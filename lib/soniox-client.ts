@@ -85,6 +85,7 @@ export function useSonioxTranscription() {
   const socketRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioSendChainRef = useRef<Promise<void>>(Promise.resolve());
   const keepaliveRef = useRef<number | null>(null);
   const finishTimeoutRef = useRef<number | null>(null);
 
@@ -121,6 +122,7 @@ export function useSonioxTranscription() {
     setError(null);
     setRegion(null);
     setStatus('requesting');
+    audioSendChainRef.current = Promise.resolve();
 
     try {
       const response = await fetch('/api/realtime/credentials', {
@@ -190,9 +192,14 @@ export function useSonioxTranscription() {
           }),
         );
 
-        recorder.ondataavailable = async (event) => {
-          if (!event.data.size || socket.readyState !== WebSocket.OPEN) return;
-          socket.send(await event.data.arrayBuffer());
+        recorder.ondataavailable = (event) => {
+          if (!event.data.size) return;
+          audioSendChainRef.current = audioSendChainRef.current.then(
+            async () => {
+              if (socket.readyState !== WebSocket.OPEN) return;
+              socket.send(await event.data.arrayBuffer());
+            },
+          );
         };
         recorder.onerror = () => {
           setError('Ошибка захвата звука с микрофона.');
@@ -295,7 +302,9 @@ export function useSonioxTranscription() {
     };
 
     if (recorder && recorder.state !== 'inactive') {
-      recorder.onstop = finishStream;
+      recorder.onstop = () => {
+        void audioSendChainRef.current.finally(finishStream);
+      };
       recorder.stop();
     } else {
       finishStream();

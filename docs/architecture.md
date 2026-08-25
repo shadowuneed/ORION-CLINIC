@@ -56,7 +56,8 @@ data model stores only structured encounter state, final transcript segments,
 the evidence links behind suggestions, clinician actions, protocol versions, and
 audit events.
 
-The current hosted-development database is not approved for real patient data.
+The current hosted-development database and the first Soniox project (US region)
+are not approved for real patient data.
 Production persistence must be deployed in Kazakhstan and integrated with the
 clinic identity/KMIS boundary. Using a foreign speech provider for real visits
 requires explicit patient information, a legal basis, contracts, and a documented

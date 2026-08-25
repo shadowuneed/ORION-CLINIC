@@ -26,11 +26,32 @@ function json(body: unknown, status = 200) {
     headers: {
       'Cache-Control': 'no-store, max-age=0',
       Pragma: 'no-cache',
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }
 
-export async function POST() {
+function matchesRequestHost(origin: string, requestUrl: URL) {
+  try {
+    return new URL(origin).host === requestUrl.host;
+  } catch {
+    return false;
+  }
+}
+
+export async function POST(request: Request) {
+  const requestUrl = new URL(request.url);
+  const origin = request.headers.get('origin');
+  const fetchSite = request.headers.get('sec-fetch-site');
+
+  if (
+    fetchSite === 'cross-site' ||
+    (origin && !matchesRequestHost(origin, requestUrl))
+  ) {
+    return json({ error: 'Запрос из другого источника отклонён.' }, 403);
+  }
+
   const user = await getChatGPTUser();
   const isLocalPreview = process.env.NODE_ENV === 'development';
 
