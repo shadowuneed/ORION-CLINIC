@@ -19,6 +19,7 @@ type WorkspaceProps = {
 
 type SessionState = 'ready' | 'listening' | 'review';
 type SpeakerRole = 'doctor' | 'patient' | 'unknown';
+type Theme = 'light' | 'dark';
 
 type TranscriptTurn = {
   id: string;
@@ -42,6 +43,40 @@ type WorkingClinicalSegment = ClinicalTranscriptSegment & {
   endMs: number | null;
   detectedLanguages: Set<'ru' | 'kk'>;
 };
+
+function readPersistedTheme(): Theme | null {
+  try {
+    const saved = window.localStorage.getItem('orion-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {
+    // Fall through to the cookie preference.
+  }
+
+  try {
+    const cookieTheme = document.cookie.match(
+      /(?:^|;\s*)orion-theme=(light|dark)(?:;|$)/,
+    )?.[1];
+    return cookieTheme === 'light' || cookieTheme === 'dark'
+      ? cookieTheme
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistTheme(theme: Theme) {
+  try {
+    window.localStorage.setItem('orion-theme', theme);
+  } catch {
+    // The cookie below keeps the preference when storage is unavailable.
+  }
+
+  try {
+    document.cookie = `orion-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  } catch {
+    // The visual switch still works when all persistence is blocked.
+  }
+}
 
 function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
@@ -170,6 +205,7 @@ function suggestionPriorityLabel(priority: ClinicalSuggestion['priority']) {
 }
 
 export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
+  const [theme, setTheme] = useState<Theme | null>(null);
   const [consentConfirmed, setConsentConfirmed] = useState(false);
   const [sessionState, setSessionState] = useState<SessionState>('ready');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -187,6 +223,27 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const lastAnalyzedKeyRef = useRef('');
   const latestAnalysisKeyRef = useRef('');
   const speech = useSonioxTranscription();
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const resolveTheme = (): Theme =>
+      document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+    const syncTheme = window.setTimeout(() => setTheme(resolveTheme()), 0);
+
+    const followSystemTheme = (event: MediaQueryListEvent) => {
+      if (readPersistedTheme()) return;
+      const nextTheme: Theme = event.matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+      setTheme(nextTheme);
+    };
+
+    media.addEventListener('change', followSystemTheme);
+    return () => {
+      window.clearTimeout(syncTheme);
+      media.removeEventListener('change', followSystemTheme);
+    };
+  }, []);
 
   useEffect(() => {
     if (sessionState !== 'listening') return;
@@ -462,6 +519,17 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     [suggestionReviews],
   );
 
+  const toggleTheme = () => {
+    const currentTheme =
+      theme ??
+      (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+    const nextTheme: Theme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    persistTheme(nextTheme);
+    setTheme(nextTheme);
+  };
+
   return (
     <main className={`orion-shell is-${sessionState}`}>
       <header className="orion-header">
@@ -477,9 +545,23 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
           <strong>{statusLabel}</strong>
         </div>
 
-        <div className="clinician-chip">
-          <span className="clinician-avatar" aria-hidden="true">В</span>
-          <span><small>Рабочее место</small><strong>{clinicianName}</strong></span>
+        <div className="header-actions">
+          <button
+            className={`theme-toggle is-${theme ?? 'light'}`}
+            type="button"
+            aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            onClick={toggleTheme}
+          >
+            <span className="theme-toggle__icon" aria-hidden="true">
+              {theme === 'dark' ? '☀' : '☾'}
+            </span>
+            <span>{theme === 'dark' ? 'Светлая' : 'Тёмная'}</span>
+          </button>
+          <div className="clinician-chip">
+            <span className="clinician-avatar" aria-hidden="true">В</span>
+            <span><small>Рабочее место</small><strong>{clinicianName}</strong></span>
+          </div>
         </div>
       </header>
 

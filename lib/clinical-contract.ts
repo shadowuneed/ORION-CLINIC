@@ -1,4 +1,4 @@
-export const CLINICAL_ANALYSIS_MODEL = '@cf/qwen/qwen3.8-27b';
+export const CLINICAL_ANALYSIS_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 
 export type ClinicalSpeakerRole = 'doctor' | 'patient' | 'unknown';
 export type ClinicalLanguage = 'ru' | 'kk' | 'mixed' | 'unknown';

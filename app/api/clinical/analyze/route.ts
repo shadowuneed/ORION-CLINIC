@@ -188,25 +188,28 @@ function buildSystemPrompt() {
     'Анализируй только явно сказанное. Не выдумывай симптомы, диагнозы, анализы, лекарства, дозировки или факты.',
     'Не подменяй один факт другим: например, отсутствие постоянных лекарств не означает отсутствие хронических заболеваний.',
     'Вывод предназначен только врачу и не является окончательным медицинским решением.',
-    'Предлагай максимум 6 коротких элементов: clarification — что уточнить; safety — подтверждённый сигнал безопасности; option — вариант для рассмотрения врачом.',
-    'Используй safety только для присутствующего тревожного признака; отсутствие симптома не является safety-подсказкой.',
+    'Предлагай максимум 4 коротких элемента: clarification — что уточнить; safety — подтверждённый сигнал безопасности; option — вариант для рассмотрения врачом.',
+    'Используй safety только для присутствующего срочного тревожного признака и только вместе с priority="urgent"; отсутствие симптома не является safety-подсказкой.',
+    'Не используй safety для изолированной субфебрильной температуры без иных явно сказанных тревожных признаков.',
+    'Пример: фраза «температура 37,5, одышки и боли в груди нет» не является safety; при необходимости уточни динамику температуры через clarification.',
     'Не назначай лечение и не формулируй категоричный диагноз. Для urgent требуется прямая опора на конкретный сегмент.',
     'Каждый элемент обязан ссылаться на один или несколько существующих evidenceSegmentIds.',
     'Корректно понимай русский, казахский и смешанную речь, но все значения summary, title, rationale и clinicianPrompt пиши только на грамотном русском языке.',
     'Значения category и priority используй только в точности из перечисленных английских enum, никогда не переводи их.',
+    'Слово urgent разрешено только в поле priority; для срочного сигнала всегда ставь category="safety" и priority="urgent".',
     'Верни только JSON без markdown: {"summary":"...","suggestions":[{"category":"clarification|safety|option","priority":"routine|attention|urgent","title":"...","rationale":"...","clinicianPrompt":"...","evidenceSegmentIds":["segment-id"]}]}.',
     'Если надёжных подсказок нет, верни пустой массив suggestions.',
   ].join('\n');
 }
 
 function buildUserPrompt(request: ClinicalAnalysisRequest) {
-  return JSON.stringify({
+  return `${JSON.stringify({
     task:
       request.mode === 'final'
         ? 'Финальная проверка завершённой расшифровки.'
         : 'Обновление подсказок по текущей подтверждённой части разговора.',
     transcript: request.segments,
-  });
+  })}\n/no_think`;
 }
 
 type WorkersAiPayload = {
@@ -220,7 +223,9 @@ type WorkersAiPayload = {
 
 function readWorkersAiResponse(result: WorkersAiPayload['result']) {
   if (!result) return null;
-  if (result.response !== undefined) return result.response;
+  if (result.response !== undefined && result.response !== null) {
+    return result.response;
+  }
   if (!Array.isArray(result.choices) || result.choices.length !== 1) return null;
 
   const choice = result.choices[0];
@@ -248,14 +253,11 @@ async function runWorkersAi(
           { role: 'system', content: buildSystemPrompt() },
           { role: 'user', content: buildUserPrompt(request) },
         ],
-        temperature: 0.1,
-        max_completion_tokens: 900,
-        reasoning_effort: 'low',
-        chat_template_kwargs: { enable_thinking: false },
+        temperature: 0,
+        max_tokens: 700,
         response_format: { type: 'json_object' },
-        store: false,
       }),
-      signal: AbortSignal.timeout(35_000),
+      signal: AbortSignal.timeout(25_000),
     },
   );
 
@@ -342,6 +344,7 @@ function validateSuggestion(
     rawEvidence.length > 8 ||
     evidenceSegmentIds.length !== rawEvidence.length ||
     evidenceSegmentIds.some((id) => !allowedEvidenceIds.has(id)) ||
+    (category === 'safety' && priority !== 'urgent') ||
     (priority === 'urgent' && category !== 'safety')
   ) {
     return null;
@@ -365,7 +368,7 @@ function validateModelOutput(
   const parsed = parseModelJson(value);
   if (!isRecord(parsed) || !Array.isArray(parsed.suggestions)) return null;
   if (!hasOnlyKeys(parsed, ['summary', 'suggestions'])) return null;
-  if (parsed.suggestions.length > 6) return null;
+  if (parsed.suggestions.length > 4) return null;
 
   const summary = boundedString(parsed.summary, 600);
   if (!summary || forbiddenModelText.test(summary)) return null;
