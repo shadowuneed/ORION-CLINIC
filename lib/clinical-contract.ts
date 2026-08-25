@@ -1,4 +1,5 @@
-export const CLINICAL_ANALYSIS_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
+export const CLINICAL_ANALYSIS_PROVIDER = 'groq' as const;
+export const CLINICAL_ANALYSIS_MODEL = 'openai/gpt-oss-120b';
 
 export type ClinicalSpeakerRole = 'doctor' | 'patient' | 'unknown';
 export type ClinicalLanguage = 'ru' | 'kk' | 'mixed' | 'unknown';
@@ -31,8 +32,8 @@ export type ClinicalSuggestion = {
 };
 
 export type ClinicalAnalysisResponse = {
-  provider: 'cloudflare-workers-ai';
-  model: typeof CLINICAL_ANALYSIS_MODEL;
+  provider: typeof CLINICAL_ANALYSIS_PROVIDER;
+  model: string;
   generatedAt: string;
   summary: string;
   suggestions: ClinicalSuggestion[];

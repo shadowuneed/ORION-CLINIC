@@ -1,9 +1,9 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
-    SONIOX_API_KEY?: string;
-    SONIOX_REGION?: 'us' | 'eu' | 'jp';
-    CLOUDFLARE_ACCOUNT_ID?: string;
-    CLOUDFLARE_AI_API_TOKEN?: string;
+    GROQ_LLM_API_KEY?: string;
+    GROQ_LLM_MODEL?: string;
+    GROQ_COMPOUND_API_KEY?: string;
+    GROQ_COMPOUND_MODEL?: string;
   }
 }

@@ -1,109 +1,72 @@
-# ORION architecture decisions
+# Архитектура прототипа ORION
 
-## Product boundary
+## Сценарий
 
-ORION is a silent assistant visible only to the clinician. It may surface
-clarifying questions, safety signals, differential considerations,
-investigation options, and treatment options. Every item starts in `pending`
-state. A clinician must accept, edit, or reject it before it can contribute to a
-protocol.
+ORION — молчаливый ассистент на экране врача. Он не обращается к пациенту и не
+перебивает разговор. Врач видит расшифровку и подсказки, а затем принимает,
+редактирует или отклоняет их. Протокол формируется только после проверки.
 
-## Delivery shape
-
-The first version is a responsive web application/PWA. That makes pilot rollout,
-updates, and testing across clinic computers much simpler. The production design
-keeps the web UI but can wrap it in a managed desktop shell with a local audio
-agent if device policy, offline operation, or tighter microphone control requires
-it. This avoids maintaining two user interfaces.
-
-## Speech pipeline
+## Поток данных
 
 ```text
-one room microphone
-  -> browser capture (WebM/Opus when supported)
-  -> regional Soniox realtime WebSocket
-  -> final and provisional RU/KZ tokens
-  -> speaker calibration and doctor correction
-  -> verified transcript
-  -> clinical analysis
-  -> doctor review
-  -> protocol
+общий микрофон
+  -> AudioWorklet в браузере
+  -> локальный VAD и короткая WAV-реплика
+  -> 127.0.0.1:3101
+  -> GigaAM Multilingual (RU/KZ)
+  -> CAMPPlus (врач / пациент)
+  -> подтверждённый текст в интерфейсе
+  -> Groq GPT-OSS 120B
+  -> подсказки только врачу
+  -> принять / изменить / отклонить
+  -> протокол
 ```
 
-Soniox is used for the first bilingual proof because its public API documents the
-combination ORION needs: `ru` and `kk` language hints, token-level language
-identification, and realtime speaker diarization in one stream. The first text
-frame configures the session before any binary audio frames are sent.
+Аудиофайл не создаётся. Браузер и локальный FastAPI передают реплики в памяти;
+после ответа сохраняется только текст в состоянии текущей страницы. Локальный
+сервис слушает только loopback-интерфейс `127.0.0.1`.
 
-Final tokens are append-only. Provisional tokens are replaced on every response
-and must never be persisted or used to create irreversible clinical output.
+## Почему локальный GigaAM
 
-## Clinical-analysis pipeline
+Для RU/KZ выбран `ai-sage/GigaAM-Multilingual large_ctc` 600M. Он запускается
+на RTX 4060 через PyTorch CUDA и не требует API-ключа. Закреплена конкретная
+ревизия модели. При недоступной CUDA предусмотрен 220M CPU-вариант.
 
-The browser groups only final Soniox tokens into stable segments. A segment is
-closed when the speaker changes, the pause exceeds 1.8 seconds, or the segment
-reaches its size limit. Language switching alone does not split a segment.
+Groq STT использует Whisper Large v3. Для русского это сильная модель, но в
+опубликованной оценке GigaAM Multilingual значительно лучше на казахском,
+поэтому облачный Whisper не используется в речевом контуре ORION.
 
-The authenticated ORION backend sends a bounded transcript window to Cloudflare
-Workers AI using `@cf/qwen/qwen3.8-27b`. The Cloudflare account ID and API
-token are server runtime values. Neither value is returned to the browser.
+GigaAM не отдаёт надёжный отдельный language-id. Интерфейс помечает RU/KZ по
+буквам и поддерживает значение `mixed`; сам текст при этом декодируется одной
+многоязычной моделью.
 
-The transcript is treated as untrusted evidence rather than instructions. Model
-output is accepted only when it is one complete JSON object, has the exact
-expected fields and enums, contains no more than six suggestions, and cites only
-segment IDs present in the submitted transcript. Any malformed item rejects the
-whole response. The raw provider response and transcript are not logged.
+## Разделение голосов
 
-This validation proves structure and citation identity, not clinical truth. A
-production release must additionally ground urgent/safety items to an exact
-server-owned quote or deterministic red-flag rule and validate that behavior
-with clinician-reviewed RU/KZ evaluation cases.
+Первая различимая реплика создаёт профиль врача. Второй достаточно отличный
+голос создаёт профиль пациента. Следующие реплики сравниваются с двумя
+профилями CAMPPlus. Если уверенного совпадения нет, роль остаётся неизвестной.
+Врач в любой момент может поменять роли вручную.
 
-This browser-submitted transcript route is limited to the current synthetic-data
-pilot. Before patient-data use, final segments must be persisted under an
-authenticated encounter and the analysis endpoint must load them from the
-server-owned record rather than accepting clinical text from the client.
+Это лёгкая калибровка для демонстрации, а не полноценная overlap-diarization:
+одновременную речь двух людей прототип надёжно не разделяет.
 
-## Credential boundary
+## Groq-контуры
 
-The long-lived Soniox key exists only in the server environment. The browser asks
-ORION for a temporary key that is:
+Основной endpoint отправляет ограниченное окно подтверждённых сегментов в
+`openai/gpt-oss-120b`. Модель возвращает строгий JSON Schema. Сервер повторно
+проверяет поля, enum, размеры и ссылки на существующие сегменты; некорректный
+ответ целиком отклоняется. Ключ доступен только серверному runtime.
 
-- restricted to `transcribe_websocket`;
-- valid for opening a stream for 60 seconds;
-- single-use;
-- capped to a two-hour session;
-- associated with a random ORION reference rather than patient identity.
+`groq/compound-mini` использует второй ключ и запускается вручную кнопкой
+«Проверить по источникам». Он выполняет один быстрый web search и возвращает
+ответ вместе с найденными URL. Этот результат является справкой для врача, а
+не автоматическим решением и не попадает в протокол сам.
 
-## Data boundary
+## Границы демонстрации
 
-ORION does not create a raw audio object and has no R2/audio storage binding. The
-data model stores only structured encounter state, final transcript segments,
-the evidence links behind suggestions, clinician actions, protocol versions, and
-audit events.
-
-The current hosted-development database and the first Soniox project (US region)
-are not approved for real patient data.
-Production persistence must be deployed in Kazakhstan and integrated with the
-clinic identity/KMIS boundary. Using a foreign speech provider for real visits
-requires explicit patient information, a legal basis, contracts, and a documented
-cross-border-transfer decision.
-
-## Role calibration
-
-Speaker diarization returns anonymous labels, not medical roles. ORION asks the
-doctor to speak first and maps the first detected label to `doctor`. The clinician
-can swap the two roles at any time. A later version should store role corrections
-as audit events and re-label affected transcript segments.
-
-## Remaining production gates
-
-1. Configure a non-production Soniox project and test only consented sample audio.
-2. Benchmark RU/KZ medical terminology, code-switching, overlapping speech,
-   latency, and speaker attribution.
-3. Persist final transcript segments under a clinician-owned encounter and make
-   analysis load only that server-owned evidence.
-4. Persist accept/edit/reject actions and generate protocols exclusively from
-   reviewed items.
-5. Move patient-data persistence to an approved Kazakhstan environment, then add
-   clinic SSO, roles, retention, export, monitoring, and incident controls.
+- использовать только тестовые или специально согласованные данные;
+- качество проверить на живой русской, казахской и смешанной речи конкретного
+  кабинета и микрофона;
+- роли исправлять вручную при ошибке;
+- клинические подсказки считать вариантами для проверки врача;
+- не обещать надёжное разделение перекрывающейся речи.

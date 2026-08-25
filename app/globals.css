@@ -328,6 +328,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .suggestion-actions button { padding: 7px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-size: 8px; font-weight: 650; }
 .suggestion-actions .accept { border-color: var(--accepted-action-border); background: var(--mint); color: var(--teal-dark); }
 .suggestion-actions .reject { background: var(--surface); color: var(--rejected-text); }
+.research-check { margin-top: 8px; }
+.research-check > button { width: 100%; padding: 7px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--wash); color: var(--teal-dark); cursor: pointer; font-size: 8px; font-weight: 650; }
+.research-check > button:disabled { cursor: wait; opacity: .65; }
+.research-check > p { margin: 7px 0 0; color: var(--danger); font-size: 8px; line-height: 1.45; }
+.research-result { margin-top: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--quote-surface); }
+.research-result > strong { font-size: 8px; }
+.research-result > p { margin: 6px 0 0; white-space: pre-wrap; color: var(--text-subtle); font-size: 8px; line-height: 1.5; }
+.research-result ul { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 15px; }
+.research-result a { color: var(--teal-dark); font-size: 7px; text-decoration: underline; text-underline-offset: 2px; }
 .analysis-refresh { width: 100%; margin: 11px 0 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--teal-dark); cursor: pointer; font-size: 8px; font-weight: 650; }
 .decision-rule { display: flex; gap: 12px; margin-top: auto; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: var(--decision-fill); color: var(--decision-text); }
 .decision-rule > span { color: var(--decision-accent); font-family: var(--font-geist-mono); font-size: 10px; }

@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  type SonioxToken,
-  useSonioxTranscription,
-} from '../lib/soniox-client';
+  type LocalSpeechToken,
+  useLocalSpeechTranscription,
+} from '../lib/local-speech-client';
 import { requestClinicalAnalysis } from '../lib/clinical-analysis-client';
+import { requestClinicalResearch } from '../lib/clinical-research-client';
 import type {
   ClinicalAnalysisResponse,
   ClinicalLanguage,
   ClinicalSuggestion,
   ClinicalTranscriptSegment,
 } from '../lib/clinical-contract';
+import type { ClinicalResearchResponse } from '../lib/clinical-research-contract';
 
 type WorkspaceProps = {
   clinicianName: string;
@@ -24,7 +26,7 @@ type Theme = 'light' | 'dark';
 type TranscriptTurn = {
   id: string;
   speaker: string | null;
-  language: 'ru' | 'kk' | 'unknown';
+  language: 'ru' | 'kk' | 'mixed' | 'unknown';
   text: string;
   startMs: number | null;
   provisional: boolean;
@@ -36,6 +38,11 @@ type SuggestionReview = {
   status: ReviewStatus;
   title: string;
   clinicianPrompt: string;
+};
+type ResearchState = {
+  status: 'loading' | 'ready' | 'error';
+  result?: ClinicalResearchResponse;
+  error?: string;
 };
 
 type WorkingClinicalSegment = ClinicalTranscriptSegment & {
@@ -84,7 +91,7 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${seconds}`;
 }
 
-function groupTokens(tokens: SonioxToken[], provisional: boolean) {
+function groupTokens(tokens: LocalSpeechToken[], provisional: boolean) {
   const turns: TranscriptTurn[] = [];
 
   for (const token of tokens) {
@@ -95,7 +102,7 @@ function groupTokens(tokens: SonioxToken[], provisional: boolean) {
       previous.language === token.language;
 
     if (sameTurn) {
-      previous.text += token.text;
+      previous.text = `${previous.text.trimEnd()} ${token.text.trimStart()}`;
       continue;
     }
 
@@ -113,7 +120,7 @@ function groupTokens(tokens: SonioxToken[], provisional: boolean) {
 }
 
 function segmentFinalTokens(
-  tokens: SonioxToken[],
+  tokens: LocalSpeechToken[],
   roleForSpeaker: (speaker: string | null) => SpeakerRole,
 ) {
   const working: WorkingClinicalSegment[] = [];
@@ -136,10 +143,13 @@ function segmentFinalTokens(
     );
 
     if (continuesPrevious && previous) {
-      previous.text += token.text;
+      previous.text = `${previous.text.trimEnd()} ${token.text.trimStart()}`;
       previous.endMs = token.endMs ?? previous.endMs;
       if (token.language === 'ru' || token.language === 'kk') {
         previous.detectedLanguages.add(token.language);
+      } else if (token.language === 'mixed') {
+        previous.detectedLanguages.add('ru');
+        previous.detectedLanguages.add('kk');
       }
       continue;
     }
@@ -147,6 +157,9 @@ function segmentFinalTokens(
     const detectedLanguages = new Set<'ru' | 'kk'>();
     if (token.language === 'ru' || token.language === 'kk') {
       detectedLanguages.add(token.language);
+    } else if (token.language === 'mixed') {
+      detectedLanguages.add('ru');
+      detectedLanguages.add('kk');
     }
 
     working.push({
@@ -160,7 +173,7 @@ function segmentFinalTokens(
     });
   }
 
-  return working.slice(-60).map((segment): ClinicalTranscriptSegment => {
+  return working.slice(-24).map((segment): ClinicalTranscriptSegment => {
     let language: ClinicalLanguage = 'unknown';
     if (segment.detectedLanguages.size > 1) language = 'mixed';
     else if (segment.detectedLanguages.has('ru')) language = 'ru';
@@ -183,6 +196,7 @@ function formatTranscriptTime(milliseconds: number | null) {
 function languageLabel(language: TranscriptTurn['language']) {
   if (language === 'ru') return 'RU';
   if (language === 'kk') return 'KZ';
+  if (language === 'mixed') return 'RU/KZ';
   return '—';
 }
 
@@ -219,10 +233,14 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(
     null,
   );
+  const [researchBySuggestion, setResearchBySuggestion] = useState<
+    Record<string, ResearchState>
+  >({});
   const analysisAbortRef = useRef<AbortController | null>(null);
+  const researchAbortRef = useRef<AbortController | null>(null);
   const lastAnalyzedKeyRef = useRef('');
   const latestAnalysisKeyRef = useRef('');
-  const speech = useSonioxTranscription();
+  const speech = useLocalSpeechTranscription();
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -321,6 +339,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       if (!force && analysisKey === lastAnalyzedKeyRef.current) return;
 
       analysisAbortRef.current?.abort();
+      researchAbortRef.current?.abort();
       const controller = new AbortController();
       const requestedKey = analysisKey;
       analysisAbortRef.current = controller;
@@ -342,6 +361,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
         lastAnalyzedKeyRef.current = requestedKey;
         setAnalysis(result);
+        setResearchBySuggestion({});
         setSuggestionReviews((current) => {
           const next: Record<string, SuggestionReview> = {};
           for (const suggestion of result.suggestions) {
@@ -385,7 +405,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setAnalysisStatus('waiting');
     const timer = window.setTimeout(() => {
       void runAnalysis('live');
-    }, 7_000);
+    }, 15_000);
     return () => window.clearTimeout(timer);
   }, [analysisCharacterCount, analysisKey, runAnalysis, sessionState]);
 
@@ -414,14 +434,15 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   useEffect(
     () => () => {
       analysisAbortRef.current?.abort();
+      researchAbortRef.current?.abort();
     },
     [],
   );
 
   const speechStatusLabel = useMemo(() => {
-    if (speech.status === 'requesting') return 'Получаем временный доступ';
-    if (speech.status === 'connecting') return 'Соединяем речевой контур';
-    if (speech.status === 'streaming') return 'RU/KZ поток активен';
+    if (speech.status === 'requesting') return 'Подключаем микрофон';
+    if (speech.status === 'connecting') return 'Готовим локальный STT';
+    if (speech.status === 'streaming') return 'Локальный RU/KZ контур активен';
     if (speech.status === 'stopping') return 'Завершаем расшифровку';
     if (speech.status === 'finished') return 'Расшифровка завершена';
     if (speech.status === 'error') return 'Речевой контур не запущен';
@@ -431,6 +452,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const startSession = () => {
     if (!consentConfirmed) return;
     analysisAbortRef.current?.abort();
+    researchAbortRef.current?.abort();
     setElapsedSeconds(0);
     setRolesSwapped(false);
     setAnalysisStatus('idle');
@@ -438,6 +460,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setAnalysisError(null);
     setSuggestionReviews({});
     setEditingSuggestionId(null);
+    setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
     setSessionState('listening');
     void speech.start();
@@ -456,6 +479,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
   const resetSession = () => {
     analysisAbortRef.current?.abort();
+    researchAbortRef.current?.abort();
     speech.reset();
     setConsentConfirmed(false);
     setElapsedSeconds(0);
@@ -465,18 +489,21 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setAnalysisError(null);
     setSuggestionReviews({});
     setEditingSuggestionId(null);
+    setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
     setSessionState('ready');
   };
 
   const swapSpeakerRoles = () => {
     analysisAbortRef.current?.abort();
+    researchAbortRef.current?.abort();
     setRolesSwapped((value) => !value);
     setAnalysis(null);
     setAnalysisStatus('waiting');
     setAnalysisError(null);
     setSuggestionReviews({});
     setEditingSuggestionId(null);
+    setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
   };
 
@@ -503,6 +530,59 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       };
     });
   };
+
+  const runResearch = useCallback(
+    async (suggestion: ClinicalSuggestion) => {
+      const evidence = analysisSegments.filter((segment) =>
+        suggestion.evidenceSegmentIds.includes(segment.id),
+      );
+      if (evidence.length === 0) return;
+
+      researchAbortRef.current?.abort();
+      const controller = new AbortController();
+      researchAbortRef.current = controller;
+      setResearchBySuggestion((current) => ({
+        ...current,
+        [suggestion.id]: { status: 'loading' },
+      }));
+
+      try {
+        const result = await requestClinicalResearch(
+          {
+            suggestion: {
+              title: suggestion.title,
+              rationale: suggestion.rationale,
+              clinicianPrompt: suggestion.clinicianPrompt,
+            },
+            evidence,
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted || researchAbortRef.current !== controller) {
+          return;
+        }
+        setResearchBySuggestion((current) => ({
+          ...current,
+          [suggestion.id]: { status: 'ready', result },
+        }));
+      } catch (error) {
+        if (controller.signal.aborted || researchAbortRef.current !== controller) {
+          return;
+        }
+        setResearchBySuggestion((current) => ({
+          ...current,
+          [suggestion.id]: {
+            status: 'error',
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Проверка источников временно недоступна.',
+          },
+        }));
+      }
+    },
+    [analysisSegments],
+  );
 
   const reviewedSuggestionCount = useMemo(
     () =>
@@ -585,9 +665,9 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
               <strong>ORION не создаёт аудиофайл</strong>
               <p>
                 {sessionState === 'listening' && speech.status === 'streaming'
-                  ? `Аудиопоток идёт в Soniox (${speech.region?.toUpperCase() ?? 'регион проекта'}); только подтверждённый текст — в Workers AI.`
+                  ? 'Короткие реплики распознаются локально на этом ПК; в Groq уходит только подтверждённый текст.'
                   : sessionState === 'review'
-                    ? 'Аудиофайл не создавался. Для подсказок используется только подтверждённый текст.'
+                    ? 'Аудиофайл не создавался. В Groq передаётся только подтверждённый врачом текстовый контекст.'
                     : 'До запуска микрофона аудио не захватывается и не передаётся.'}
               </p>
             </div>
@@ -659,7 +739,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                       <h2>Живая расшифровка</h2>
                       <p>Черновой текст видит только врач</p>
                     </div>
-                    <span>{speech.finalTokens.length} подтверждённых токенов</span>
+                    <span>{speech.finalTokens.length} подтверждённых реплик</span>
                   </div>
 
                   <div className="transcript-feed" aria-label="Живая расшифровка разговора">
@@ -731,7 +811,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                   <span>Расшифровка</span>
                   <strong>
                     {speech.finalTokens.length
-                      ? `${speech.finalTokens.length} подтверждённых токенов`
+                      ? `${speech.finalTokens.length} подтверждённых реплик`
                       : 'Нет подтверждённого текста'}
                   </strong>
                 </div>
@@ -783,7 +863,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                         ? 'Ждём паузу для обновления'
                         : analysisStatus === 'error'
                           ? 'Предыдущие подсказки · проверьте актуальность'
-                          : 'Qwen · подтверждённый текст'}
+                          : 'GPT-OSS 120B · подтверждённый текст'}
                   </strong>
                 </div>
                 <p>{analysis.summary}</p>
@@ -817,6 +897,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                     clinicianPrompt: suggestion.clinicianPrompt,
                   };
                   const isEditing = editingSuggestionId === suggestion.id;
+                  const research = researchBySuggestion[suggestion.id];
 
                   return (
                     <article
@@ -910,6 +991,40 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                           Отклонить
                         </button>
                       </div>
+
+                      <div className={`research-check is-${research?.status ?? 'idle'}`}>
+                        <button
+                          type="button"
+                          disabled={research?.status === 'loading'}
+                          onClick={() => void runResearch(suggestion)}
+                        >
+                          {research?.status === 'loading'
+                            ? 'Compound ищет источники…'
+                            : research?.status === 'ready'
+                              ? 'Обновить проверку'
+                              : 'Проверить по источникам'}
+                        </button>
+                        {research?.status === 'error' && (
+                          <p role="alert">{research.error}</p>
+                        )}
+                        {research?.status === 'ready' && research.result && (
+                          <div className="research-result">
+                            <strong>Проверка Compound</strong>
+                            <p>{research.result.answer}</p>
+                            {research.result.sources.length > 0 && (
+                              <ul>
+                                {research.result.sources.map((source) => (
+                                  <li key={source.url}>
+                                    <a href={source.url} target="_blank" rel="noreferrer">
+                                      {source.title}
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </article>
                   );
                 })}
@@ -945,7 +1060,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 </h3>
                 <p>
                   {analysisError ??
-                    'Qwen получает только подтверждённый текст. ORION не перебивает разговор и не принимает решения за врача.'}
+                    'GPT-OSS 120B получает только подтверждённый текст. ORION не перебивает разговор и не принимает решения за врача.'}
                 </p>
                 {analysisStatus === 'error' && analysisSegments.length > 0 && (
                   <button
@@ -990,7 +1105,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         <div>
           <span><i className="footer-dot" /> Тестовый контур · без реальных данных пациентов</span>
           <span>RU + KZ</span>
-          <span>Один микрофон · два голоса</span>
+          <span>Локальный STT · Groq AI</span>
         </div>
       </footer>
     </main>

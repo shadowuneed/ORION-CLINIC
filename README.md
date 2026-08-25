@@ -1,49 +1,65 @@
 # ORION
 
-ORION is a doctor-facing assistant for an in-person consultation. It listens to
-one shared microphone, transcribes Russian and Kazakh speech, separates speakers,
-and prepares clinical options for the doctor to review. It never addresses or
-interrupts the patient, and it never makes the final clinical decision.
+ORION — демонстрационный ассистент врача для очного приёма. Один микрофон
+слушает врача и пациента, локально распознаёт русскую и казахскую речь,
+разделяет голоса и показывает подсказки только врачу. Решения всегда принимает
+врач: каждую подсказку можно принять, изменить или отклонить до протокола.
 
-## Current vertical slice
+## Стек прототипа
 
-- consent gate before microphone access;
-- live RU/KZ transcription contract with speaker diarization;
-- temporary, single-use Soniox credentials minted by the backend;
-- server-only Cloudflare Workers AI analysis with Qwen3 and strict output validation;
-- no raw-audio object storage or audio-retention table;
-- manual doctor/patient speaker-role correction;
-- doctor-only accept, edit, or reject controls for every AI suggestion;
-- review-first workflow before protocol generation;
-- D1 schema for encounters, consent, transcript segments, suggestions, clinician
-  reviews, protocol versions, and audit events.
+- **STT без ключей и квот:** локальный `ai-sage/GigaAM-Multilingual`
+  `large_ctc` (600M) на CUDA, с CPU-fallback на `ctc` (220M).
+- **Кто говорит:** локальный `sherpa-onnx` и многоязычный CAMPPlus; врач
+  говорит первым, роли можно поменять вручную.
+- **Основные подсказки:** Groq `openai/gpt-oss-120b`, строгий JSON Schema и
+  дополнительная серверная проверка результата.
+- **Проверка источников:** отдельный ключ и `groq/compound-mini` с web search;
+  запускается только по кнопке врача.
+- **Интерфейс:** Vinext/React, светлая и тёмная темы.
 
-The current D1 database is suitable only for product development. Real patient
-data must not be used until Kazakhstan hosting, access control, contracts,
-retention rules, and a legal review are complete.
+Аудио обрабатывается короткими WAV-репликами в оперативной памяти на этом ПК и
+не отправляется в Groq. В Groq уходит только подтверждённый текстовый контекст.
 
-## Local development
+## Первый запуск
 
-1. Copy `.env.example` to `.env.local`.
-2. Set the Soniox project region (`us`, `eu`, or `jp`) and the server-only API
-   key. Never expose the long-lived key to client code.
-3. Set the Cloudflare account ID and a Workers AI-only API token. The token is
-   used only by the ORION backend and must never use a `NEXT_PUBLIC_` name.
-4. Run `pnpm dev` with the bundled workspace runtime.
+1. Создайте `.env.local` по примеру `.env.example` и добавьте два серверных
+   ключа Groq.
+2. Один раз установите локальный STT и скачайте модели:
 
-The browser receives only a 60-second, single-use key capped to a two-hour
-transcription session. ORION sends encoded microphone chunks directly to the
-regional Soniox WebSocket and does not create an audio file.
+   ```powershell
+   .\local-ai\setup.ps1 -Device Cuda
+   ```
 
-## Source layout
+   Среда и модели сохраняются вне OneDrive в `%LOCALAPPDATA%\ORION`.
+3. Запустите STT на `127.0.0.1:3101`:
 
-- `app/orion-workspace.tsx` — doctor workspace and consultation state machine.
-- `lib/soniox-client.ts` — microphone, WebSocket, token buffering, and cleanup.
-- `app/api/realtime/credentials/route.ts` — protected temporary-key minting.
-- `app/api/clinical/analyze/route.ts` — authenticated Workers AI adapter,
-  transcript limits, prompt-injection boundary, and fail-closed validation.
-- `lib/clinical-contract.ts` — shared transcript and suggestion contracts.
-- `db/schema.ts` — reviewable clinical data and audit model.
-- `drizzle/` — generated SQL migrations.
+   ```powershell
+   .\local-ai\start.ps1 -Device Cuda
+   ```
 
-See `docs/architecture.md` for the product and safety decisions.
+4. В другом терминале запустите интерфейс на порту `3100`:
+
+   ```powershell
+   pnpm dev -- --port 3100
+   ```
+
+Проверка локального сервиса:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:3101/health
+```
+
+Порты `3000` и `8000` проект не использует.
+
+## Основные файлы
+
+- `app/orion-workspace.tsx` — рабочее место врача и сценарий приёма.
+- `lib/local-speech-client.ts` — захват микрофона, VAD и очередь локальных
+  реплик.
+- `local-ai/orion_local/` — FastAPI, GigaAM и определение голоса.
+- `app/api/clinical/analyze/route.ts` — GPT-OSS 120B и проверка подсказок.
+- `app/api/clinical/research/route.ts` — ручная проверка по веб-источникам.
+- `lib/clinical-contract.ts` — общий контракт расшифровки и подсказок.
+
+Это прототип для демонстрации на тестовых данных, не готовая медицинская
+система. Подробнее: `docs/architecture.md`.

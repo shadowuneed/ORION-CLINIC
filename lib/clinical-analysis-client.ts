@@ -5,7 +5,7 @@ import type {
   ClinicalAnalysisRequest,
   ClinicalAnalysisResponse,
 } from './clinical-contract';
-import { CLINICAL_ANALYSIS_MODEL } from './clinical-contract';
+import { CLINICAL_ANALYSIS_PROVIDER } from './clinical-contract';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -16,8 +16,9 @@ function isClinicalAnalysisResponse(
 ): value is ClinicalAnalysisResponse {
   return (
     isRecord(value) &&
-    value.provider === 'cloudflare-workers-ai' &&
-    value.model === CLINICAL_ANALYSIS_MODEL &&
+    value.provider === CLINICAL_ANALYSIS_PROVIDER &&
+    typeof value.model === 'string' &&
+    value.model.length > 0 &&
     typeof value.generatedAt === 'string' &&
     typeof value.summary === 'string' &&
     Array.isArray(value.suggestions) &&

@@ -1,0 +1,19 @@
+# PyTorch is installed by setup.ps1 from the CPU or CUDA wheel index first.
+torch>=2.10,<2.11
+torchaudio>=2.10,<2.11
+transformers>=5,<6
+huggingface-hub>=0.35,<2
+hf-xet>=1.1,<2
+hydra-core>=1.3,<2
+omegaconf>=2.3,<3
+sentencepiece>=0.2,<1
+# Transformers' remote-code import check expects the pyannote namespace even
+# though ORION uses only short-form transcription and not pyannote.audio.
+pyannote-core>=6,<7
+
+fastapi>=0.116,<1
+uvicorn[standard]>=0.35,<1
+pydantic>=2.11,<3
+numpy>=2,<3
+soundfile>=0.13,<1
+sherpa-onnx>=1.12,<2

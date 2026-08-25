@@ -9,6 +9,9 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
+    "speech:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./local-ai/setup.ps1 -Device Auto",
+    "speech:start": "powershell -NoProfile -ExecutionPolicy Bypass -File ./local-ai/start.ps1 -Device Auto",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

@@ -17,17 +17,28 @@ export default defineConfig(async ({ command, mode }) => {
   // builds receive runtime secrets from the hosting environment instead.
   const fileEnv = command === 'serve' ? loadEnv(mode, process.cwd(), '') : {};
   const localRuntimeVars = {
-    ...(process.env.CLOUDFLARE_ACCOUNT_ID ?? fileEnv.CLOUDFLARE_ACCOUNT_ID
+    ...(process.env.GROQ_LLM_API_KEY ?? fileEnv.GROQ_LLM_API_KEY
       ? {
-          CLOUDFLARE_ACCOUNT_ID:
-            process.env.CLOUDFLARE_ACCOUNT_ID ?? fileEnv.CLOUDFLARE_ACCOUNT_ID,
+          GROQ_LLM_API_KEY:
+            process.env.GROQ_LLM_API_KEY ?? fileEnv.GROQ_LLM_API_KEY,
         }
       : {}),
-    ...(process.env.CLOUDFLARE_AI_API_TOKEN ?? fileEnv.CLOUDFLARE_AI_API_TOKEN
+    ...(process.env.GROQ_LLM_MODEL ?? fileEnv.GROQ_LLM_MODEL
       ? {
-          CLOUDFLARE_AI_API_TOKEN:
-            process.env.CLOUDFLARE_AI_API_TOKEN ??
-            fileEnv.CLOUDFLARE_AI_API_TOKEN,
+          GROQ_LLM_MODEL:
+            process.env.GROQ_LLM_MODEL ?? fileEnv.GROQ_LLM_MODEL,
+        }
+      : {}),
+    ...(process.env.GROQ_COMPOUND_API_KEY ?? fileEnv.GROQ_COMPOUND_API_KEY
+      ? {
+          GROQ_COMPOUND_API_KEY:
+            process.env.GROQ_COMPOUND_API_KEY ?? fileEnv.GROQ_COMPOUND_API_KEY,
+        }
+      : {}),
+    ...(process.env.GROQ_COMPOUND_MODEL ?? fileEnv.GROQ_COMPOUND_MODEL
+      ? {
+          GROQ_COMPOUND_MODEL:
+            process.env.GROQ_COMPOUND_MODEL ?? fileEnv.GROQ_COMPOUND_MODEL,
         }
       : {}),
   };
