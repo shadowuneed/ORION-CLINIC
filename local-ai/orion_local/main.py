@@ -24,6 +24,7 @@ from .sessions import (
     SessionState,
     SessionStore,
     identify_speaker,
+    unidentified_speaker,
 )
 
 
@@ -151,18 +152,22 @@ def _process_utterance(
         logger.exception("Local STT inference failed; transcript is not logged")
         raise HTTPException(status_code=500, detail="Локальное распознавание завершилось ошибкой.") from exc
 
-    embedding, embedding_status = speaker_engine.embedding(audio.samples)
-    speaker = identify_speaker(
-        session,
-        embedding=embedding,
-        embedding_status=embedding_status,
-        utterance_index=utterance_index,
-    )
+    recognized_text = speech.text.strip()
+    if recognized_text:
+        embedding, embedding_status = speaker_engine.embedding(audio.samples)
+        speaker = identify_speaker(
+            session,
+            embedding=embedding,
+            embedding_status=embedding_status,
+            utterance_index=utterance_index,
+        )
+    else:
+        speaker = unidentified_speaker("empty_transcript_not_enrolled")
     elapsed_ms = round((time.perf_counter() - started) * 1000)
     return {
         "sessionId": session.session_id,
         "utteranceIndex": utterance_index,
-        "text": speech.text,
+        "text": recognized_text,
         "tokens": [
             {"text": token.text, "start": token.start, "end": token.end}
             for token in speech.words

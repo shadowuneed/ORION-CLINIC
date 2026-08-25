@@ -106,7 +106,10 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: { Accept: 'application/json' },
       body: form,
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.any([
+        request.signal,
+        AbortSignal.timeout(45_000),
+      ]),
     });
     const payload = (await upstream.json().catch(() => null)) as unknown;
 

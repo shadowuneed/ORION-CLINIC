@@ -21,6 +21,12 @@ export type TranscriptionStatus =
   | 'finished'
   | 'error';
 
+export type SpeechActivity =
+  | 'idle'
+  | 'listening'
+  | 'speaking'
+  | 'recognizing';
+
 export type LocalSpeechEngine = {
   stt: string;
   speaker: string;
@@ -76,6 +82,8 @@ type CaptureState = {
   utteranceVoicedSamples: number;
   silenceSamples: number;
   utteranceIndex: number;
+  noiseFloorRms: number;
+  calibrationSamples: number;
 };
 
 type WorkletMessage =
@@ -83,12 +91,21 @@ type WorkletMessage =
   | { type: 'flushed' };
 
 const TARGET_SAMPLE_RATE = 16_000;
-const SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.65);
-const PRE_ROLL_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.3);
-const SPEECH_TRIGGER_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.12);
-const MIN_SPEECH_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.1);
-const MAX_UTTERANCE_SAMPLES = TARGET_SAMPLE_RATE * 12;
-const VAD_RMS_THRESHOLD = 0.012;
+const NOISE_CALIBRATION_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.35);
+const NOISE_CALIBRATION_WAIT_MS = 400;
+const END_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.5);
+const SHORT_PAUSE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.18);
+const TRAILING_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.2);
+const PRE_ROLL_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.45);
+const SPEECH_TRIGGER_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.14);
+const MIN_SPEECH_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.12);
+const SOFT_MAX_UTTERANCE_SAMPLES = TARGET_SAMPLE_RATE * 6;
+const HARD_MAX_UTTERANCE_SAMPLES = TARGET_SAMPLE_RATE * 10;
+const MIN_START_RMS_THRESHOLD = 0.0045;
+const MAX_START_RMS_THRESHOLD = 0.03;
+const MIN_CONTINUE_RMS_THRESHOLD = 0.003;
+const MAX_CONTINUE_RMS_THRESHOLD = 0.02;
+const LOCAL_TRANSCRIBE_TIMEOUT_MS = 30_000;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 function createCaptureState(): CaptureState {
@@ -104,6 +121,8 @@ function createCaptureState(): CaptureState {
     utteranceVoicedSamples: 0,
     silenceSamples: 0,
     utteranceIndex: 0,
+    noiseFloorRms: 0.0025,
+    calibrationSamples: 0,
   };
 }
 
@@ -117,6 +136,9 @@ function readableError(error: unknown) {
     }
     if (error.name === 'NotReadableError') {
       return 'Микрофон занят другим приложением.';
+    }
+    if (error.name === 'TimeoutError') {
+      return 'Локальное распознавание не ответило за 30 секунд.';
     }
   }
   if (error instanceof Error && error.message) return error.message;
@@ -310,6 +332,7 @@ function normalizeTranscription(
 
 export function useLocalSpeechTranscription() {
   const [status, setStatus] = useState<TranscriptionStatus>('idle');
+  const [activity, setActivity] = useState<SpeechActivity>('idle');
   const [finalTokens, setFinalTokens] = useState<LocalSpeechToken[]>([]);
   const [provisionalTokens, setProvisionalTokens] = useState<LocalSpeechToken[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +343,7 @@ export function useLocalSpeechTranscription() {
   const sessionIdRef = useRef<string | null>(null);
   const captureRef = useRef<CaptureState>(createCaptureState());
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingUploadsRef = useRef(0);
   const uploadFailedRef = useRef(false);
   const requestAbortRef = useRef<AbortController | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -333,6 +357,23 @@ export function useLocalSpeechTranscription() {
     statusRef.current = nextStatus;
     setStatus(nextStatus);
   }, []);
+
+  const updateActivity = useCallback((nextActivity: SpeechActivity) => {
+    setActivity((current) =>
+      current === nextActivity ? current : nextActivity,
+    );
+  }, []);
+
+  const syncActivity = useCallback(() => {
+    if (statusRef.current !== 'streaming') return;
+    if (captureRef.current.utteranceStartSample !== null) {
+      updateActivity('speaking');
+    } else if (pendingUploadsRef.current > 0) {
+      updateActivity('recognizing');
+    } else {
+      updateActivity('listening');
+    }
+  }, [updateActivity]);
 
   const tearDownAudio = useCallback(() => {
     captureRef.current.accepting = false;
@@ -376,17 +417,24 @@ export function useLocalSpeechTranscription() {
       return null;
     }
 
-    const utterance =
-      capture.utteranceVoicedSamples >= MIN_SPEECH_SAMPLES
-        ? {
-            samples: joinSamples(
-              capture.utteranceChunks,
-              capture.utteranceSamples,
-            ),
-            startSample: capture.utteranceStartSample,
-            index: capture.utteranceIndex,
-          }
-        : null;
+    let utterance: PendingUtterance | null = null;
+    if (capture.utteranceVoicedSamples >= MIN_SPEECH_SAMPLES) {
+      const joined = joinSamples(
+        capture.utteranceChunks,
+        capture.utteranceSamples,
+      );
+      const removableSilence = Math.max(
+        0,
+        capture.silenceSamples - TRAILING_SILENCE_SAMPLES,
+      );
+      const keptSamples = Math.max(1, joined.length - removableSilence);
+      utterance = {
+        samples:
+          keptSamples === joined.length ? joined : joined.slice(0, keptSamples),
+        startSample: capture.utteranceStartSample,
+        index: capture.utteranceIndex,
+      };
+    }
 
     if (utterance) capture.utteranceIndex += 1;
     capture.utteranceChunks = [];
@@ -406,48 +454,67 @@ export function useLocalSpeechTranscription() {
       const run = runRef.current;
       if (!sessionId || uploadFailedRef.current) return;
 
+      pendingUploadsRef.current += 1;
+      updateActivity('recognizing');
       const task = uploadChainRef.current.then(async () => {
-        if (run !== runRef.current) return;
-        const response = await fetch('/api/local-speech/transcribe', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'audio/wav',
-            'X-Orion-Session-Id': sessionId,
-            'X-Orion-Utterance-Index': String(utterance.index),
-          },
-          body: encodeWav(utterance.samples),
-        });
-        if (!response.ok) {
-          throw new Error(
-            await responseError(
-              response,
-              'Локальное распознавание не обработало фрагмент.',
-            ),
+        try {
+          if (run !== runRef.current) return;
+          const timeoutSignal = AbortSignal.timeout(
+            LOCAL_TRANSCRIBE_TIMEOUT_MS,
           );
+          const sessionSignal = requestAbortRef.current?.signal;
+          const response = await fetch('/api/local-speech/transcribe', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'audio/wav',
+              'X-Orion-Session-Id': sessionId,
+              'X-Orion-Utterance-Index': String(utterance.index),
+            },
+            body: encodeWav(utterance.samples),
+            signal: sessionSignal
+              ? AbortSignal.any([sessionSignal, timeoutSignal])
+              : timeoutSignal,
+          });
+          if (!response.ok) {
+            throw new Error(
+              await responseError(
+                response,
+                'Локальное распознавание не обработало фрагмент.',
+              ),
+            );
+          }
+
+          const payload = (await response.json().catch(() => null)) as
+            | TranscriptionResponse
+            | null;
+          if (!payload || run !== runRef.current) return;
+          const token = normalizeTranscription(
+            payload,
+            Math.round((utterance.startSample / TARGET_SAMPLE_RATE) * 1_000),
+          );
+          if (!token) return;
+
+          setFinalTokens((current) => {
+            const previous = current.at(-1);
+            const needsSpace =
+              previous &&
+              !/\s$/u.test(previous.text) &&
+              !/^[,.;:!?…\])}]/u.test(token.text);
+            return [
+              ...current,
+              needsSpace ? { ...token, text: ` ${token.text}` } : token,
+            ];
+          });
+          setProvisionalTokens([]);
+        } finally {
+          if (run === runRef.current) {
+            pendingUploadsRef.current = Math.max(
+              0,
+              pendingUploadsRef.current - 1,
+            );
+            syncActivity();
+          }
         }
-
-        const payload = (await response.json().catch(() => null)) as
-          | TranscriptionResponse
-          | null;
-        if (!payload || run !== runRef.current) return;
-        const token = normalizeTranscription(
-          payload,
-          Math.round((utterance.startSample / TARGET_SAMPLE_RATE) * 1_000),
-        );
-        if (!token) return;
-
-        setFinalTokens((current) => {
-          const previous = current.at(-1);
-          const needsSpace =
-            previous &&
-            !/\s$/u.test(previous.text) &&
-            !/^[,.;:!?…\])}]/u.test(token.text);
-          return [
-            ...current,
-            needsSpace ? { ...token, text: ` ${token.text}` } : token,
-          ];
-        });
-        setProvisionalTokens([]);
       });
 
       uploadChainRef.current = task;
@@ -455,11 +522,12 @@ export function useLocalSpeechTranscription() {
         if (run !== runRef.current) return;
         uploadFailedRef.current = true;
         setError(readableError(caught));
+        updateActivity('idle');
         updateStatus('error');
         tearDownAudio();
       });
     },
-    [tearDownAudio, updateStatus],
+    [syncActivity, tearDownAudio, updateActivity, updateStatus],
   );
 
   const processPcm = useCallback(
@@ -470,9 +538,10 @@ export function useLocalSpeechTranscription() {
       const samples = resampleTo16Khz(input, sourceRate);
       const startSample = capture.sampleCursor;
       capture.sampleCursor += samples.length;
-      const voiced = rootMeanSquare(samples) >= VAD_RMS_THRESHOLD;
+      const rms = rootMeanSquare(samples);
+      const waitingForSpeech = capture.utteranceStartSample === null;
 
-      if (capture.utteranceStartSample === null) {
+      if (waitingForSpeech) {
         capture.preRoll.push({ samples, startSample });
         capture.preRollSamples += samples.length;
         while (
@@ -481,6 +550,24 @@ export function useLocalSpeechTranscription() {
         ) {
           const removed = capture.preRoll.shift();
           if (removed) capture.preRollSamples -= removed.samples.length;
+        }
+
+        if (capture.calibrationSamples < NOISE_CALIBRATION_SAMPLES) {
+          capture.calibrationSamples += samples.length;
+          capture.noiseFloorRms =
+            capture.noiseFloorRms * 0.85 + Math.min(rms, 0.04) * 0.15;
+          capture.voicedLeadSamples = 0;
+          return;
+        }
+
+        const startThreshold = Math.min(
+          MAX_START_RMS_THRESHOLD,
+          Math.max(MIN_START_RMS_THRESHOLD, capture.noiseFloorRms * 1.8),
+        );
+        const voiced = rms >= startThreshold;
+        if (!voiced) {
+          capture.noiseFloorRms =
+            capture.noiseFloorRms * 0.97 + Math.min(rms, 0.04) * 0.03;
         }
 
         capture.voicedLeadSamples = voiced
@@ -495,9 +582,18 @@ export function useLocalSpeechTranscription() {
         capture.preRoll = [];
         capture.preRollSamples = 0;
         capture.silenceSamples = 0;
+        updateActivity('speaking');
         return;
       }
 
+      const continueThreshold = Math.min(
+        MAX_CONTINUE_RMS_THRESHOLD,
+        Math.max(
+          MIN_CONTINUE_RMS_THRESHOLD,
+          capture.noiseFloorRms * 1.35,
+        ),
+      );
+      const voiced = rms >= continueThreshold;
       capture.utteranceChunks.push(samples);
       capture.utteranceSamples += samples.length;
       if (voiced) {
@@ -507,15 +603,20 @@ export function useLocalSpeechTranscription() {
         capture.silenceSamples += samples.length;
       }
 
-      if (
-        capture.silenceSamples >= SILENCE_SAMPLES ||
-        capture.utteranceSamples >= MAX_UTTERANCE_SAMPLES
-      ) {
+      const reachedNaturalPause =
+        capture.silenceSamples >= END_SILENCE_SAMPLES;
+      const reachedSoftLimitAtPause =
+        capture.utteranceSamples >= SOFT_MAX_UTTERANCE_SAMPLES &&
+        capture.silenceSamples >= SHORT_PAUSE_SAMPLES;
+      const reachedHardLimit =
+        capture.utteranceSamples >= HARD_MAX_UTTERANCE_SAMPLES;
+      if (reachedNaturalPause || reachedSoftLimitAtPause || reachedHardLimit) {
         const utterance = takeUtterance();
         if (utterance) enqueueUtterance(utterance);
+        else syncActivity();
       }
     },
-    [enqueueUtterance, takeUtterance],
+    [enqueueUtterance, syncActivity, takeUtterance, updateActivity],
   );
 
   const flushWorklet = useCallback(async () => {
@@ -549,11 +650,13 @@ export function useLocalSpeechTranscription() {
     runRef.current = run;
     captureRef.current = createCaptureState();
     uploadChainRef.current = Promise.resolve();
+    pendingUploadsRef.current = 0;
     uploadFailedRef.current = false;
     setFinalTokens([]);
     setProvisionalTokens([]);
     setError(null);
     setEngine(null);
+    updateActivity('idle');
     updateStatus('requesting');
 
     try {
@@ -653,8 +756,12 @@ export function useLocalSpeechTranscription() {
       worklet.connect(silentGain);
       silentGain.connect(context.destination);
       await context.resume();
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, NOISE_CALIBRATION_WAIT_MS);
+      });
       if (run !== runRef.current) return;
       updateStatus('streaming');
+      syncActivity();
     } catch (caught) {
       if (run !== runRef.current || controller.signal.aborted) return;
       tearDownAudio();
@@ -662,9 +769,17 @@ export function useLocalSpeechTranscription() {
       sessionIdRef.current = null;
       if (sessionId) void releaseSession(sessionId);
       setError(readableError(caught));
+      updateActivity('idle');
       updateStatus('error');
     }
-  }, [processPcm, releaseSession, tearDownAudio, updateStatus]);
+  }, [
+    processPcm,
+    releaseSession,
+    syncActivity,
+    tearDownAudio,
+    updateActivity,
+    updateStatus,
+  ]);
 
   const stop = useCallback(async () => {
     if (
@@ -686,6 +801,8 @@ export function useLocalSpeechTranscription() {
       const sessionId = sessionIdRef.current;
       sessionIdRef.current = null;
       if (sessionId) await releaseSession(sessionId);
+      pendingUploadsRef.current = 0;
+      updateActivity('idle');
       updateStatus('finished');
       return;
     }
@@ -703,8 +820,18 @@ export function useLocalSpeechTranscription() {
     if (sessionId) await releaseSession(sessionId);
     requestAbortRef.current = null;
     setProvisionalTokens([]);
+    pendingUploadsRef.current = 0;
+    updateActivity('idle');
     updateStatus(uploadFailedRef.current ? 'error' : 'finished');
-  }, [enqueueUtterance, flushWorklet, releaseSession, takeUtterance, tearDownAudio, updateStatus]);
+  }, [
+    enqueueUtterance,
+    flushWorklet,
+    releaseSession,
+    takeUtterance,
+    tearDownAudio,
+    updateActivity,
+    updateStatus,
+  ]);
 
   const reset = useCallback(() => {
     runRef.current += 1;
@@ -716,13 +843,15 @@ export function useLocalSpeechTranscription() {
     tearDownAudio();
     captureRef.current = createCaptureState();
     uploadChainRef.current = Promise.resolve();
+    pendingUploadsRef.current = 0;
     uploadFailedRef.current = false;
     setFinalTokens([]);
     setProvisionalTokens([]);
     setError(null);
     setEngine(null);
+    updateActivity('idle');
     updateStatus('idle');
-  }, [releaseSession, tearDownAudio, updateStatus]);
+  }, [releaseSession, tearDownAudio, updateActivity, updateStatus]);
 
   useEffect(
     () => () => {
@@ -737,6 +866,7 @@ export function useLocalSpeechTranscription() {
 
   return {
     status,
+    activity,
     finalTokens,
     provisionalTokens,
     error,

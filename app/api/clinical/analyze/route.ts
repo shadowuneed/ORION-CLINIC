@@ -21,6 +21,8 @@ const MAX_SEGMENT_CHARACTERS = 1_200;
 const MAX_TRANSCRIPT_CHARACTERS = 12_000;
 const ANALYSIS_RATE_LIMIT = 6;
 const ANALYSIS_RATE_WINDOW_MS = 60_000;
+const ANALYSIS_TOTAL_TIMEOUT_MS = 30_000;
+const GROQ_JSON_RETRY_CODE = 'json_validate_failed';
 
 const speakerRoles = new Set<ClinicalSpeakerRole>([
   'doctor',
@@ -69,16 +71,23 @@ function matchesRequestHost(origin: string, requestUrl: URL) {
   }
 }
 
-function allowAnalysisRequest(key: string) {
+function consumeAnalysisRateLimit(key: string) {
   const now = Date.now();
   const current = analysisRateWindows.get(key);
   if (!current || now - current.startedAt >= ANALYSIS_RATE_WINDOW_MS) {
     analysisRateWindows.set(key, { startedAt: now, requestCount: 1 });
-    return true;
+    return null;
   }
-  if (current.requestCount >= ANALYSIS_RATE_LIMIT) return false;
+  if (current.requestCount >= ANALYSIS_RATE_LIMIT) {
+    return Math.max(
+      1,
+      Math.ceil(
+        (current.startedAt + ANALYSIS_RATE_WINDOW_MS - now) / 1_000,
+      ),
+    );
+  }
   current.requestCount += 1;
-  return true;
+  return null;
 }
 
 async function readBoundedRequestBody(request: Request) {
@@ -263,6 +272,7 @@ const clinicalResponseSchema = {
 
 type GroqPayload = {
   choices?: unknown;
+  error?: unknown;
 };
 
 function readGroqResponse(payload: GroqPayload) {
@@ -278,15 +288,31 @@ function readGroqResponse(payload: GroqPayload) {
 }
 
 class GroqHttpError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    readonly upstreamCode: string | null,
+    readonly retryAfterSeconds: number | null,
+  ) {
     super(`groq_http_${status}`);
   }
+}
+
+function groqErrorCode(payload: GroqPayload | null) {
+  if (!payload || !isRecord(payload.error)) return null;
+  return typeof payload.error.code === 'string' ? payload.error.code : null;
+}
+
+function retryAfterSeconds(value: string | null) {
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
 }
 
 async function runGroq(
   apiKey: string,
   model: string,
   request: ClinicalAnalysisRequest,
+  signal: AbortSignal,
   retry = false,
 ) {
   const messages = [
@@ -314,20 +340,22 @@ async function runGroq(
       body: JSON.stringify({
         model,
         messages,
-        temperature: 0.1,
-        max_completion_tokens: 900,
-        reasoning_effort: 'medium',
+        temperature: retry ? 0 : 0.1,
+        max_completion_tokens: 1_800,
+        reasoning_effort: 'low',
         reasoning_format: 'hidden',
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'orion_clinical_assistance',
-            strict: true,
-            schema: clinicalResponseSchema,
-          },
-        },
+        response_format: retry
+          ? { type: 'json_object' }
+          : {
+              type: 'json_schema',
+              json_schema: {
+                name: 'orion_clinical_assistance',
+                strict: true,
+                schema: clinicalResponseSchema,
+              },
+            },
       }),
-      signal: AbortSignal.timeout(25_000),
+      signal,
     },
   );
 
@@ -335,7 +363,13 @@ async function runGroq(
     | GroqPayload
     | null;
 
-  if (!upstream.ok) throw new GroqHttpError(upstream.status);
+  if (!upstream.ok) {
+    throw new GroqHttpError(
+      upstream.status,
+      groqErrorCode(payload),
+      retryAfterSeconds(upstream.headers.get('retry-after')),
+    );
+  }
   if (!payload) return null;
 
   return readGroqResponse(payload);
@@ -352,11 +386,6 @@ function parseModelJson(value: unknown): unknown {
   }
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]) {
-  const keys = Object.keys(value);
-  return keys.length === allowed.length && keys.every((key) => allowed.includes(key));
-}
-
 function stableSuggestionId(parts: string[]) {
   let hash = 2_166_136_261;
   for (const character of parts.join('|').toLocaleLowerCase('ru')) {
@@ -371,18 +400,6 @@ function validateSuggestion(
   allowedEvidenceIds: Set<string>,
 ): ClinicalSuggestion | null {
   if (!isRecord(value)) return null;
-  if (
-    !hasOnlyKeys(value, [
-      'category',
-      'priority',
-      'title',
-      'rationale',
-      'clinicianPrompt',
-      'evidenceSegmentIds',
-    ])
-  ) {
-    return null;
-  }
 
   const category = value.category;
   const priority = value.priority;
@@ -436,23 +453,21 @@ function validateModelOutput(
 ): Pick<ClinicalAnalysisResponse, 'summary' | 'suggestions'> | null {
   const parsed = parseModelJson(value);
   if (!isRecord(parsed) || !Array.isArray(parsed.suggestions)) return null;
-  if (!hasOnlyKeys(parsed, ['summary', 'suggestions'])) return null;
-  if (parsed.suggestions.length > 4) return null;
 
   const summary = boundedString(parsed.summary, 600);
   if (!summary || forbiddenModelText.test(summary)) return null;
 
   const allowedEvidenceIds = new Set(segments.map((segment) => segment.id));
-  const checkedSuggestions = parsed.suggestions.map((suggestion) =>
-    validateSuggestion(suggestion, allowedEvidenceIds),
-  );
-  if (checkedSuggestions.some((suggestion) => suggestion === null)) return null;
-  const suggestions = checkedSuggestions as ClinicalSuggestion[];
+  const suggestions = parsed.suggestions
+    .slice(0, 8)
+    .map((suggestion) => validateSuggestion(suggestion, allowedEvidenceIds))
+    .filter((suggestion): suggestion is ClinicalSuggestion => suggestion !== null);
+
+  if (parsed.suggestions.length > 0 && suggestions.length === 0) return null;
 
   const uniqueSuggestions = Array.from(
     new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])).values(),
-  );
-  if (uniqueSuggestions.length !== suggestions.length) return null;
+  ).slice(0, 4);
 
   return { summary, suggestions: uniqueSuggestions };
 }
@@ -480,11 +495,15 @@ export async function POST(request: Request) {
     return json({ error: 'Требуется вход врача.', code: 'unauthorized' }, 401);
   }
 
-  if (!allowAnalysisRequest(user?.userId ?? 'local-preview')) {
+  const localRetryAfterSeconds = consumeAnalysisRateLimit(
+    user?.userId ?? 'local-preview',
+  );
+  if (localRetryAfterSeconds !== null) {
     return json(
       {
         error: 'Слишком много запросов анализа. Подождите минуту.',
         code: 'analysis_rate_limited',
+        retryAfterSeconds: localRetryAfterSeconds,
       },
       429,
     );
@@ -547,17 +566,33 @@ export async function POST(request: Request) {
   }
 
   try {
+    const upstreamSignal = AbortSignal.any([
+      request.signal,
+      AbortSignal.timeout(ANALYSIS_TOTAL_TIMEOUT_MS),
+    ]);
     let validated: Pick<
       ClinicalAnalysisResponse,
       'summary' | 'suggestions'
     > | null = null;
     for (let attempt = 0; attempt < 2 && !validated; attempt += 1) {
-      const modelOutput = await runGroq(
-        apiKey.trim(),
-        model,
-        clinicalRequest,
-        attempt > 0,
-      );
+      let modelOutput: unknown;
+      try {
+        modelOutput = await runGroq(
+          apiKey.trim(),
+          model,
+          clinicalRequest,
+          upstreamSignal,
+          attempt > 0,
+        );
+      } catch (error) {
+        const retryableStructuredOutputFailure =
+          attempt === 0 &&
+          error instanceof GroqHttpError &&
+          error.status === 400 &&
+          error.upstreamCode === GROQ_JSON_RETRY_CODE;
+        if (retryableStructuredOutputFailure) continue;
+        throw error;
+      }
       validated = validateModelOutput(
         modelOutput,
         clinicalRequest.segments,
@@ -585,6 +620,10 @@ export async function POST(request: Request) {
     const timedOut =
       error instanceof DOMException && error.name === 'TimeoutError';
     const groqStatus = error instanceof GroqHttpError ? error.status : null;
+    const retryAfter =
+      error instanceof GroqHttpError ? error.retryAfterSeconds : null;
+    const groqCode =
+      error instanceof GroqHttpError ? error.upstreamCode : null;
 
     if (groqStatus === 401 || groqStatus === 403) {
       return json(
@@ -601,8 +640,19 @@ export async function POST(request: Request) {
         {
           error: 'Лимит Groq временно исчерпан. Расшифровка продолжает работать.',
           code: 'analysis_provider_rate_limited',
+          ...(retryAfter !== null ? { retryAfterSeconds: retryAfter } : {}),
         },
         429,
+      );
+    }
+
+    if (groqStatus === 400 && groqCode === GROQ_JSON_RETRY_CODE) {
+      return json(
+        {
+          error: 'Модель не смогла сформировать проверяемые подсказки. Повторите анализ.',
+          code: 'invalid_model_output',
+        },
+        502,
       );
     }
 

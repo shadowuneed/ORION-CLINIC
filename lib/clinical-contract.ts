@@ -42,4 +42,5 @@ export type ClinicalAnalysisResponse = {
 export type ClinicalAnalysisError = {
   error: string;
   code: string;
+  retryAfterSeconds?: number;
 };

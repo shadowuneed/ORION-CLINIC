@@ -7,6 +7,20 @@ import type {
 } from './clinical-contract';
 import { CLINICAL_ANALYSIS_PROVIDER } from './clinical-contract';
 
+const ANALYSIS_CLIENT_TIMEOUT_MS = 35_000;
+
+export class ClinicalAnalysisRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string | null,
+    readonly retryAfterSeconds: number | null,
+  ) {
+    super(message);
+    this.name = 'ClinicalAnalysisRequestError';
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -41,22 +55,44 @@ export async function requestClinicalAnalysis(
   request: ClinicalAnalysisRequest,
   signal: AbortSignal,
 ): Promise<ClinicalAnalysisResponse> {
-  const response = await fetch('/api/clinical/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
-    cache: 'no-store',
-    signal,
-  });
-
-  const body: unknown = await response.json().catch(() => null);
+  const timeoutSignal = AbortSignal.timeout(ANALYSIS_CLIENT_TIMEOUT_MS);
+  let response: Response;
+  let body: unknown;
+  try {
+    response = await fetch('/api/clinical/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      cache: 'no-store',
+      signal: AbortSignal.any([signal, timeoutSignal]),
+    });
+    body = await response.json().catch((error: unknown) => {
+      if (signal.aborted || timeoutSignal.aborted) throw error;
+      return null;
+    });
+  } catch (error) {
+    if (timeoutSignal.aborted && !signal.aborted) {
+      throw new Error(
+        'Анализ не ответил за 35 секунд. Расшифровка сохранена — повторите запрос.',
+      );
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const errorBody = isRecord(body) ? (body as ClinicalAnalysisError) : null;
-    throw new Error(
+    throw new ClinicalAnalysisRequestError(
       errorBody && typeof errorBody.error === 'string'
         ? errorBody.error
         : 'Не удалось получить проверенные подсказки.',
+      response.status,
+      errorBody && typeof errorBody.code === 'string' ? errorBody.code : null,
+      errorBody &&
+        typeof errorBody.retryAfterSeconds === 'number' &&
+        Number.isFinite(errorBody.retryAfterSeconds) &&
+        errorBody.retryAfterSeconds >= 0
+        ? errorBody.retryAfterSeconds
+        : null,
     );
   }
 

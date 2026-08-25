@@ -5,7 +5,10 @@ import {
   type LocalSpeechToken,
   useLocalSpeechTranscription,
 } from '../lib/local-speech-client';
-import { requestClinicalAnalysis } from '../lib/clinical-analysis-client';
+import {
+  ClinicalAnalysisRequestError,
+  requestClinicalAnalysis,
+} from '../lib/clinical-analysis-client';
 import { requestClinicalResearch } from '../lib/clinical-research-client';
 import type {
   ClinicalAnalysisResponse,
@@ -44,6 +47,9 @@ type ResearchState = {
   result?: ClinicalResearchResponse;
   error?: string;
 };
+
+const FIRST_LIVE_ANALYSIS_DELAY_MS = 1_200;
+const LIVE_ANALYSIS_INTERVAL_MS = 12_000;
 
 type WorkingClinicalSegment = ClinicalTranscriptSegment & {
   speaker: string | null;
@@ -240,6 +246,8 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const researchAbortRef = useRef<AbortController | null>(null);
   const lastAnalyzedKeyRef = useRef('');
   const latestAnalysisKeyRef = useRef('');
+  const lastAnalysisStartedAtRef = useRef(0);
+  const analysisBackoffUntilRef = useRef(0);
   const speech = useLocalSpeechTranscription();
 
   useEffect(() => {
@@ -291,7 +299,10 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         new Set(
           speech.finalTokens
             .map((token) => token.speaker)
-            .filter((speaker): speaker is string => Boolean(speaker)),
+            .filter(
+              (speaker): speaker is 'doctor' | 'patient' =>
+                speaker === 'doctor' || speaker === 'patient',
+            ),
         ),
       ),
     [speech.finalTokens],
@@ -300,12 +311,11 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const roleForSpeaker = useCallback(
     (speaker: string | null): SpeakerRole => {
       if (!speaker) return 'unknown';
-      const position = detectedSpeakers.indexOf(speaker);
-      if (position === 0) return rolesSwapped ? 'patient' : 'doctor';
-      if (position === 1) return rolesSwapped ? 'doctor' : 'patient';
+      if (speaker === 'doctor') return rolesSwapped ? 'patient' : 'doctor';
+      if (speaker === 'patient') return rolesSwapped ? 'doctor' : 'patient';
       return 'unknown';
     },
-    [detectedSpeakers, rolesSwapped],
+    [rolesSwapped],
   );
 
   const analysisSegments = useMemo(
@@ -330,7 +340,13 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
   useEffect(() => {
     latestAnalysisKeyRef.current = analysisKey;
-    analysisAbortRef.current?.abort();
+    const activeRequest = analysisAbortRef.current;
+    if (!activeRequest) return;
+    analysisAbortRef.current = null;
+    activeRequest.abort();
+    setAnalysisStatus((current) =>
+      current === 'loading' ? (analysisKey ? 'waiting' : 'idle') : current,
+    );
   }, [analysisKey]);
 
   const runAnalysis = useCallback(
@@ -343,6 +359,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       const controller = new AbortController();
       const requestedKey = analysisKey;
       analysisAbortRef.current = controller;
+      lastAnalysisStartedAtRef.current = Date.now();
       setAnalysisStatus('loading');
       setAnalysisError(null);
 
@@ -360,6 +377,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         }
 
         lastAnalyzedKeyRef.current = requestedKey;
+        analysisBackoffUntilRef.current = 0;
         setAnalysis(result);
         setResearchBySuggestion({});
         setSuggestionReviews((current) => {
@@ -382,12 +400,26 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         ) {
           return;
         }
+        if (
+          error instanceof ClinicalAnalysisRequestError &&
+          error.status === 429
+        ) {
+          const retryAfterSeconds = error.retryAfterSeconds ?? 30;
+          analysisBackoffUntilRef.current = Math.max(
+            analysisBackoffUntilRef.current,
+            Date.now() + Math.max(1, retryAfterSeconds) * 1_000,
+          );
+        }
         setAnalysisStatus('error');
         setAnalysisError(
           error instanceof Error
             ? error.message
             : 'Клинический анализ временно недоступен.',
         );
+      } finally {
+        if (analysisAbortRef.current === controller) {
+          analysisAbortRef.current = null;
+        }
       }
     },
     [analysisCharacterCount, analysisKey, analysisSegments],
@@ -402,26 +434,41 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       return;
     }
 
-    setAnalysisStatus('waiting');
+    setAnalysisStatus((current) =>
+      current === 'loading' ? current : 'waiting',
+    );
+    const elapsedSinceLastStart =
+      Date.now() - lastAnalysisStartedAtRef.current;
+    const delay = lastAnalysisStartedAtRef.current
+      ? Math.max(500, LIVE_ANALYSIS_INTERVAL_MS - elapsedSinceLastStart)
+      : FIRST_LIVE_ANALYSIS_DELAY_MS;
+    const scheduledDelay = Math.max(
+      delay,
+      analysisBackoffUntilRef.current - Date.now(),
+    );
     const timer = window.setTimeout(() => {
       void runAnalysis('live');
-    }, 15_000);
+    }, scheduledDelay);
     return () => window.clearTimeout(timer);
   }, [analysisCharacterCount, analysisKey, runAnalysis, sessionState]);
 
   useEffect(() => {
     if (
       sessionState !== 'review' ||
-      speech.status !== 'finished' ||
+      (speech.status !== 'finished' && speech.status !== 'error') ||
       analysisCharacterCount < 40 ||
       analysisKey === lastAnalyzedKeyRef.current
     ) {
       return;
     }
 
+    const delay = Math.max(
+      400,
+      analysisBackoffUntilRef.current - Date.now(),
+    );
     const timer = window.setTimeout(() => {
       void runAnalysis('final', true);
-    }, 400);
+    }, delay);
     return () => window.clearTimeout(timer);
   }, [
     analysisCharacterCount,
@@ -442,16 +489,25 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const speechStatusLabel = useMemo(() => {
     if (speech.status === 'requesting') return 'Подключаем микрофон';
     if (speech.status === 'connecting') return 'Готовим локальный STT';
-    if (speech.status === 'streaming') return 'Локальный RU/KZ контур активен';
+    if (speech.status === 'streaming' && speech.activity === 'speaking') {
+      return 'Слышу речь · записываю';
+    }
+    if (speech.status === 'streaming' && speech.activity === 'recognizing') {
+      return 'Реплика принята · распознаём';
+    }
+    if (speech.status === 'streaming') {
+      return 'Говорите · локальный RU/KZ контур активен';
+    }
     if (speech.status === 'stopping') return 'Завершаем расшифровку';
     if (speech.status === 'finished') return 'Расшифровка завершена';
     if (speech.status === 'error') return 'Речевой контур не запущен';
     return 'Микрофон ожидает запуска';
-  }, [speech.status]);
+  }, [speech.activity, speech.status]);
 
   const startSession = () => {
     if (!consentConfirmed) return;
     analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
     setElapsedSeconds(0);
     setRolesSwapped(false);
@@ -462,6 +518,8 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
+    lastAnalysisStartedAtRef.current = 0;
+    analysisBackoffUntilRef.current = 0;
     setSessionState('listening');
     void speech.start();
   };
@@ -479,6 +537,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
   const resetSession = () => {
     analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
     speech.reset();
     setConsentConfirmed(false);
@@ -491,11 +550,14 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
+    lastAnalysisStartedAtRef.current = 0;
+    analysisBackoffUntilRef.current = 0;
     setSessionState('ready');
   };
 
   const swapSpeakerRoles = () => {
     analysisAbortRef.current?.abort();
+    analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
     setRolesSwapped((value) => !value);
     setAnalysis(null);
@@ -505,6 +567,8 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
+    lastAnalysisStartedAtRef.current = 0;
+    analysisBackoffUntilRef.current = 0;
   };
 
   const reviewSuggestion = (id: string, status: ReviewStatus) => {
@@ -737,7 +801,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                   <div className="live-transcript__heading">
                     <div>
                       <h2>Живая расшифровка</h2>
-                      <p>Черновой текст видит только врач</p>
+                      <p>Подтверждённый текст видит только врач</p>
                     </div>
                     <span>{speech.finalTokens.length} подтверждённых реплик</span>
                   </div>

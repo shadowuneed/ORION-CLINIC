@@ -1,7 +1,7 @@
 class OrionPcmProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.frameSize = Math.max(512, Math.round(sampleRate * 0.04));
+    this.frameSize = Math.max(256, Math.round(sampleRate * 0.02));
     this.frame = new Float32Array(this.frameSize);
     this.frameOffset = 0;
     this.active = true;

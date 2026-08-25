@@ -114,10 +114,13 @@ def _speaker_payload(
     }
 
 
-def _ordered_role(session: SessionState, utterance_index: int) -> str:
-    first = "doctor" if session.doctor_first else "patient"
-    second = "patient" if session.doctor_first else "doctor"
-    return first if utterance_index % 2 == 0 else second
+def unidentified_speaker(status: str) -> dict[str, Any]:
+    return _speaker_payload(
+        "unknown",
+        confidence=None,
+        method="order_fallback",
+        status=status,
+    )
 
 
 def _update_profile(current: np.ndarray, observed: np.ndarray) -> np.ndarray:
@@ -134,18 +137,26 @@ def identify_speaker(
     utterance_index: int,
 ) -> dict[str, Any]:
     with session.lock:
-        session.utterance_count = max(session.utterance_count, utterance_index + 1)
+        accepted_position = session.utterance_count
+        session.utterance_count += 1
+        first_role = "doctor" if session.doctor_first else "patient"
+        second_role = "patient" if session.doctor_first else "doctor"
         if embedding is None:
             return _speaker_payload(
-                _ordered_role(session, utterance_index),
+                first_role if accepted_position == 0 else "unknown",
                 confidence=None,
                 method="order_fallback",
                 status=embedding_status,
             )
 
-        first_role = "doctor" if session.doctor_first else "patient"
-        second_role = "patient" if session.doctor_first else "doctor"
         if first_role not in session.profiles:
+            if accepted_position > 0:
+                return _speaker_payload(
+                    "unknown",
+                    confidence=None,
+                    method="embedding",
+                    status="first_voice_profile_missing",
+                )
             session.profiles[first_role] = embedding
             return _speaker_payload(
                 first_role,
