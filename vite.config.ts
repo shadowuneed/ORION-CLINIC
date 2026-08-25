@@ -1,7 +1,7 @@
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import hostingConfig from './.openai/hosting.json';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
@@ -9,42 +9,51 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
 
 const { d1, r2 } = hostingConfig;
 
-const localRuntimeVars = {
-  ...(process.env.CLOUDFLARE_ACCOUNT_ID
-    ? { CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID }
-    : {}),
-  ...(process.env.CLOUDFLARE_AI_API_TOKEN
-    ? { CLOUDFLARE_AI_API_TOKEN: process.env.CLOUDFLARE_AI_API_TOKEN }
-    : {}),
-};
-
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
-const localBindingConfig = {
-  main: 'vinext/server/app-router-entry',
-  compatibility_flags: ['nodejs_compat'],
-  vars: localRuntimeVars,
-  d1_databases: d1
-    ? [
-        {
-          binding: d1,
-          database_name: 'site-creator-d1',
-          database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
-        },
-      ]
-    : [],
-  r2_buckets: r2
-    ? [
-        {
-          binding: r2,
-          bucket_name: 'site-creator-r2',
-        },
-      ]
-    : [],
-};
+export default defineConfig(async ({ command, mode }) => {
+  // Load ignored local secrets only for the development server. Production
+  // builds receive runtime secrets from the hosting environment instead.
+  const fileEnv = command === 'serve' ? loadEnv(mode, process.cwd(), '') : {};
+  const localRuntimeVars = {
+    ...(process.env.CLOUDFLARE_ACCOUNT_ID ?? fileEnv.CLOUDFLARE_ACCOUNT_ID
+      ? {
+          CLOUDFLARE_ACCOUNT_ID:
+            process.env.CLOUDFLARE_ACCOUNT_ID ?? fileEnv.CLOUDFLARE_ACCOUNT_ID,
+        }
+      : {}),
+    ...(process.env.CLOUDFLARE_AI_API_TOKEN ?? fileEnv.CLOUDFLARE_AI_API_TOKEN
+      ? {
+          CLOUDFLARE_AI_API_TOKEN:
+            process.env.CLOUDFLARE_AI_API_TOKEN ??
+            fileEnv.CLOUDFLARE_AI_API_TOKEN,
+        }
+      : {}),
+  };
+  const localBindingConfig = {
+    main: 'vinext/server/app-router-entry',
+    compatibility_flags: ['nodejs_compat'],
+    vars: localRuntimeVars,
+    d1_databases: d1
+      ? [
+          {
+            binding: d1,
+            database_name: 'site-creator-d1',
+            database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          },
+        ]
+      : [],
+    r2_buckets: r2
+      ? [
+          {
+            binding: r2,
+            bucket_name: 'site-creator-r2',
+          },
+        ]
+      : [],
+  };
 
-export default defineConfig(async () => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
