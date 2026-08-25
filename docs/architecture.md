@@ -38,6 +38,32 @@ frame configures the session before any binary audio frames are sent.
 Final tokens are append-only. Provisional tokens are replaced on every response
 and must never be persisted or used to create irreversible clinical output.
 
+## Clinical-analysis pipeline
+
+The browser groups only final Soniox tokens into stable segments. A segment is
+closed when the speaker changes, the pause exceeds 1.8 seconds, or the segment
+reaches its size limit. Language switching alone does not split a segment.
+
+The authenticated ORION backend sends a bounded transcript window to Cloudflare
+Workers AI using `@cf/qwen/qwen3.8-27b`. The Cloudflare account ID and API
+token are server runtime values. Neither value is returned to the browser.
+
+The transcript is treated as untrusted evidence rather than instructions. Model
+output is accepted only when it is one complete JSON object, has the exact
+expected fields and enums, contains no more than six suggestions, and cites only
+segment IDs present in the submitted transcript. Any malformed item rejects the
+whole response. The raw provider response and transcript are not logged.
+
+This validation proves structure and citation identity, not clinical truth. A
+production release must additionally ground urgent/safety items to an exact
+server-owned quote or deterministic red-flag rule and validate that behavior
+with clinician-reviewed RU/KZ evaluation cases.
+
+This browser-submitted transcript route is limited to the current synthetic-data
+pilot. Before patient-data use, final segments must be persisted under an
+authenticated encounter and the analysis endpoint must load them from the
+server-owned record rather than accepting clinical text from the client.
+
 ## Credential boundary
 
 The long-lived Soniox key exists only in the server environment. The browser asks
@@ -75,9 +101,9 @@ as audit events and re-label affected transcript segments.
 1. Configure a non-production Soniox project and test only consented sample audio.
 2. Benchmark RU/KZ medical terminology, code-switching, overlapping speech,
    latency, and speaker attribution.
-3. Connect the clinical-analysis model through a server-only contract and add
-   source-segment citations to every suggestion.
-4. Implement the accept/edit/reject API and protocol generation exclusively from
+3. Persist final transcript segments under a clinician-owned encounter and make
+   analysis load only that server-owned evidence.
+4. Persist accept/edit/reject actions and generate protocols exclusively from
    reviewed items.
 5. Move patient-data persistence to an approved Kazakhstan environment, then add
    clinic SSO, roles, retention, export, monitoring, and incident controls.

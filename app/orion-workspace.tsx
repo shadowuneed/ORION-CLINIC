@@ -1,10 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type SonioxToken,
   useSonioxTranscription,
 } from '../lib/soniox-client';
+import { requestClinicalAnalysis } from '../lib/clinical-analysis-client';
+import type {
+  ClinicalAnalysisResponse,
+  ClinicalLanguage,
+  ClinicalSuggestion,
+  ClinicalTranscriptSegment,
+} from '../lib/clinical-contract';
 
 type WorkspaceProps = {
   clinicianName: string;
@@ -20,6 +27,20 @@ type TranscriptTurn = {
   text: string;
   startMs: number | null;
   provisional: boolean;
+};
+
+type AnalysisStatus = 'idle' | 'waiting' | 'loading' | 'ready' | 'error';
+type ReviewStatus = 'pending' | 'accepted' | 'rejected';
+type SuggestionReview = {
+  status: ReviewStatus;
+  title: string;
+  clinicianPrompt: string;
+};
+
+type WorkingClinicalSegment = ClinicalTranscriptSegment & {
+  speaker: string | null;
+  endMs: number | null;
+  detectedLanguages: Set<'ru' | 'kk'>;
 };
 
 function formatDuration(totalSeconds: number) {
@@ -56,6 +77,69 @@ function groupTokens(tokens: SonioxToken[], provisional: boolean) {
   return turns.filter((turn) => turn.text.trim().length > 0);
 }
 
+function segmentFinalTokens(
+  tokens: SonioxToken[],
+  roleForSpeaker: (speaker: string | null) => SpeakerRole,
+) {
+  const working: WorkingClinicalSegment[] = [];
+
+  for (const [index, token] of tokens.entries()) {
+    if (!token.isFinal || !token.text.trim()) continue;
+
+    const previous = working.at(-1);
+    const gap =
+      previous?.endMs !== null &&
+      previous?.endMs !== undefined &&
+      token.startMs !== null
+        ? token.startMs - previous.endMs
+        : null;
+    const continuesPrevious = Boolean(
+      previous &&
+        previous.speaker === token.speaker &&
+        (gap === null || gap <= 1_800) &&
+        previous.text.length + token.text.length <= 1_000,
+    );
+
+    if (continuesPrevious && previous) {
+      previous.text += token.text;
+      previous.endMs = token.endMs ?? previous.endMs;
+      if (token.language === 'ru' || token.language === 'kk') {
+        previous.detectedLanguages.add(token.language);
+      }
+      continue;
+    }
+
+    const detectedLanguages = new Set<'ru' | 'kk'>();
+    if (token.language === 'ru' || token.language === 'kk') {
+      detectedLanguages.add(token.language);
+    }
+
+    working.push({
+      id: `seg_${token.startMs ?? index}_${working.length}`,
+      role: roleForSpeaker(token.speaker),
+      language: token.language,
+      text: token.text,
+      speaker: token.speaker,
+      endMs: token.endMs,
+      detectedLanguages,
+    });
+  }
+
+  return working.slice(-60).map((segment): ClinicalTranscriptSegment => {
+    let language: ClinicalLanguage = 'unknown';
+    if (segment.detectedLanguages.size > 1) language = 'mixed';
+    else if (segment.detectedLanguages.has('ru')) language = 'ru';
+    else if (segment.detectedLanguages.has('kk')) language = 'kk';
+
+    return {
+      id: segment.id,
+      role: segment.role,
+      language,
+      text: segment.text.trim(),
+    };
+  });
+}
+
 function formatTranscriptTime(milliseconds: number | null) {
   if (milliseconds === null) return 'сейчас';
   return formatDuration(Math.floor(milliseconds / 1_000));
@@ -67,11 +151,41 @@ function languageLabel(language: TranscriptTurn['language']) {
   return '—';
 }
 
+function suggestionCategoryLabel(category: ClinicalSuggestion['category']) {
+  if (category === 'clarification') return 'Что уточнить';
+  if (category === 'safety') return 'Безопасность';
+  return 'Вариант действия';
+}
+
+function suggestionCategoryGlyph(category: ClinicalSuggestion['category']) {
+  if (category === 'clarification') return '?';
+  if (category === 'safety') return '!';
+  return '+';
+}
+
+function suggestionPriorityLabel(priority: ClinicalSuggestion['priority']) {
+  if (priority === 'urgent') return 'Срочно проверить';
+  if (priority === 'attention') return 'Обратить внимание';
+  return 'Обычный приоритет';
+}
+
 export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const [consentConfirmed, setConsentConfirmed] = useState(false);
   const [sessionState, setSessionState] = useState<SessionState>('ready');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [rolesSwapped, setRolesSwapped] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>('idle');
+  const [analysis, setAnalysis] = useState<ClinicalAnalysisResponse | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [suggestionReviews, setSuggestionReviews] = useState<
+    Record<string, SuggestionReview>
+  >({});
+  const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(
+    null,
+  );
+  const analysisAbortRef = useRef<AbortController | null>(null);
+  const lastAnalyzedKeyRef = useRef('');
+  const latestAnalysisKeyRef = useRef('');
   const speech = useSonioxTranscription();
 
   useEffect(() => {
@@ -100,21 +214,152 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     () =>
       Array.from(
         new Set(
-          [...speech.finalTokens, ...speech.provisionalTokens]
+          speech.finalTokens
             .map((token) => token.speaker)
             .filter((speaker): speaker is string => Boolean(speaker)),
         ),
       ),
-    [speech.finalTokens, speech.provisionalTokens],
+    [speech.finalTokens],
   );
 
-  const roleForSpeaker = (speaker: string | null): SpeakerRole => {
-    if (!speaker) return 'unknown';
-    const position = detectedSpeakers.indexOf(speaker);
-    if (position === 0) return rolesSwapped ? 'patient' : 'doctor';
-    if (position === 1) return rolesSwapped ? 'doctor' : 'patient';
-    return 'unknown';
-  };
+  const roleForSpeaker = useCallback(
+    (speaker: string | null): SpeakerRole => {
+      if (!speaker) return 'unknown';
+      const position = detectedSpeakers.indexOf(speaker);
+      if (position === 0) return rolesSwapped ? 'patient' : 'doctor';
+      if (position === 1) return rolesSwapped ? 'doctor' : 'patient';
+      return 'unknown';
+    },
+    [detectedSpeakers, rolesSwapped],
+  );
+
+  const analysisSegments = useMemo(
+    () => segmentFinalTokens(speech.finalTokens, roleForSpeaker),
+    [roleForSpeaker, speech.finalTokens],
+  );
+  const analysisKey = useMemo(
+    () =>
+      analysisSegments
+        .map((segment) => `${segment.id}:${segment.role}:${segment.text}`)
+        .join('|'),
+    [analysisSegments],
+  );
+  const analysisCharacterCount = useMemo(
+    () =>
+      analysisSegments.reduce(
+        (total, segment) => total + segment.text.length,
+        0,
+      ),
+    [analysisSegments],
+  );
+
+  useEffect(() => {
+    latestAnalysisKeyRef.current = analysisKey;
+    analysisAbortRef.current?.abort();
+  }, [analysisKey]);
+
+  const runAnalysis = useCallback(
+    async (mode: 'live' | 'final', force = false) => {
+      if (analysisCharacterCount < 40 || analysisSegments.length === 0) return;
+      if (!force && analysisKey === lastAnalyzedKeyRef.current) return;
+
+      analysisAbortRef.current?.abort();
+      const controller = new AbortController();
+      const requestedKey = analysisKey;
+      analysisAbortRef.current = controller;
+      setAnalysisStatus('loading');
+      setAnalysisError(null);
+
+      try {
+        const result = await requestClinicalAnalysis(
+          { segments: analysisSegments, mode },
+          controller.signal,
+        );
+        if (
+          controller.signal.aborted ||
+          analysisAbortRef.current !== controller ||
+          latestAnalysisKeyRef.current !== requestedKey
+        ) {
+          return;
+        }
+
+        lastAnalyzedKeyRef.current = requestedKey;
+        setAnalysis(result);
+        setSuggestionReviews((current) => {
+          const next: Record<string, SuggestionReview> = {};
+          for (const suggestion of result.suggestions) {
+            next[suggestion.id] = current[suggestion.id] ?? {
+              status: 'pending',
+              title: suggestion.title,
+              clinicianPrompt: suggestion.clinicianPrompt,
+            };
+          }
+          return next;
+        });
+        setAnalysisStatus('ready');
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          analysisAbortRef.current !== controller ||
+          latestAnalysisKeyRef.current !== requestedKey
+        ) {
+          return;
+        }
+        setAnalysisStatus('error');
+        setAnalysisError(
+          error instanceof Error
+            ? error.message
+            : 'Клинический анализ временно недоступен.',
+        );
+      }
+    },
+    [analysisCharacterCount, analysisKey, analysisSegments],
+  );
+
+  useEffect(() => {
+    if (
+      sessionState !== 'listening' ||
+      analysisCharacterCount < 80 ||
+      analysisKey === lastAnalyzedKeyRef.current
+    ) {
+      return;
+    }
+
+    setAnalysisStatus('waiting');
+    const timer = window.setTimeout(() => {
+      void runAnalysis('live');
+    }, 7_000);
+    return () => window.clearTimeout(timer);
+  }, [analysisCharacterCount, analysisKey, runAnalysis, sessionState]);
+
+  useEffect(() => {
+    if (
+      sessionState !== 'review' ||
+      speech.status !== 'finished' ||
+      analysisCharacterCount < 40 ||
+      analysisKey === lastAnalyzedKeyRef.current
+    ) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void runAnalysis('final', true);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    analysisCharacterCount,
+    analysisKey,
+    runAnalysis,
+    sessionState,
+    speech.status,
+  ]);
+
+  useEffect(
+    () => () => {
+      analysisAbortRef.current?.abort();
+    },
+    [],
+  );
 
   const speechStatusLabel = useMemo(() => {
     if (speech.status === 'requesting') return 'Получаем временный доступ';
@@ -128,8 +373,15 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
   const startSession = () => {
     if (!consentConfirmed) return;
+    analysisAbortRef.current?.abort();
     setElapsedSeconds(0);
     setRolesSwapped(false);
+    setAnalysisStatus('idle');
+    setAnalysis(null);
+    setAnalysisError(null);
+    setSuggestionReviews({});
+    setEditingSuggestionId(null);
+    lastAnalyzedKeyRef.current = '';
     setSessionState('listening');
     void speech.start();
   };
@@ -146,12 +398,69 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   };
 
   const resetSession = () => {
+    analysisAbortRef.current?.abort();
     speech.reset();
     setConsentConfirmed(false);
     setElapsedSeconds(0);
     setRolesSwapped(false);
+    setAnalysisStatus('idle');
+    setAnalysis(null);
+    setAnalysisError(null);
+    setSuggestionReviews({});
+    setEditingSuggestionId(null);
+    lastAnalyzedKeyRef.current = '';
     setSessionState('ready');
   };
+
+  const swapSpeakerRoles = () => {
+    analysisAbortRef.current?.abort();
+    setRolesSwapped((value) => !value);
+    setAnalysis(null);
+    setAnalysisStatus('waiting');
+    setAnalysisError(null);
+    setSuggestionReviews({});
+    setEditingSuggestionId(null);
+    lastAnalyzedKeyRef.current = '';
+  };
+
+  const reviewSuggestion = (id: string, status: ReviewStatus) => {
+    setSuggestionReviews((current) => {
+      const review = current[id];
+      if (!review) return current;
+      return { ...current, [id]: { ...review, status } };
+    });
+    setEditingSuggestionId(null);
+  };
+
+  const updateSuggestionReview = (
+    id: string,
+    field: 'title' | 'clinicianPrompt',
+    value: string,
+  ) => {
+    setSuggestionReviews((current) => {
+      const review = current[id];
+      if (!review) return current;
+      return {
+        ...current,
+        [id]: { ...review, [field]: value.slice(0, 260) },
+      };
+    });
+  };
+
+  const reviewedSuggestionCount = useMemo(
+    () =>
+      Object.values(suggestionReviews).filter(
+        (review) => review.status !== 'pending',
+      ).length,
+    [suggestionReviews],
+  );
+  const acceptedSuggestionCount = useMemo(
+    () =>
+      Object.values(suggestionReviews).filter(
+        (review) => review.status === 'accepted',
+      ).length,
+    [suggestionReviews],
+  );
 
   return (
     <main className={`orion-shell is-${sessionState}`}>
@@ -194,8 +503,10 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
               <strong>ORION не создаёт аудиофайл</strong>
               <p>
                 {sessionState === 'listening' && speech.status === 'streaming'
-                  ? `Живой поток передаётся в Soniox (${speech.region?.toUpperCase() ?? 'регион проекта'}) только для STT.`
-                  : 'До запуска микрофона аудио не захватывается и не передаётся.'}
+                  ? `Аудиопоток идёт в Soniox (${speech.region?.toUpperCase() ?? 'регион проекта'}); только подтверждённый текст — в Workers AI.`
+                  : sessionState === 'review'
+                    ? 'Аудиофайл не создавался. Для подсказок используется только подтверждённый текст.'
+                    : 'До запуска микрофона аудио не захватывается и не передаётся.'}
               </p>
             </div>
           </div>
@@ -307,7 +618,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                     : 'Калибровка голосов ожидается'}
                 </small>
                 {detectedSpeakers.length >= 2 && (
-                  <button type="button" onClick={() => setRolesSwapped((value) => !value)}>
+                  <button type="button" onClick={swapSpeakerRoles}>
                     Поменять роли
                   </button>
                 )}
@@ -329,7 +640,9 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
               <p className="eyebrow">Приём завершён</p>
               <h2>Сначала решения.<br />Затем протокол.</h2>
               <p className="stage-description">
-                Врач проверяет факты, меняет или отклоняет рекомендации и только после этого создаёт документ.
+                {speech.status === 'stopping'
+                  ? 'ORION принимает последние подтверждённые слова. Решения можно проверять после завершения расшифровки.'
+                  : 'Врач проверяет факты, меняет или отклоняет рекомендации и только после этого создаёт документ.'}
               </p>
               <div className="review-evidence">
                 <div>
@@ -341,11 +654,13 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                   </strong>
                 </div>
                 <div>
-                  <span>Голоса</span>
+                  <span>Подсказки</span>
                   <strong>
-                    {detectedSpeakers.length
-                      ? `${detectedSpeakers.length} распознано`
-                      : 'Не определены'}
+                    {analysis?.suggestions.length
+                      ? `${reviewedSuggestionCount} из ${analysis.suggestions.length} проверено`
+                      : analysisStatus === 'loading'
+                        ? 'Финальный анализ идёт'
+                        : 'Нет проверенных подсказок'}
                   </strong>
                 </div>
                 <div>
@@ -355,8 +670,8 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
               </div>
               <div className="review-steps" aria-label="Этапы проверки">
                 <span><b>1</b> Проверить расшифровку</span>
-                <span><b>2</b> Принять решения</span>
-                <span><b>3</b> Создать протокол</span>
+                <span><b>2</b> Принять решения ({acceptedSuggestionCount})</span>
+                <span><b>3</b> Протокол — после проверки</span>
               </div>
               <button className="secondary-action" type="button" onClick={resetSession}>Новый приём</button>
             </div>
@@ -369,25 +684,217 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
             <span className="private-pill">Приватно</span>
           </div>
 
-          <div className="assistant-empty">
-            <span className="assistant-glyph" aria-hidden="true">✦</span>
-            <h3>
-              {sessionState === 'listening' && speech.status === 'streaming'
-                ? 'Расшифровка идёт отдельно от анализа'
-                : sessionState === 'listening' && speech.status === 'error'
-                  ? 'Речевой контур не запущен'
-                  : 'Здесь будет только важное'}
-            </h3>
-            <p>
-              Клинический анализ будет получать только подтверждённый текст. ORION не перебивает разговор и не показывает пациенту внутренние рекомендации.
-            </p>
-          </div>
+          {analysis?.suggestions.length ? (
+            <div className="assistant-results">
+              <div
+                className="analysis-summary"
+                role="status"
+                aria-live="polite"
+                aria-busy={analysisStatus === 'loading'}
+              >
+                <div>
+                  <span className={`analysis-dot is-${analysisStatus}`} />
+                  <strong>
+                    {analysisStatus === 'loading'
+                      ? 'Обновляем по новым словам'
+                      : analysisStatus === 'waiting'
+                        ? 'Ждём паузу для обновления'
+                        : analysisStatus === 'error'
+                          ? 'Предыдущие подсказки · проверьте актуальность'
+                          : 'Qwen · подтверждённый текст'}
+                  </strong>
+                </div>
+                <p>{analysis.summary}</p>
+              </div>
 
-          <div className="insight-types" aria-label="Типы подсказок">
-            <div><span className="insight-icon question">?</span><p><strong>Что уточнить</strong><small>Недостающие сведения</small></p></div>
-            <div><span className="insight-icon safety">!</span><p><strong>Безопасность</strong><small>Красные флаги и риски</small></p></div>
-            <div><span className="insight-icon plan">+</span><p><strong>Варианты действий</strong><small>Обследования и лечение</small></p></div>
-          </div>
+              {analysisStatus === 'error' && (
+                <div className="analysis-inline-error" role="alert">
+                  <div>
+                    <strong>Не удалось обновить подсказки</strong>
+                    <p>{analysisError ?? 'Клинический анализ временно недоступен.'}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void runAnalysis(
+                        sessionState === 'review' ? 'final' : 'live',
+                        true,
+                      )
+                    }
+                  >
+                    Повторить
+                  </button>
+                </div>
+              )}
+
+              <div className="suggestion-list" aria-live="polite">
+                {analysis.suggestions.map((suggestion) => {
+                  const review = suggestionReviews[suggestion.id] ?? {
+                    status: 'pending' as const,
+                    title: suggestion.title,
+                    clinicianPrompt: suggestion.clinicianPrompt,
+                  };
+                  const isEditing = editingSuggestionId === suggestion.id;
+
+                  return (
+                    <article
+                      className={`suggestion-card category-${suggestion.category} status-${review.status}`}
+                      key={suggestion.id}
+                    >
+                      <div className="suggestion-card__meta">
+                        <span className={`insight-icon ${suggestion.category}`}>
+                          {suggestionCategoryGlyph(suggestion.category)}
+                        </span>
+                        <div>
+                          <strong>{suggestionCategoryLabel(suggestion.category)}</strong>
+                          <small>{suggestionPriorityLabel(suggestion.priority)}</small>
+                        </div>
+                        <span className="review-state">
+                          {review.status === 'accepted'
+                            ? 'Принято'
+                            : review.status === 'rejected'
+                              ? 'Отклонено'
+                              : 'Ожидает врача'}
+                        </span>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="suggestion-editor">
+                          <label>
+                            Решение
+                            <textarea
+                              value={review.title}
+                              onChange={(event) =>
+                                updateSuggestionReview(
+                                  suggestion.id,
+                                  'title',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </label>
+                          <label>
+                            Формулировка для врача
+                            <textarea
+                              value={review.clinicianPrompt}
+                              onChange={(event) =>
+                                updateSuggestionReview(
+                                  suggestion.id,
+                                  'clinicianPrompt',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <>
+                          <h3>{review.title}</h3>
+                          <p>{suggestion.rationale}</p>
+                          <blockquote>{review.clinicianPrompt}</blockquote>
+                        </>
+                      )}
+
+                      <div className="suggestion-evidence">
+                        <span>
+                          Основание: {suggestion.evidenceSegmentIds.length}{' '}
+                          {suggestion.evidenceSegmentIds.length === 1
+                            ? 'фрагмент'
+                            : 'фрагмента'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingSuggestionId(isEditing ? null : suggestion.id)
+                          }
+                        >
+                          {isEditing ? 'Готово' : 'Изменить'}
+                        </button>
+                      </div>
+
+                      <div className="suggestion-actions">
+                        <button
+                          className="accept"
+                          type="button"
+                          onClick={() => reviewSuggestion(suggestion.id, 'accepted')}
+                        >
+                          Принять
+                        </button>
+                        <button
+                          className="reject"
+                          type="button"
+                          onClick={() => reviewSuggestion(suggestion.id, 'rejected')}
+                        >
+                          Отклонить
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div
+                className={`assistant-empty is-${analysisStatus}`}
+                role={analysisStatus === 'error' ? 'alert' : 'status'}
+                aria-live="polite"
+                aria-busy={analysisStatus === 'loading'}
+              >
+                <span className="assistant-glyph" aria-hidden="true">
+                  {analysisStatus === 'loading' || analysisStatus === 'waiting'
+                    ? '···'
+                    : analysisStatus === 'error'
+                      ? '!'
+                      : '✦'}
+                </span>
+                <h3>
+                  {analysisStatus === 'loading'
+                    ? 'Проверяем подтверждённый текст'
+                    : analysisStatus === 'waiting'
+                      ? 'Ждём естественную паузу'
+                      : analysisStatus === 'error'
+                        ? 'Анализ временно недоступен'
+                        : sessionState === 'listening' && speech.status === 'error'
+                          ? 'Речевой контур не запущен'
+                          : analysisStatus === 'ready'
+                            ? 'Надёжных подсказок пока нет'
+                            : 'Здесь будет только важное'}
+                </h3>
+                <p>
+                  {analysisError ??
+                    'Qwen получает только подтверждённый текст. ORION не перебивает разговор и не принимает решения за врача.'}
+                </p>
+                {analysisStatus === 'error' && analysisSegments.length > 0 && (
+                  <button
+                    className="analysis-retry"
+                    type="button"
+                    onClick={() => void runAnalysis(sessionState === 'review' ? 'final' : 'live', true)}
+                  >
+                    Повторить анализ
+                  </button>
+                )}
+              </div>
+
+              <div className="insight-types" aria-label="Типы подсказок">
+                <div><span className="insight-icon clarification">?</span><p><strong>Что уточнить</strong><small>Недостающие сведения</small></p></div>
+                <div><span className="insight-icon safety">!</span><p><strong>Безопасность</strong><small>Красные флаги и риски</small></p></div>
+                <div><span className="insight-icon option">+</span><p><strong>Варианты действий</strong><small>Только для решения врача</small></p></div>
+              </div>
+            </>
+          )}
+
+          {analysisSegments.length > 0 && analysisStatus !== 'loading' && (
+            <button
+              className="analysis-refresh"
+              type="button"
+              onClick={() =>
+                void runAnalysis(sessionState === 'review' ? 'final' : 'live', true)
+              }
+            >
+              Обновить по подтверждённому тексту
+            </button>
+          )}
 
           <div className="decision-rule">
             <span aria-hidden="true">01</span>
@@ -399,7 +906,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       <footer className="orion-footer">
         <span>ORION clinical workspace</span>
         <div>
-          <span><i className="footer-dot" /> Локальный предварительный режим</span>
+          <span><i className="footer-dot" /> Тестовый контур · без реальных данных пациентов</span>
           <span>RU + KZ</span>
           <span>Один микрофон · два голоса</span>
         </div>

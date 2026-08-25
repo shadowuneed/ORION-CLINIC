@@ -9,12 +9,22 @@ const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
 
 const { d1, r2 } = hostingConfig;
 
+const localRuntimeVars = {
+  ...(process.env.CLOUDFLARE_ACCOUNT_ID
+    ? { CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID }
+    : {}),
+  ...(process.env.CLOUDFLARE_AI_API_TOKEN
+    ? { CLOUDFLARE_AI_API_TOKEN: process.env.CLOUDFLARE_AI_API_TOKEN }
+    : {}),
+};
+
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
 const localBindingConfig = {
   main: 'vinext/server/app-router-entry',
   compatibility_flags: ['nodejs_compat'],
+  vars: localRuntimeVars,
   d1_databases: d1
     ? [
         {
