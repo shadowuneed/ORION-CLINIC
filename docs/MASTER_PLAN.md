@@ -332,15 +332,15 @@ be copied into this repository or plan.
 
 ### Phase 0 — Repository, plan, requirements, and architecture
 
-Status: `IN_PROGRESS`; the traceable draft exists, but clinic review, process
-discovery, responsibility approval, KPIs, and the baseline commit remain open.
+Status: `IN_PROGRESS`; the traceable draft and verified Git baseline exist, but
+clinic review, process discovery, responsibility approval, and KPIs remain open.
 
 - [x] Preserve the legacy project.
 - [x] Create a separate ORION Clinic directory.
 - [x] Scaffold a current React/Next/Vinext web surface with durable-state and
       object-storage capabilities available locally.
 - [x] Create root `AGENTS.md`, this master plan, and ADR-0001.
-- [ ] Initialize Git and create the first verified baseline commit.
+- [x] Initialize Git and create the first verified baseline commit.
 - [x] Complete the first recognizable clinician workspace preview.
 - [x] Record exact local launch and verification results.
 - [x] Convert client messages into a traceable draft requirements catalogue and
@@ -1116,8 +1116,10 @@ Do not touch:
 - Agent: Codex.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`.
 - Product name: **ORION Clinic**; **ORION** is the short product mark.
-- Branch/commit: `main`; the first commit is still pending because this host has
-  no configured Git `user.name` or `user.email`, and no identity was invented.
+- Branch/baseline commit: `main` at `0f1bc95`; Git identity is repository-local
+  and derived from the authenticated owner `shadowuneed`, leaving global Git
+  configuration unchanged.
+- Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
 - Runtime at handoff: local web and STT intentionally running on ports `3200` and
@@ -1596,3 +1598,17 @@ the named open decisions. This is the current canonical continuation point.
   RU/KK clinical quality and all production/integration decisions remain open.
 - Next: build an approved synthetic RU/KK/MIXED speech quality harness. Phases 4-10
   remain `NOT_STARTED`.
+
+### 2026-09-03 — verified private Git baseline
+
+- Reason: the product needed a recoverable remote baseline that another engineer or
+  agent can clone without relying on this laptop or rediscovering the implementation
+  history.
+- Decision: publish only the new ORION Clinic checkout to a private repository;
+  preserve the legacy `ariaproject`, local D1/R2/runtime state, model cache and all
+  ignored secrets outside Git.
+- Added: private `shadowuneed/ORION-CLINIC` remote and repository-local verified
+  GitHub noreply identity; global Git configuration was not changed.
+- Verified baseline: commit `0f1bc95` contains all 243 policy-scanned source,
+  migration, documentation and synthetic screenshot files. The final handoff commit
+  records the remote and checkpoint after that baseline.
