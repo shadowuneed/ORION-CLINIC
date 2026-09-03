@@ -1,0 +1,125 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787905220815,
+      "tag": "0000_chemical_piledriver",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787905266387,
+      "tag": "0001_append_only_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787909947210,
+      "tag": "0002_charming_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787916599807,
+      "tag": "0003_foundation_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787916601558,
+      "tag": "0004_command_integrity_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788160802353,
+      "tag": "0005_green_norman_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788162336047,
+      "tag": "0006_encounter_lifecycle_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788162628164,
+      "tag": "0007_encounter_lifecycle_subsecond_fix",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788166343403,
+      "tag": "0008_protocol_head_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788175121626,
+      "tag": "0009_protocol_amendments",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788194261499,
+      "tag": "0010_suggestion_derivative_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788244717217,
+      "tag": "0011_access_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788331462432,
+      "tag": "0012_silly_lady_ursula",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788331844453,
+      "tag": "0013_ambitious_toad_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788331923066,
+      "tag": "0014_striped_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788341991659,
+      "tag": "0015_left_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788425751219,
+      "tag": "0016_last_hemingway",
+      "breakpoints": true
+    }
+  ]
+}

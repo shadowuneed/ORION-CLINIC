@@ -1,0 +1,41 @@
+.state {
+  width: min(720px, calc(100% - 48px));
+  margin: 72px auto;
+  padding: 44px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.state small {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.state h1 {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 48px);
+  letter-spacing: -.04em;
+}
+
+.state p {
+  max-width: 580px;
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+@media (max-width: 680px) {
+  .state {
+    width: calc(100% - 28px);
+    margin: 28px auto;
+    padding: 28px 22px;
+  }
+}

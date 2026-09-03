@@ -1,0 +1,98 @@
+import { env } from 'cloudflare:workers';
+import type { ReactNode } from 'react';
+import {
+  toSiteIdentityPrincipal,
+} from '@/lib/auth/site-identity';
+import type { ActiveMembership } from '@/lib/auth/workspace-access';
+import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
+import { ClinicShell } from './clinic-shell';
+import styles from './authenticated-clinic-page.module.css';
+
+export type ClinicCapability = 'clinician' | 'patient-directory';
+
+export type AuthenticatedClinicContext = {
+  user: ChatGPTUser;
+  capabilities: {
+    clinician: boolean;
+    patientDirectory: boolean;
+  };
+  accessCheck: 'ready' | 'unavailable';
+};
+
+export async function getAuthenticatedClinicContext(
+  returnTo: string,
+): Promise<AuthenticatedClinicContext> {
+  const user = await requireChatGPTUser(returnTo);
+  let memberships: ActiveMembership[] = [];
+  let accessCheck: AuthenticatedClinicContext['accessCheck'] = 'ready';
+
+  try {
+    memberships = await new D1WorkspaceAccessRepository(
+      env.DB,
+    ).listActiveMemberships(
+      toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
+    );
+  } catch {
+    accessCheck = 'unavailable';
+  }
+
+  return {
+    user,
+    accessCheck,
+    capabilities: {
+      clinician: memberships.some((membership) => membership.role === 'clinician'),
+      patientDirectory: memberships.some(
+        (membership) =>
+          membership.role === 'clinician' || membership.role === 'registrar',
+      ),
+    },
+  };
+}
+
+export function AuthenticatedClinicPage({
+  children,
+  context,
+  requiredCapability,
+}: {
+  children: ReactNode;
+  context: AuthenticatedClinicContext;
+  requiredCapability: ClinicCapability;
+}) {
+  const allowed =
+    requiredCapability === 'clinician'
+      ? context.capabilities.clinician
+      : context.capabilities.patientDirectory;
+
+  return (
+    <ClinicShell capabilities={context.capabilities} user={context.user}>
+      {context.accessCheck === 'unavailable' ? (
+        <AccessState
+          title="Проверка доступа недоступна"
+          text="ORION не смог подтвердить роль в D1. Клинические данные и инструменты не открыты. Повторите после восстановления локальной базы."
+        />
+      ) : allowed ? (
+        children
+      ) : (
+        <AccessState
+          title="Нет доступа к разделу"
+          text={
+            requiredCapability === 'clinician'
+              ? 'Этот раздел доступен только пользователю с активной ролью врача.'
+              : 'Нужна активная роль врача или регистратора в выбранной клинике.'
+          }
+        />
+      )}
+    </ClinicShell>
+  );
+}
+
+function AccessState({ title, text }: { title: string; text: string }) {
+  return (
+    <main className={styles.state}>
+      <small>Доступ закрыт безопасно</small>
+      <h1>{title}</h1>
+      <p>{text}</p>
+    </main>
+  );
+}

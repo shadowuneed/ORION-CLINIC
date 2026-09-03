@@ -1,0 +1,203 @@
+'use client';
+
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  LayoutDashboard,
+  LogOut,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Stethoscope,
+  Sun,
+  Users,
+} from 'lucide-react';
+import styles from './clinic-shell.module.css';
+
+type Theme = 'light' | 'dark';
+
+const navigation = [
+  { href: '/', label: 'Рабочий день', icon: LayoutDashboard, capability: 'clinician' },
+  { href: '/patients', label: 'Пациенты', icon: Users, capability: 'patientDirectory' },
+  { href: '/live', label: 'Очный приём', icon: Stethoscope, badge: 'LIVE', capability: 'clinician' },
+] as const;
+
+function isActivePath(pathname: string, href: string) {
+  if (href === '/') return pathname === '/';
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function readTheme(): Theme {
+  try {
+    const saved = window.localStorage.getItem('orion-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {
+    // Continue with the browser preference when storage is unavailable.
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
+}
+
+function persistTheme(theme: Theme) {
+  try {
+    window.localStorage.setItem('orion-theme', theme);
+  } catch {
+    // The cookie still preserves the preference when localStorage is blocked.
+  }
+  document.cookie = `orion-theme=${theme}; Path=/; Max-Age=31536000; SameSite=Lax`;
+}
+
+export function ClinicShell({
+  children,
+  capabilities,
+  user,
+}: {
+  children: React.ReactNode;
+  capabilities: { clinician: boolean; patientDirectory: boolean };
+  user: { displayName: string; email: string | null };
+}) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState<Theme>('light');
+
+  useEffect(() => {
+    const nextTheme = readTheme();
+    document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    const timer = window.setTimeout(() => {
+      setTheme(nextTheme);
+      try {
+        setCollapsed(
+          window.localStorage.getItem('orion-navigation-collapsed') === 'true',
+        );
+      } catch {
+        // A usable expanded navigation is the safe fallback.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const permittedNavigation = navigation.filter(
+    (item) => capabilities[item.capability],
+  );
+  const activeLabel =
+    permittedNavigation.find((item) => isActivePath(pathname, item.href))?.label ??
+    'Рабочее место';
+  const initials = useMemo(
+    () =>
+      user.displayName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join('')
+        .toUpperCase() || 'В',
+    [user.displayName],
+  );
+
+  function toggleNavigation() {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem('orion-navigation-collapsed', String(next));
+      } catch {
+        // The current session still updates even when persistence is blocked.
+      }
+      return next;
+    });
+  }
+
+  function toggleTheme() {
+    const nextTheme: Theme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    persistTheme(nextTheme);
+    setTheme(nextTheme);
+  }
+
+  return (
+    <div className={`${styles.shell} ${collapsed ? styles.collapsed : ''}`}>
+      <header className={styles.topbar}>
+        <Link className={styles.brand} href="/" aria-label="ORION Clinic — рабочий день">
+          <span className={styles.brandMark} aria-hidden="true">O</span>
+          <span className={styles.brandCopy}>
+            <strong>ORION</strong>
+            <small>Clinic</small>
+          </span>
+        </Link>
+
+        <div className={styles.context} aria-label="Текущий раздел">
+          <span className={styles.contextDot} aria-hidden="true" />
+          <span>{activeLabel}</span>
+          <small>Локальный защищённый контур</small>
+        </div>
+
+        <div className={styles.actions}>
+          <button
+            className={styles.iconButton}
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
+            type="button"
+          >
+            {theme === 'dark' ? <Sun aria-hidden="true" size={18} /> : <Moon aria-hidden="true" size={18} />}
+            <span className={styles.actionLabel}>{theme === 'dark' ? 'Светлая' : 'Тёмная'}</span>
+          </button>
+
+          <div className={styles.identity}>
+            <span className={styles.avatar} aria-hidden="true">{initials}</span>
+            <span className={styles.identityCopy}>
+              <strong>{user.displayName}</strong>
+              <small>{user.email ?? 'Sites identity'}</small>
+            </span>
+          </div>
+
+          <a
+            className={styles.signOut}
+            href="/signout-with-chatgpt?return_to=%2F"
+            title="Выйти из ORION Clinic"
+          >
+            <LogOut aria-hidden="true" size={18} />
+            <span className={styles.actionLabel}>Выйти</span>
+          </a>
+        </div>
+      </header>
+
+      <aside className={styles.sidebar}>
+        <nav aria-label="Основная навигация">
+          {permittedNavigation.map((item) => {
+            const Icon = item.icon;
+            const active = isActivePath(pathname, item.href);
+            return (
+              <Link
+                aria-current={active ? 'page' : undefined}
+                className={`${styles.navItem} ${active ? styles.navActive : ''}`}
+                href={item.href}
+                key={item.href}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
+                <span>{item.label}</span>
+                {'badge' in item ? <small>{item.badge}</small> : null}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <button
+          aria-label={collapsed ? 'Развернуть навигацию' : 'Свернуть навигацию'}
+          className={styles.collapseButton}
+          onClick={toggleNavigation}
+          type="button"
+        >
+          {collapsed ? <PanelLeftOpen aria-hidden="true" size={19} /> : <PanelLeftClose aria-hidden="true" size={19} />}
+          <span>Свернуть</span>
+        </button>
+      </aside>
+
+      <div className={styles.content}>{children}</div>
+    </div>
+  );
+}

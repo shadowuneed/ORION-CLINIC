@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orion-clinic",
+  "main": "vinext/server/app-router-entry",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ORION_ENV": "development",
+    "ORION_BUILD_ID": "local",
+    "ORION_SYNTHETIC_DATA_ONLY": "true",
+    "ORION_STT_BASE_URL": "http://127.0.0.1:3101",
+    "ORION_STT_MODEL": "gigaam-multilingual-local",
+    "GROQ_MODEL": "openai/gpt-oss-120b",
+    "GROQ_API_BASE_URL": "https://api.groq.com/openai/v1"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "orion-clinic-local",
+      "database_id": "00000000-0000-4000-8000-000000000000",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "orion-clinic-local"
+    }
+  ]
+}

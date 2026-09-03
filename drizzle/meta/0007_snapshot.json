@@ -1,0 +1,5386 @@
+{
+  "id": "71052613-77a8-4514-a3cc-2bdea6564ba7",
+  "prevId": "1ee37a99-761a-4e4d-a5aa-fa8e7c972c9f",
+  "version": "6",
+  "dialect": "sqlite",
+  "tables": {
+    "analysis_runs": {
+      "name": "analysis_runs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "model_version": {
+          "name": "model_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "input_hash": {
+          "name": "input_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_record_ids_json": {
+          "name": "source_record_ids_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'queued'"
+        },
+        "raw_result_json": {
+          "name": "raw_result_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "validation_result_json": {
+          "name": "validation_result_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metrics_json": {
+          "name": "metrics_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "analysis_encounter_status_idx": {
+          "name": "analysis_encounter_status_idx",
+          "columns": [
+            "encounter_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "analysis_encounter_input_policy_uidx": {
+          "name": "analysis_encounter_input_policy_uidx",
+          "columns": [
+            "encounter_id",
+            "input_hash",
+            "policy_version"
+          ],
+          "isUnique": true
+        },
+        "analysis_scope_id_uidx": {
+          "name": "analysis_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "analysis_scope_encounter_id_uidx": {
+          "name": "analysis_scope_encounter_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "analysis_runs_organization_id_organizations_id_fk": {
+          "name": "analysis_runs_organization_id_organizations_id_fk",
+          "tableFrom": "analysis_runs",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "analysis_runs_facility_id_facilities_id_fk": {
+          "name": "analysis_runs_facility_id_facilities_id_fk",
+          "tableFrom": "analysis_runs",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "analysis_runs_encounter_id_encounters_id_fk": {
+          "name": "analysis_runs_encounter_id_encounters_id_fk",
+          "tableFrom": "analysis_runs",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "analysis_scope_facility_fk": {
+          "name": "analysis_scope_facility_fk",
+          "tableFrom": "analysis_runs",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "analysis_scope_encounter_fk": {
+          "name": "analysis_scope_encounter_fk",
+          "tableFrom": "analysis_runs",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "analysis_kind_enum": {
+          "name": "analysis_kind_enum",
+          "value": "\"analysis_runs\".\"kind\" in ('clinical_note', 'suggestions', 'risk_review')"
+        },
+        "analysis_status_enum": {
+          "name": "analysis_status_enum",
+          "value": "\"analysis_runs\".\"status\" in ('queued', 'running', 'succeeded', 'failed', 'superseded')"
+        },
+        "analysis_source_records_json": {
+          "name": "analysis_source_records_json",
+          "value": "json_valid(\"analysis_runs\".\"source_record_ids_json\")"
+        },
+        "analysis_raw_result_json": {
+          "name": "analysis_raw_result_json",
+          "value": "\"analysis_runs\".\"raw_result_json\" is null or json_valid(\"analysis_runs\".\"raw_result_json\")"
+        },
+        "analysis_validation_result_json": {
+          "name": "analysis_validation_result_json",
+          "value": "\"analysis_runs\".\"validation_result_json\" is null or json_valid(\"analysis_runs\".\"validation_result_json\")"
+        },
+        "analysis_metrics_json": {
+          "name": "analysis_metrics_json",
+          "value": "\"analysis_runs\".\"metrics_json\" is null or json_valid(\"analysis_runs\".\"metrics_json\")"
+        },
+        "analysis_completion_valid": {
+          "name": "analysis_completion_valid",
+          "value": "\"analysis_runs\".\"completed_at\" is null or (\"analysis_runs\".\"started_at\" is not null and \"analysis_runs\".\"completed_at\" >= \"analysis_runs\".\"started_at\")"
+        }
+      }
+    },
+    "audio_assets": {
+      "name": "audio_assets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "object_key": {
+          "name": "object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "byte_size": {
+          "name": "byte_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "retention_state": {
+          "name": "retention_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'temporary'"
+        },
+        "created_by_membership_id": {
+          "name": "created_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "audio_assets_encounter_idx": {
+          "name": "audio_assets_encounter_idx",
+          "columns": [
+            "encounter_id"
+          ],
+          "isUnique": false
+        },
+        "audio_assets_scope_object_key_uidx": {
+          "name": "audio_assets_scope_object_key_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "object_key"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "audio_assets_organization_id_organizations_id_fk": {
+          "name": "audio_assets_organization_id_organizations_id_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_facility_id_facilities_id_fk": {
+          "name": "audio_assets_facility_id_facilities_id_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_encounter_id_encounters_id_fk": {
+          "name": "audio_assets_encounter_id_encounters_id_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_created_by_membership_id_memberships_id_fk": {
+          "name": "audio_assets_created_by_membership_id_memberships_id_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_scope_facility_fk": {
+          "name": "audio_assets_scope_facility_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_scope_encounter_fk": {
+          "name": "audio_assets_scope_encounter_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audio_assets_scope_created_by_fk": {
+          "name": "audio_assets_scope_created_by_fk",
+          "tableFrom": "audio_assets",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audio_assets_byte_size_valid": {
+          "name": "audio_assets_byte_size_valid",
+          "value": "\"audio_assets\".\"byte_size\" >= 0"
+        },
+        "audio_assets_retention_state_enum": {
+          "name": "audio_assets_retention_state_enum",
+          "value": "\"audio_assets\".\"retention_state\" in ('temporary', 'retained', 'deletion_due', 'deleted')"
+        },
+        "audio_assets_duration_valid": {
+          "name": "audio_assets_duration_valid",
+          "value": "\"audio_assets\".\"duration_ms\" is null or \"audio_assets\".\"duration_ms\" >= 0"
+        }
+      }
+    },
+    "audit_events": {
+      "name": "audit_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_membership_id": {
+          "name": "actor_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schema_version": {
+          "name": "schema_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata_json": {
+          "name": "metadata_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "previous_hash": {
+          "name": "previous_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_hash": {
+          "name": "event_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "audit_scope_sequence_uidx": {
+          "name": "audit_scope_sequence_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "sequence"
+          ],
+          "isUnique": true
+        },
+        "audit_scope_time_idx": {
+          "name": "audit_scope_time_idx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "occurred_at"
+          ],
+          "isUnique": false
+        },
+        "audit_entity_time_idx": {
+          "name": "audit_entity_time_idx",
+          "columns": [
+            "entity_type",
+            "entity_id",
+            "occurred_at"
+          ],
+          "isUnique": false
+        },
+        "audit_event_hash_uidx": {
+          "name": "audit_event_hash_uidx",
+          "columns": [
+            "event_hash"
+          ],
+          "isUnique": true
+        },
+        "audit_scope_sequence_hash_uidx": {
+          "name": "audit_scope_sequence_hash_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "sequence",
+            "event_hash"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "audit_events_organization_id_organizations_id_fk": {
+          "name": "audit_events_organization_id_organizations_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_events_facility_id_facilities_id_fk": {
+          "name": "audit_events_facility_id_facilities_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_events_actor_membership_id_memberships_id_fk": {
+          "name": "audit_events_actor_membership_id_memberships_id_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": [
+            "actor_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_scope_facility_fk": {
+          "name": "audit_scope_facility_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_scope_actor_membership_fk": {
+          "name": "audit_scope_actor_membership_fk",
+          "tableFrom": "audit_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "actor_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audit_sequence_positive": {
+          "name": "audit_sequence_positive",
+          "value": "\"audit_events\".\"sequence\" > 0"
+        },
+        "audit_schema_version_positive": {
+          "name": "audit_schema_version_positive",
+          "value": "\"audit_events\".\"schema_version\" > 0"
+        },
+        "audit_genesis_consistent": {
+          "name": "audit_genesis_consistent",
+          "value": "(\"audit_events\".\"sequence\" = 1 and \"audit_events\".\"previous_hash\" is null) or (\"audit_events\".\"sequence\" > 1 and \"audit_events\".\"previous_hash\" is not null)"
+        },
+        "audit_actor_consistent": {
+          "name": "audit_actor_consistent",
+          "value": "(\"audit_events\".\"actor_type\" = 'user' and \"audit_events\".\"actor_membership_id\" is not null) or (\"audit_events\".\"actor_type\" = 'service' and \"audit_events\".\"actor_membership_id\" is null)"
+        },
+        "audit_actor_type_enum": {
+          "name": "audit_actor_type_enum",
+          "value": "\"audit_events\".\"actor_type\" in ('user', 'service')"
+        },
+        "audit_outcome_enum": {
+          "name": "audit_outcome_enum",
+          "value": "\"audit_events\".\"outcome\" in ('succeeded', 'denied', 'failed')"
+        },
+        "audit_metadata_json": {
+          "name": "audit_metadata_json",
+          "value": "json_valid(\"audit_events\".\"metadata_json\")"
+        }
+      }
+    },
+    "audit_stream_heads": {
+      "name": "audit_stream_heads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_sequence": {
+          "name": "last_sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "last_event_hash": {
+          "name": "last_event_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lock_version": {
+          "name": "lock_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "audit_stream_heads_scope_uidx": {
+          "name": "audit_stream_heads_scope_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "audit_stream_heads_organization_id_organizations_id_fk": {
+          "name": "audit_stream_heads_organization_id_organizations_id_fk",
+          "tableFrom": "audit_stream_heads",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_stream_heads_facility_id_facilities_id_fk": {
+          "name": "audit_stream_heads_facility_id_facilities_id_fk",
+          "tableFrom": "audit_stream_heads",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_stream_heads_scope_facility_fk": {
+          "name": "audit_stream_heads_scope_facility_fk",
+          "tableFrom": "audit_stream_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "audit_stream_heads_last_event_fk": {
+          "name": "audit_stream_heads_last_event_fk",
+          "tableFrom": "audit_stream_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "last_sequence",
+            "last_event_hash"
+          ],
+          "tableTo": "audit_events",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "sequence",
+            "event_hash"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audit_stream_heads_sequence_nonnegative": {
+          "name": "audit_stream_heads_sequence_nonnegative",
+          "value": "\"audit_stream_heads\".\"last_sequence\" >= 0"
+        },
+        "audit_stream_heads_lock_positive": {
+          "name": "audit_stream_heads_lock_positive",
+          "value": "\"audit_stream_heads\".\"lock_version\" > 0"
+        },
+        "audit_stream_heads_genesis_consistent": {
+          "name": "audit_stream_heads_genesis_consistent",
+          "value": "(\"audit_stream_heads\".\"last_sequence\" = 0 and \"audit_stream_heads\".\"last_event_hash\" is null) or (\"audit_stream_heads\".\"last_sequence\" > 0 and \"audit_stream_heads\".\"last_event_hash\" is not null)"
+        }
+      }
+    },
+    "clinical_section_heads": {
+      "name": "clinical_section_heads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_version_id": {
+          "name": "current_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lock_version": {
+          "name": "lock_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "clinical_section_heads_scope_subject_uidx": {
+          "name": "clinical_section_heads_scope_subject_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "code"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "clinical_section_heads_organization_id_organizations_id_fk": {
+          "name": "clinical_section_heads_organization_id_organizations_id_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_facility_id_facilities_id_fk": {
+          "name": "clinical_section_heads_facility_id_facilities_id_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_encounter_id_encounters_id_fk": {
+          "name": "clinical_section_heads_encounter_id_encounters_id_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_current_version_id_clinical_section_versions_id_fk": {
+          "name": "clinical_section_heads_current_version_id_clinical_section_versions_id_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "current_version_id"
+          ],
+          "tableTo": "clinical_section_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_scope_facility_fk": {
+          "name": "clinical_section_heads_scope_facility_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_scope_encounter_fk": {
+          "name": "clinical_section_heads_scope_encounter_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_heads_scope_current_fk": {
+          "name": "clinical_section_heads_scope_current_fk",
+          "tableFrom": "clinical_section_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "code",
+            "current_version_id"
+          ],
+          "tableTo": "clinical_section_versions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "code",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "clinical_section_heads_lock_positive": {
+          "name": "clinical_section_heads_lock_positive",
+          "value": "\"clinical_section_heads\".\"lock_version\" > 0"
+        },
+        "clinical_section_heads_code_enum": {
+          "name": "clinical_section_heads_code_enum",
+          "value": "\"clinical_section_heads\".\"code\" in ('complaints', 'history_of_present_illness', 'past_medical_history', 'allergy_status', 'objective_findings', 'preliminary_diagnosis', 'examination_plan', 'treatment_plan')"
+        }
+      }
+    },
+    "clinical_section_versions": {
+      "name": "clinical_section_versions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "review_state": {
+          "name": "review_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'empty'"
+        },
+        "provenance_json": {
+          "name": "provenance_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_type": {
+          "name": "created_by_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_id": {
+          "name": "created_by_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reviewed_by_membership_id": {
+          "name": "reviewed_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "supersedes_section_version_id": {
+          "name": "supersedes_section_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "clinical_section_versions_encounter_code_version_uidx": {
+          "name": "clinical_section_versions_encounter_code_version_uidx",
+          "columns": [
+            "encounter_id",
+            "code",
+            "version"
+          ],
+          "isUnique": true
+        },
+        "clinical_section_versions_scope_subject_id_uidx": {
+          "name": "clinical_section_versions_scope_subject_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "code",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "clinical_section_versions_supersedes_once_uidx": {
+          "name": "clinical_section_versions_supersedes_once_uidx",
+          "columns": [
+            "supersedes_section_version_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "clinical_section_versions_organization_id_organizations_id_fk": {
+          "name": "clinical_section_versions_organization_id_organizations_id_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_facility_id_facilities_id_fk": {
+          "name": "clinical_section_versions_facility_id_facilities_id_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_encounter_id_encounters_id_fk": {
+          "name": "clinical_section_versions_encounter_id_encounters_id_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_reviewed_by_membership_id_memberships_id_fk": {
+          "name": "clinical_section_versions_reviewed_by_membership_id_memberships_id_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "reviewed_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_supersedes_section_version_id_clinical_section_versions_id_fk": {
+          "name": "clinical_section_versions_supersedes_section_version_id_clinical_section_versions_id_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "supersedes_section_version_id"
+          ],
+          "tableTo": "clinical_section_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_scope_facility_fk": {
+          "name": "clinical_section_versions_scope_facility_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_scope_encounter_fk": {
+          "name": "clinical_section_versions_scope_encounter_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_section_versions_scope_reviewer_fk": {
+          "name": "clinical_section_versions_scope_reviewer_fk",
+          "tableFrom": "clinical_section_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "reviewed_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "clinical_section_versions_human_review_valid": {
+          "name": "clinical_section_versions_human_review_valid",
+          "value": "(\"clinical_section_versions\".\"review_state\" not in ('reviewed', 'explicitly_absent')) or (\"clinical_section_versions\".\"reviewed_by_membership_id\" is not null and \"clinical_section_versions\".\"reviewed_at\" is not null)"
+        },
+        "clinical_section_versions_version_positive": {
+          "name": "clinical_section_versions_version_positive",
+          "value": "\"clinical_section_versions\".\"version\" > 0"
+        },
+        "clinical_section_versions_code_enum": {
+          "name": "clinical_section_versions_code_enum",
+          "value": "\"clinical_section_versions\".\"code\" in ('complaints', 'history_of_present_illness', 'past_medical_history', 'allergy_status', 'objective_findings', 'preliminary_diagnosis', 'examination_plan', 'treatment_plan')"
+        },
+        "clinical_section_versions_review_state_enum": {
+          "name": "clinical_section_versions_review_state_enum",
+          "value": "\"clinical_section_versions\".\"review_state\" in ('empty', 'ai_draft', 'clinician_edited', 'reviewed', 'explicitly_absent')"
+        },
+        "clinical_section_versions_created_by_type_enum": {
+          "name": "clinical_section_versions_created_by_type_enum",
+          "value": "\"clinical_section_versions\".\"created_by_type\" in ('user', 'service')"
+        },
+        "clinical_section_versions_provenance_json": {
+          "name": "clinical_section_versions_provenance_json",
+          "value": "json_valid(\"clinical_section_versions\".\"provenance_json\")"
+        }
+      }
+    },
+    "clinical_suggestions": {
+      "name": "clinical_suggestions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "analysis_run_id": {
+          "name": "analysis_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "risk_level": {
+          "name": "risk_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'informational'"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "original_content": {
+          "name": "original_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "evidence_json": {
+          "name": "evidence_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "suggestions_encounter_created_idx": {
+          "name": "suggestions_encounter_created_idx",
+          "columns": [
+            "encounter_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "suggestions_analysis_run_idx": {
+          "name": "suggestions_analysis_run_idx",
+          "columns": [
+            "analysis_run_id"
+          ],
+          "isUnique": false
+        },
+        "suggestions_scope_id_uidx": {
+          "name": "suggestions_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "suggestions_scope_encounter_id_uidx": {
+          "name": "suggestions_scope_encounter_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "clinical_suggestions_organization_id_organizations_id_fk": {
+          "name": "clinical_suggestions_organization_id_organizations_id_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_suggestions_facility_id_facilities_id_fk": {
+          "name": "clinical_suggestions_facility_id_facilities_id_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_suggestions_encounter_id_encounters_id_fk": {
+          "name": "clinical_suggestions_encounter_id_encounters_id_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "clinical_suggestions_analysis_run_id_analysis_runs_id_fk": {
+          "name": "clinical_suggestions_analysis_run_id_analysis_runs_id_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "analysis_run_id"
+          ],
+          "tableTo": "analysis_runs",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestions_scope_facility_fk": {
+          "name": "suggestions_scope_facility_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestions_scope_encounter_fk": {
+          "name": "suggestions_scope_encounter_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestions_scope_analysis_fk": {
+          "name": "suggestions_scope_analysis_fk",
+          "tableFrom": "clinical_suggestions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "analysis_run_id"
+          ],
+          "tableTo": "analysis_runs",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "suggestions_category_enum": {
+          "name": "suggestions_category_enum",
+          "value": "\"clinical_suggestions\".\"category\" in ('clarification', 'safety', 'action', 'medication', 'clinical_section')"
+        },
+        "suggestions_risk_level_enum": {
+          "name": "suggestions_risk_level_enum",
+          "value": "\"clinical_suggestions\".\"risk_level\" in ('informational', 'attention', 'urgent')"
+        },
+        "suggestions_evidence_json": {
+          "name": "suggestions_evidence_json",
+          "value": "json_valid(\"clinical_suggestions\".\"evidence_json\")"
+        }
+      }
+    },
+    "command_idempotency": {
+      "name": "command_idempotency",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_membership_id": {
+          "name": "actor_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_hash": {
+          "name": "request_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'processing'"
+        },
+        "result_resource_type": {
+          "name": "result_resource_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "result_resource_id": {
+          "name": "result_resource_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "response_json": {
+          "name": "response_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "command_idempotency_scope_operation_key_uidx": {
+          "name": "command_idempotency_scope_operation_key_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "actor_membership_id",
+            "operation",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "command_idempotency_scope_id_uidx": {
+          "name": "command_idempotency_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "command_idempotency_organization_id_organizations_id_fk": {
+          "name": "command_idempotency_organization_id_organizations_id_fk",
+          "tableFrom": "command_idempotency",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "command_idempotency_facility_id_facilities_id_fk": {
+          "name": "command_idempotency_facility_id_facilities_id_fk",
+          "tableFrom": "command_idempotency",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "command_idempotency_actor_membership_id_memberships_id_fk": {
+          "name": "command_idempotency_actor_membership_id_memberships_id_fk",
+          "tableFrom": "command_idempotency",
+          "columnsFrom": [
+            "actor_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "command_idempotency_scope_facility_fk": {
+          "name": "command_idempotency_scope_facility_fk",
+          "tableFrom": "command_idempotency",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "command_idempotency_scope_actor_fk": {
+          "name": "command_idempotency_scope_actor_fk",
+          "tableFrom": "command_idempotency",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "actor_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "command_idempotency_completion_consistent": {
+          "name": "command_idempotency_completion_consistent",
+          "value": "(\"command_idempotency\".\"status\" = 'processing' and \"command_idempotency\".\"completed_at\" is null) or (\"command_idempotency\".\"status\" <> 'processing' and \"command_idempotency\".\"completed_at\" is not null)"
+        },
+        "command_idempotency_status_enum": {
+          "name": "command_idempotency_status_enum",
+          "value": "\"command_idempotency\".\"status\" in ('processing', 'succeeded', 'failed')"
+        },
+        "command_idempotency_response_json": {
+          "name": "command_idempotency_response_json",
+          "value": "\"command_idempotency\".\"response_json\" is null or json_valid(\"command_idempotency\".\"response_json\")"
+        }
+      }
+    },
+    "consent_events": {
+      "name": "consent_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "consent_type": {
+          "name": "consent_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "captured_by_membership_id": {
+          "name": "captured_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policy_version": {
+          "name": "policy_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "policy_hash": {
+          "name": "policy_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notice_language": {
+          "name": "notice_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "external_processor": {
+          "name": "external_processor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evidence_object_key": {
+          "name": "evidence_object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effective_at": {
+          "name": "effective_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "supersedes_consent_event_id": {
+          "name": "supersedes_consent_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "consent_patient_type_time_idx": {
+          "name": "consent_patient_type_time_idx",
+          "columns": [
+            "patient_id",
+            "consent_type",
+            "occurred_at"
+          ],
+          "isUnique": false
+        },
+        "consent_encounter_idx": {
+          "name": "consent_encounter_idx",
+          "columns": [
+            "encounter_id"
+          ],
+          "isUnique": false
+        },
+        "consent_scope_id_uidx": {
+          "name": "consent_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "consent_scope_subject_id_uidx": {
+          "name": "consent_scope_subject_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "consent_type",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "consent_scope_encounter_version_uidx": {
+          "name": "consent_scope_encounter_version_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "encounter_id",
+            "consent_type",
+            "version"
+          ],
+          "isUnique": true
+        },
+        "consent_scope_encounter_event_uidx": {
+          "name": "consent_scope_encounter_event_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "encounter_id",
+            "consent_type",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "consent_supersedes_once_uidx": {
+          "name": "consent_supersedes_once_uidx",
+          "columns": [
+            "supersedes_consent_event_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "consent_events_organization_id_organizations_id_fk": {
+          "name": "consent_events_organization_id_organizations_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_events_facility_id_facilities_id_fk": {
+          "name": "consent_events_facility_id_facilities_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_events_patient_id_patients_id_fk": {
+          "name": "consent_events_patient_id_patients_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_events_encounter_id_encounters_id_fk": {
+          "name": "consent_events_encounter_id_encounters_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_events_captured_by_membership_id_memberships_id_fk": {
+          "name": "consent_events_captured_by_membership_id_memberships_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "captured_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_events_supersedes_consent_event_id_consent_events_id_fk": {
+          "name": "consent_events_supersedes_consent_event_id_consent_events_id_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "supersedes_consent_event_id"
+          ],
+          "tableTo": "consent_events",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_scope_facility_fk": {
+          "name": "consent_scope_facility_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_scope_patient_fk": {
+          "name": "consent_scope_patient_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_scope_encounter_fk": {
+          "name": "consent_scope_encounter_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_scope_captured_by_fk": {
+          "name": "consent_scope_captured_by_fk",
+          "tableFrom": "consent_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "captured_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "consent_withdrawal_has_source": {
+          "name": "consent_withdrawal_has_source",
+          "value": "\"consent_events\".\"decision\" <> 'withdrawn' or \"consent_events\".\"supersedes_consent_event_id\" is not null"
+        },
+        "consent_expiry_valid": {
+          "name": "consent_expiry_valid",
+          "value": "\"consent_events\".\"expires_at\" is null or \"consent_events\".\"expires_at\" > \"consent_events\".\"effective_at\""
+        },
+        "consent_version_positive": {
+          "name": "consent_version_positive",
+          "value": "\"consent_events\".\"version\" > 0"
+        },
+        "consent_type_enum": {
+          "name": "consent_type_enum",
+          "value": "\"consent_events\".\"consent_type\" in ('care', 'transient_audio_processing', 'audio_retention', 'transcript_storage', 'external_ai_processing', 'data_exchange', 'notifications')"
+        },
+        "consent_decision_enum": {
+          "name": "consent_decision_enum",
+          "value": "\"consent_events\".\"decision\" in ('granted', 'denied', 'withdrawn')"
+        },
+        "consent_notice_language_enum": {
+          "name": "consent_notice_language_enum",
+          "value": "\"consent_events\".\"notice_language\" in ('ru', 'kk')"
+        },
+        "consent_source_enum": {
+          "name": "consent_source_enum",
+          "value": "\"consent_events\".\"source\" in ('written', 'verbal', 'digital')"
+        }
+      }
+    },
+    "consent_heads": {
+      "name": "consent_heads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "consent_type": {
+          "name": "consent_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_consent_event_id": {
+          "name": "current_consent_event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lock_version": {
+          "name": "lock_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "consent_heads_scope_subject_type_uidx": {
+          "name": "consent_heads_scope_subject_type_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "encounter_id",
+            "consent_type"
+          ],
+          "isUnique": true
+        },
+        "consent_heads_scope_id_uidx": {
+          "name": "consent_heads_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "consent_heads_organization_id_organizations_id_fk": {
+          "name": "consent_heads_organization_id_organizations_id_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_facility_id_facilities_id_fk": {
+          "name": "consent_heads_facility_id_facilities_id_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_patient_id_patients_id_fk": {
+          "name": "consent_heads_patient_id_patients_id_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_encounter_id_encounters_id_fk": {
+          "name": "consent_heads_encounter_id_encounters_id_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_current_consent_event_id_consent_events_id_fk": {
+          "name": "consent_heads_current_consent_event_id_consent_events_id_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "current_consent_event_id"
+          ],
+          "tableTo": "consent_events",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_scope_facility_fk": {
+          "name": "consent_heads_scope_facility_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_scope_patient_fk": {
+          "name": "consent_heads_scope_patient_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_scope_encounter_fk": {
+          "name": "consent_heads_scope_encounter_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "consent_heads_scope_current_event_fk": {
+          "name": "consent_heads_scope_current_event_fk",
+          "tableFrom": "consent_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "encounter_id",
+            "consent_type",
+            "current_consent_event_id"
+          ],
+          "tableTo": "consent_events",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "patient_id",
+            "encounter_id",
+            "consent_type",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "consent_heads_type_enum": {
+          "name": "consent_heads_type_enum",
+          "value": "\"consent_heads\".\"consent_type\" in ('care', 'transient_audio_processing', 'audio_retention', 'transcript_storage', 'external_ai_processing', 'data_exchange', 'notifications')"
+        },
+        "consent_heads_lock_positive": {
+          "name": "consent_heads_lock_positive",
+          "value": "\"consent_heads\".\"lock_version\" > 0"
+        }
+      }
+    },
+    "document_artifacts": {
+      "name": "document_artifacts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "protocol_version_id": {
+          "name": "protocol_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "object_key": {
+          "name": "object_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "byte_size": {
+          "name": "byte_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_by_membership_id": {
+          "name": "created_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "documents_encounter_kind_idx": {
+          "name": "documents_encounter_kind_idx",
+          "columns": [
+            "encounter_id",
+            "kind"
+          ],
+          "isUnique": false
+        },
+        "documents_scope_object_key_uidx": {
+          "name": "documents_scope_object_key_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "object_key"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "document_artifacts_organization_id_organizations_id_fk": {
+          "name": "document_artifacts_organization_id_organizations_id_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "document_artifacts_facility_id_facilities_id_fk": {
+          "name": "document_artifacts_facility_id_facilities_id_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "document_artifacts_encounter_id_encounters_id_fk": {
+          "name": "document_artifacts_encounter_id_encounters_id_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "document_artifacts_protocol_version_id_protocol_versions_id_fk": {
+          "name": "document_artifacts_protocol_version_id_protocol_versions_id_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "document_artifacts_created_by_membership_id_memberships_id_fk": {
+          "name": "document_artifacts_created_by_membership_id_memberships_id_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "documents_scope_facility_fk": {
+          "name": "documents_scope_facility_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "documents_scope_encounter_fk": {
+          "name": "documents_scope_encounter_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "documents_scope_protocol_fk": {
+          "name": "documents_scope_protocol_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "documents_scope_created_by_fk": {
+          "name": "documents_scope_created_by_fk",
+          "tableFrom": "document_artifacts",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "documents_byte_size_valid": {
+          "name": "documents_byte_size_valid",
+          "value": "\"document_artifacts\".\"byte_size\" >= 0"
+        },
+        "documents_kind_enum": {
+          "name": "documents_kind_enum",
+          "value": "\"document_artifacts\".\"kind\" in ('protocol_docx', 'protocol_pdf', 'transcript_txt', 'audit_json', 'bundle_zip')"
+        },
+        "documents_status_enum": {
+          "name": "documents_status_enum",
+          "value": "\"document_artifacts\".\"status\" in ('pending', 'ready', 'failed', 'deleted')"
+        }
+      }
+    },
+    "encounters": {
+      "name": "encounters",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "clinician_membership_id": {
+          "name": "clinician_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "reason_for_visit": {
+          "name": "reason_for_visit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "finalized_at": {
+          "name": "finalized_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "encounters_scope_status_idx": {
+          "name": "encounters_scope_status_idx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "encounters_patient_started_idx": {
+          "name": "encounters_patient_started_idx",
+          "columns": [
+            "patient_id",
+            "started_at"
+          ],
+          "isUnique": false
+        },
+        "encounters_clinician_status_idx": {
+          "name": "encounters_clinician_status_idx",
+          "columns": [
+            "clinician_membership_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "encounters_scope_id_uidx": {
+          "name": "encounters_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "encounters_organization_id_organizations_id_fk": {
+          "name": "encounters_organization_id_organizations_id_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_facility_id_facilities_id_fk": {
+          "name": "encounters_facility_id_facilities_id_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_patient_id_patients_id_fk": {
+          "name": "encounters_patient_id_patients_id_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_clinician_membership_id_memberships_id_fk": {
+          "name": "encounters_clinician_membership_id_memberships_id_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "clinician_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_scope_facility_fk": {
+          "name": "encounters_scope_facility_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_scope_patient_fk": {
+          "name": "encounters_scope_patient_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "encounters_scope_clinician_fk": {
+          "name": "encounters_scope_clinician_fk",
+          "tableFrom": "encounters",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "clinician_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "encounters_status_enum": {
+          "name": "encounters_status_enum",
+          "value": "\"encounters\".\"status\" in ('draft', 'ready', 'in_progress', 'review', 'finalized', 'amended', 'cancelled')"
+        },
+        "encounters_version_positive": {
+          "name": "encounters_version_positive",
+          "value": "\"encounters\".\"version\" > 0"
+        },
+        "encounters_timing_valid": {
+          "name": "encounters_timing_valid",
+          "value": "\"encounters\".\"ended_at\" is null or (\"encounters\".\"started_at\" is not null and \"encounters\".\"ended_at\" >= \"encounters\".\"started_at\")"
+        },
+        "encounters_finalization_valid": {
+          "name": "encounters_finalization_valid",
+          "value": "\"encounters\".\"finalized_at\" is null or \"encounters\".\"status\" in ('finalized', 'amended')"
+        }
+      }
+    },
+    "facilities": {
+      "name": "facilities",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "timezone": {
+          "name": "timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'Asia/Almaty'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "facilities_organization_idx": {
+          "name": "facilities_organization_idx",
+          "columns": [
+            "organization_id"
+          ],
+          "isUnique": false
+        },
+        "facilities_scope_id_uidx": {
+          "name": "facilities_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "facilities_org_name_uidx": {
+          "name": "facilities_org_name_uidx",
+          "columns": [
+            "organization_id",
+            "name"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "facilities_organization_id_organizations_id_fk": {
+          "name": "facilities_organization_id_organizations_id_fk",
+          "tableFrom": "facilities",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "facilities_status_enum": {
+          "name": "facilities_status_enum",
+          "value": "\"facilities\".\"status\" in ('active', 'suspended')"
+        },
+        "facilities_version_positive": {
+          "name": "facilities_version_positive",
+          "value": "\"facilities\".\"version\" > 0"
+        }
+      }
+    },
+    "memberships": {
+      "name": "memberships",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "memberships_scope_user_uidx": {
+          "name": "memberships_scope_user_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "user_id"
+          ],
+          "isUnique": true
+        },
+        "memberships_user_idx": {
+          "name": "memberships_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "memberships_scope_id_uidx": {
+          "name": "memberships_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "memberships_organization_id_organizations_id_fk": {
+          "name": "memberships_organization_id_organizations_id_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "memberships_facility_id_facilities_id_fk": {
+          "name": "memberships_facility_id_facilities_id_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "memberships_user_id_users_id_fk": {
+          "name": "memberships_user_id_users_id_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "memberships_scope_facility_fk": {
+          "name": "memberships_scope_facility_fk",
+          "tableFrom": "memberships",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "memberships_role_enum": {
+          "name": "memberships_role_enum",
+          "value": "\"memberships\".\"role\" in ('clinician', 'nurse', 'registrar', 'administrator', 'auditor')"
+        },
+        "memberships_status_enum": {
+          "name": "memberships_status_enum",
+          "value": "\"memberships\".\"status\" in ('active', 'disabled')"
+        },
+        "memberships_version_positive": {
+          "name": "memberships_version_positive",
+          "value": "\"memberships\".\"version\" > 0"
+        }
+      }
+    },
+    "organizations": {
+      "name": "organizations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "organizations_status_enum": {
+          "name": "organizations_status_enum",
+          "value": "\"organizations\".\"status\" in ('active', 'suspended')"
+        },
+        "organizations_version_positive": {
+          "name": "organizations_version_positive",
+          "value": "\"organizations\".\"version\" > 0"
+        }
+      }
+    },
+    "outbox_events": {
+      "name": "outbox_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aggregate_type": {
+          "name": "aggregate_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aggregate_id": {
+          "name": "aggregate_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aggregate_version": {
+          "name": "aggregate_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "command_id": {
+          "name": "command_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload_json": {
+          "name": "payload_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_idempotency_key": {
+          "name": "event_idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "next_attempt_at": {
+          "name": "next_attempt_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error_code": {
+          "name": "last_error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_error_at": {
+          "name": "last_error_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "outbox_scope_event_idempotency_uidx": {
+          "name": "outbox_scope_event_idempotency_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "event_idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "outbox_dispatch_idx": {
+          "name": "outbox_dispatch_idx",
+          "columns": [
+            "status",
+            "next_attempt_at"
+          ],
+          "isUnique": false
+        },
+        "outbox_aggregate_idx": {
+          "name": "outbox_aggregate_idx",
+          "columns": [
+            "aggregate_type",
+            "aggregate_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "outbox_events_organization_id_organizations_id_fk": {
+          "name": "outbox_events_organization_id_organizations_id_fk",
+          "tableFrom": "outbox_events",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "outbox_events_facility_id_facilities_id_fk": {
+          "name": "outbox_events_facility_id_facilities_id_fk",
+          "tableFrom": "outbox_events",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "outbox_events_command_id_command_idempotency_id_fk": {
+          "name": "outbox_events_command_id_command_idempotency_id_fk",
+          "tableFrom": "outbox_events",
+          "columnsFrom": [
+            "command_id"
+          ],
+          "tableTo": "command_idempotency",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "outbox_scope_facility_fk": {
+          "name": "outbox_scope_facility_fk",
+          "tableFrom": "outbox_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "outbox_scope_command_fk": {
+          "name": "outbox_scope_command_fk",
+          "tableFrom": "outbox_events",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "command_id"
+          ],
+          "tableTo": "command_idempotency",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "outbox_attempts_nonnegative": {
+          "name": "outbox_attempts_nonnegative",
+          "value": "\"outbox_events\".\"attempts\" >= 0"
+        },
+        "outbox_aggregate_version_positive": {
+          "name": "outbox_aggregate_version_positive",
+          "value": "\"outbox_events\".\"aggregate_version\" > 0"
+        },
+        "outbox_lease_consistent": {
+          "name": "outbox_lease_consistent",
+          "value": "(\"outbox_events\".\"status\" = 'processing' and \"outbox_events\".\"lease_owner\" is not null and \"outbox_events\".\"lease_expires_at\" is not null and \"outbox_events\".\"claimed_at\" is not null) or (\"outbox_events\".\"status\" <> 'processing')"
+        },
+        "outbox_completion_consistent": {
+          "name": "outbox_completion_consistent",
+          "value": "(\"outbox_events\".\"status\" = 'succeeded' and \"outbox_events\".\"completed_at\" is not null) or (\"outbox_events\".\"status\" <> 'succeeded')"
+        },
+        "outbox_status_enum": {
+          "name": "outbox_status_enum",
+          "value": "\"outbox_events\".\"status\" in ('pending', 'processing', 'succeeded', 'failed', 'dead_letter')"
+        },
+        "outbox_payload_json": {
+          "name": "outbox_payload_json",
+          "value": "json_valid(\"outbox_events\".\"payload_json\")"
+        }
+      }
+    },
+    "patients": {
+      "name": "patients",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "medical_record_number": {
+          "name": "medical_record_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "birth_date": {
+          "name": "birth_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sex_at_birth": {
+          "name": "sex_at_birth",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'not_recorded'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "patients_scope_mrn_uidx": {
+          "name": "patients_scope_mrn_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "medical_record_number"
+          ],
+          "isUnique": true
+        },
+        "patients_scope_name_idx": {
+          "name": "patients_scope_name_idx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "display_name"
+          ],
+          "isUnique": false
+        },
+        "patients_scope_id_uidx": {
+          "name": "patients_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "patients_organization_id_organizations_id_fk": {
+          "name": "patients_organization_id_organizations_id_fk",
+          "tableFrom": "patients",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "patients_facility_id_facilities_id_fk": {
+          "name": "patients_facility_id_facilities_id_fk",
+          "tableFrom": "patients",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "patients_scope_facility_fk": {
+          "name": "patients_scope_facility_fk",
+          "tableFrom": "patients",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "patients_sex_at_birth_enum": {
+          "name": "patients_sex_at_birth_enum",
+          "value": "\"patients\".\"sex_at_birth\" in ('female', 'male', 'unknown', 'not_recorded')"
+        },
+        "patients_status_enum": {
+          "name": "patients_status_enum",
+          "value": "\"patients\".\"status\" in ('active', 'inactive', 'merged')"
+        },
+        "patients_version_positive": {
+          "name": "patients_version_positive",
+          "value": "\"patients\".\"version\" > 0"
+        }
+      }
+    },
+    "protocol_heads": {
+      "name": "protocol_heads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_protocol_version_id": {
+          "name": "current_protocol_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_signed_protocol_version_id": {
+          "name": "current_signed_protocol_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lock_version": {
+          "name": "lock_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "protocol_heads_scope_encounter_uidx": {
+          "name": "protocol_heads_scope_encounter_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "protocol_heads_organization_id_organizations_id_fk": {
+          "name": "protocol_heads_organization_id_organizations_id_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_facility_id_facilities_id_fk": {
+          "name": "protocol_heads_facility_id_facilities_id_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_encounter_id_encounters_id_fk": {
+          "name": "protocol_heads_encounter_id_encounters_id_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_current_protocol_version_id_protocol_versions_id_fk": {
+          "name": "protocol_heads_current_protocol_version_id_protocol_versions_id_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "current_protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_current_signed_protocol_version_id_protocol_versions_id_fk": {
+          "name": "protocol_heads_current_signed_protocol_version_id_protocol_versions_id_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "current_signed_protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_scope_facility_fk": {
+          "name": "protocol_heads_scope_facility_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_scope_encounter_fk": {
+          "name": "protocol_heads_scope_encounter_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_scope_current_fk": {
+          "name": "protocol_heads_scope_current_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "current_protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_heads_scope_signed_fk": {
+          "name": "protocol_heads_scope_signed_fk",
+          "tableFrom": "protocol_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "current_signed_protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "protocol_heads_lock_positive": {
+          "name": "protocol_heads_lock_positive",
+          "value": "\"protocol_heads\".\"lock_version\" > 0"
+        }
+      }
+    },
+    "protocol_versions": {
+      "name": "protocol_versions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
+        "content_json": {
+          "name": "content_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_hash": {
+          "name": "source_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_membership_id": {
+          "name": "created_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "signed_by_membership_id": {
+          "name": "signed_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "signed_at": {
+          "name": "signed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "supersedes_protocol_version_id": {
+          "name": "supersedes_protocol_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "protocol_versions_encounter_version_uidx": {
+          "name": "protocol_versions_encounter_version_uidx",
+          "columns": [
+            "encounter_id",
+            "version"
+          ],
+          "isUnique": true
+        },
+        "protocol_versions_encounter_status_idx": {
+          "name": "protocol_versions_encounter_status_idx",
+          "columns": [
+            "encounter_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "protocol_versions_scope_id_uidx": {
+          "name": "protocol_versions_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "protocol_versions_scope_encounter_id_uidx": {
+          "name": "protocol_versions_scope_encounter_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "protocol_versions_supersedes_once_uidx": {
+          "name": "protocol_versions_supersedes_once_uidx",
+          "columns": [
+            "supersedes_protocol_version_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "protocol_versions_organization_id_organizations_id_fk": {
+          "name": "protocol_versions_organization_id_organizations_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_facility_id_facilities_id_fk": {
+          "name": "protocol_versions_facility_id_facilities_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_encounter_id_encounters_id_fk": {
+          "name": "protocol_versions_encounter_id_encounters_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_created_by_membership_id_memberships_id_fk": {
+          "name": "protocol_versions_created_by_membership_id_memberships_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_signed_by_membership_id_memberships_id_fk": {
+          "name": "protocol_versions_signed_by_membership_id_memberships_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "signed_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_supersedes_protocol_version_id_protocol_versions_id_fk": {
+          "name": "protocol_versions_supersedes_protocol_version_id_protocol_versions_id_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "supersedes_protocol_version_id"
+          ],
+          "tableTo": "protocol_versions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_scope_facility_fk": {
+          "name": "protocol_versions_scope_facility_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_scope_encounter_fk": {
+          "name": "protocol_versions_scope_encounter_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_scope_created_by_fk": {
+          "name": "protocol_versions_scope_created_by_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "created_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "protocol_versions_scope_signed_by_fk": {
+          "name": "protocol_versions_scope_signed_by_fk",
+          "tableFrom": "protocol_versions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "signed_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "protocol_versions_version_positive": {
+          "name": "protocol_versions_version_positive",
+          "value": "\"protocol_versions\".\"version\" > 0"
+        },
+        "protocol_versions_signature_consistent": {
+          "name": "protocol_versions_signature_consistent",
+          "value": "(\"protocol_versions\".\"status\" = 'signed' and \"protocol_versions\".\"signed_by_membership_id\" is not null and \"protocol_versions\".\"signed_at\" is not null) or (\"protocol_versions\".\"status\" = 'draft' and \"protocol_versions\".\"signed_by_membership_id\" is null and \"protocol_versions\".\"signed_at\" is null)"
+        },
+        "protocol_versions_status_enum": {
+          "name": "protocol_versions_status_enum",
+          "value": "\"protocol_versions\".\"status\" in ('draft', 'signed')"
+        },
+        "protocol_versions_content_json": {
+          "name": "protocol_versions_content_json",
+          "value": "json_valid(\"protocol_versions\".\"content_json\")"
+        }
+      }
+    },
+    "review_decisions": {
+      "name": "review_decisions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "suggestion_id": {
+          "name": "suggestion_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reviewer_membership_id": {
+          "name": "reviewer_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expected_version": {
+          "name": "expected_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "result_state": {
+          "name": "result_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "edited_content": {
+          "name": "edited_content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "review_decisions_suggestion_sequence_uidx": {
+          "name": "review_decisions_suggestion_sequence_uidx",
+          "columns": [
+            "suggestion_id",
+            "sequence"
+          ],
+          "isUnique": true
+        },
+        "review_decisions_scope_idempotency_uidx": {
+          "name": "review_decisions_scope_idempotency_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "idempotency_key"
+          ],
+          "isUnique": true
+        },
+        "review_decisions_scope_id_uidx": {
+          "name": "review_decisions_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "review_decisions_scope_subject_id_uidx": {
+          "name": "review_decisions_scope_subject_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "suggestion_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "review_decisions_encounter_time_idx": {
+          "name": "review_decisions_encounter_time_idx",
+          "columns": [
+            "encounter_id",
+            "decided_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "review_decisions_organization_id_organizations_id_fk": {
+          "name": "review_decisions_organization_id_organizations_id_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_facility_id_facilities_id_fk": {
+          "name": "review_decisions_facility_id_facilities_id_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_encounter_id_encounters_id_fk": {
+          "name": "review_decisions_encounter_id_encounters_id_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_suggestion_id_clinical_suggestions_id_fk": {
+          "name": "review_decisions_suggestion_id_clinical_suggestions_id_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "suggestion_id"
+          ],
+          "tableTo": "clinical_suggestions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_reviewer_membership_id_memberships_id_fk": {
+          "name": "review_decisions_reviewer_membership_id_memberships_id_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "reviewer_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_scope_facility_fk": {
+          "name": "review_decisions_scope_facility_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_scope_encounter_fk": {
+          "name": "review_decisions_scope_encounter_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_scope_suggestion_fk": {
+          "name": "review_decisions_scope_suggestion_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "suggestion_id"
+          ],
+          "tableTo": "clinical_suggestions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "review_decisions_scope_reviewer_fk": {
+          "name": "review_decisions_scope_reviewer_fk",
+          "tableFrom": "review_decisions",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "reviewer_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "review_decisions_sequence_positive": {
+          "name": "review_decisions_sequence_positive",
+          "value": "\"review_decisions\".\"sequence\" > 0"
+        },
+        "review_decisions_version_positive": {
+          "name": "review_decisions_version_positive",
+          "value": "\"review_decisions\".\"expected_version\" > 0"
+        },
+        "review_decisions_edited_content_valid": {
+          "name": "review_decisions_edited_content_valid",
+          "value": "(\"review_decisions\".\"decision\" = 'edit_and_accept' and length(trim(coalesce(\"review_decisions\".\"edited_content\", ''))) > 0) or (\"review_decisions\".\"decision\" <> 'edit_and_accept' and \"review_decisions\".\"edited_content\" is null)"
+        },
+        "review_decisions_decision_enum": {
+          "name": "review_decisions_decision_enum",
+          "value": "\"review_decisions\".\"decision\" in ('accept', 'edit_and_accept', 'reject', 'restore')"
+        },
+        "review_decisions_result_state_enum": {
+          "name": "review_decisions_result_state_enum",
+          "value": "\"review_decisions\".\"result_state\" in ('proposed', 'accepted', 'edited_and_accepted', 'rejected')"
+        },
+        "review_decisions_transition_consistent": {
+          "name": "review_decisions_transition_consistent",
+          "value": "(\"review_decisions\".\"decision\" = 'accept' and \"review_decisions\".\"result_state\" = 'accepted') or (\"review_decisions\".\"decision\" = 'edit_and_accept' and \"review_decisions\".\"result_state\" = 'edited_and_accepted') or (\"review_decisions\".\"decision\" = 'reject' and \"review_decisions\".\"result_state\" = 'rejected') or (\"review_decisions\".\"decision\" = 'restore' and \"review_decisions\".\"result_state\" = 'proposed')"
+        }
+      }
+    },
+    "suggestion_review_heads": {
+      "name": "suggestion_review_heads",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "suggestion_id": {
+          "name": "suggestion_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'proposed'"
+        },
+        "current_decision_id": {
+          "name": "current_decision_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lock_version": {
+          "name": "lock_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "suggestion_review_heads_scope_suggestion_uidx": {
+          "name": "suggestion_review_heads_scope_suggestion_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "suggestion_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "suggestion_review_heads_organization_id_organizations_id_fk": {
+          "name": "suggestion_review_heads_organization_id_organizations_id_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_facility_id_facilities_id_fk": {
+          "name": "suggestion_review_heads_facility_id_facilities_id_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_encounter_id_encounters_id_fk": {
+          "name": "suggestion_review_heads_encounter_id_encounters_id_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_suggestion_id_clinical_suggestions_id_fk": {
+          "name": "suggestion_review_heads_suggestion_id_clinical_suggestions_id_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "suggestion_id"
+          ],
+          "tableTo": "clinical_suggestions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_current_decision_id_review_decisions_id_fk": {
+          "name": "suggestion_review_heads_current_decision_id_review_decisions_id_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "current_decision_id"
+          ],
+          "tableTo": "review_decisions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_scope_facility_fk": {
+          "name": "suggestion_review_heads_scope_facility_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_scope_encounter_fk": {
+          "name": "suggestion_review_heads_scope_encounter_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_scope_suggestion_fk": {
+          "name": "suggestion_review_heads_scope_suggestion_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "suggestion_id"
+          ],
+          "tableTo": "clinical_suggestions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "suggestion_review_heads_scope_decision_fk": {
+          "name": "suggestion_review_heads_scope_decision_fk",
+          "tableFrom": "suggestion_review_heads",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "suggestion_id",
+            "current_decision_id"
+          ],
+          "tableTo": "review_decisions",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "suggestion_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "suggestion_review_heads_lock_positive": {
+          "name": "suggestion_review_heads_lock_positive",
+          "value": "\"suggestion_review_heads\".\"lock_version\" > 0"
+        },
+        "suggestion_review_heads_decision_consistency": {
+          "name": "suggestion_review_heads_decision_consistency",
+          "value": "(\"suggestion_review_heads\".\"state\" in ('proposed', 'expired') and \"suggestion_review_heads\".\"current_decision_id\" is null) or (\"suggestion_review_heads\".\"state\" not in ('proposed', 'expired') and \"suggestion_review_heads\".\"current_decision_id\" is not null)"
+        },
+        "suggestion_review_heads_state_enum": {
+          "name": "suggestion_review_heads_state_enum",
+          "value": "\"suggestion_review_heads\".\"state\" in ('proposed', 'accepted', 'edited_and_accepted', 'rejected', 'expired')"
+        }
+      }
+    },
+    "transcript_segments": {
+      "name": "transcript_segments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encounter_id": {
+          "name": "encounter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "segment_index": {
+          "name": "segment_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "speaker_role": {
+          "name": "speaker_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'unknown'"
+        },
+        "speaker_role_source": {
+          "name": "speaker_role_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'unassigned'"
+        },
+        "speaker_confidence_basis_points": {
+          "name": "speaker_confidence_basis_points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "language_code": {
+          "name": "language_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'unknown'"
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "started_at_ms": {
+          "name": "started_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at_ms": {
+          "name": "ended_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'provisional'"
+        },
+        "corrected_by_membership_id": {
+          "name": "corrected_by_membership_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "supersedes_segment_id": {
+          "name": "supersedes_segment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {
+        "transcript_encounter_segment_version_uidx": {
+          "name": "transcript_encounter_segment_version_uidx",
+          "columns": [
+            "encounter_id",
+            "segment_index",
+            "version"
+          ],
+          "isUnique": true
+        },
+        "transcript_encounter_time_idx": {
+          "name": "transcript_encounter_time_idx",
+          "columns": [
+            "encounter_id",
+            "started_at_ms"
+          ],
+          "isUnique": false
+        },
+        "transcript_scope_id_uidx": {
+          "name": "transcript_scope_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "transcript_scope_segment_id_uidx": {
+          "name": "transcript_scope_segment_id_uidx",
+          "columns": [
+            "organization_id",
+            "facility_id",
+            "encounter_id",
+            "segment_index",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "transcript_supersedes_once_uidx": {
+          "name": "transcript_supersedes_once_uidx",
+          "columns": [
+            "supersedes_segment_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "transcript_segments_organization_id_organizations_id_fk": {
+          "name": "transcript_segments_organization_id_organizations_id_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_segments_facility_id_facilities_id_fk": {
+          "name": "transcript_segments_facility_id_facilities_id_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_segments_encounter_id_encounters_id_fk": {
+          "name": "transcript_segments_encounter_id_encounters_id_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_segments_corrected_by_membership_id_memberships_id_fk": {
+          "name": "transcript_segments_corrected_by_membership_id_memberships_id_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "corrected_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_segments_supersedes_segment_id_transcript_segments_id_fk": {
+          "name": "transcript_segments_supersedes_segment_id_transcript_segments_id_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "supersedes_segment_id"
+          ],
+          "tableTo": "transcript_segments",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_scope_facility_fk": {
+          "name": "transcript_scope_facility_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id"
+          ],
+          "tableTo": "facilities",
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_scope_encounter_fk": {
+          "name": "transcript_scope_encounter_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "encounter_id"
+          ],
+          "tableTo": "encounters",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "transcript_scope_corrected_by_fk": {
+          "name": "transcript_scope_corrected_by_fk",
+          "tableFrom": "transcript_segments",
+          "columnsFrom": [
+            "organization_id",
+            "facility_id",
+            "corrected_by_membership_id"
+          ],
+          "tableTo": "memberships",
+          "columnsTo": [
+            "organization_id",
+            "facility_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "transcript_timing_valid": {
+          "name": "transcript_timing_valid",
+          "value": "\"transcript_segments\".\"started_at_ms\" >= 0 and \"transcript_segments\".\"ended_at_ms\" >= \"transcript_segments\".\"started_at_ms\""
+        },
+        "transcript_confidence_valid": {
+          "name": "transcript_confidence_valid",
+          "value": "\"transcript_segments\".\"speaker_confidence_basis_points\" is null or (\"transcript_segments\".\"speaker_confidence_basis_points\" >= 0 and \"transcript_segments\".\"speaker_confidence_basis_points\" <= 10000)"
+        },
+        "transcript_correction_has_provenance": {
+          "name": "transcript_correction_has_provenance",
+          "value": "\"transcript_segments\".\"state\" <> 'corrected' or (\"transcript_segments\".\"supersedes_segment_id\" is not null and \"transcript_segments\".\"corrected_by_membership_id\" is not null)"
+        },
+        "transcript_version_positive": {
+          "name": "transcript_version_positive",
+          "value": "\"transcript_segments\".\"version\" > 0"
+        },
+        "transcript_speaker_role_enum": {
+          "name": "transcript_speaker_role_enum",
+          "value": "\"transcript_segments\".\"speaker_role\" in ('doctor', 'patient', 'other', 'unknown')"
+        },
+        "transcript_speaker_source_enum": {
+          "name": "transcript_speaker_source_enum",
+          "value": "\"transcript_segments\".\"speaker_role_source\" in ('unassigned', 'model', 'voice_calibration', 'manual')"
+        },
+        "transcript_language_enum": {
+          "name": "transcript_language_enum",
+          "value": "\"transcript_segments\".\"language_code\" in ('ru', 'kk', 'mixed', 'unknown')"
+        },
+        "transcript_state_enum": {
+          "name": "transcript_state_enum",
+          "value": "\"transcript_segments\".\"state\" in ('provisional', 'final', 'corrected')"
+        }
+      }
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "external_issuer": {
+          "name": "external_issuer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "external_subject": {
+          "name": "external_subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email_normalized": {
+          "name": "email_normalized",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'invited'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "users_issuer_subject_uidx": {
+          "name": "users_issuer_subject_uidx",
+          "columns": [
+            "external_issuer",
+            "external_subject"
+          ],
+          "isUnique": true
+        },
+        "users_email_normalized_idx": {
+          "name": "users_email_normalized_idx",
+          "columns": [
+            "email_normalized"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "users_status_enum": {
+          "name": "users_status_enum",
+          "value": "\"users\".\"status\" in ('invited', 'active', 'disabled')"
+        },
+        "users_version_positive": {
+          "name": "users_version_positive",
+          "value": "\"users\".\"version\" > 0"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
