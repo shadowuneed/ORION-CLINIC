@@ -1,4 +1,5 @@
 import type { ClinicalAnalysisResponse, ClinicalSuggestion } from './clinical-contract';
+import type { ConsentDecision, ConsentType } from './domain/consent';
 import type { SuggestionLedgerEntry } from './encounter-history';
 import type { LocalSpeechToken } from './live-local-speech-client';
 
@@ -10,6 +11,22 @@ export type LiveEncounterStatus =
   | 'finalized'
   | 'amended'
   | 'cancelled';
+
+export type LiveConsent = {
+  id: string;
+  type: ConsentType;
+  decision: ConsentDecision;
+  version: number;
+  noticeLanguage: 'ru' | 'kk';
+  source: 'written' | 'verbal' | 'digital';
+  policyVersion: string;
+  policyHash: string;
+  externalProcessor: string | null;
+  capturedBy: string;
+  occurredAt: number;
+  effectiveAt: number;
+  expiresAt: number | null;
+};
 
 export type LiveWorkspaceSnapshot = {
   encounter: {
@@ -33,11 +50,7 @@ export type LiveWorkspaceSnapshot = {
     endedAtMs: number;
     state: 'provisional' | 'final' | 'corrected';
   }>;
-  consents: Array<{
-    type: string;
-    decision: 'granted' | 'denied' | 'withdrawn';
-    externalProcessor: string | null;
-  }>;
+  consents: LiveConsent[];
   recommendations: Array<{
     id: string;
     eyebrow: string;
@@ -72,30 +85,56 @@ export type LiveRecommendationReference = {
   derivativeVersionId: string | null;
 };
 
-function effectiveConsent(
+export function getLiveConsent(
   snapshot: LiveWorkspaceSnapshot,
-  type: string,
-  externalProcessor?: string,
+  type: ConsentType,
 ) {
-  const consent = snapshot.consents.find((item) => item.type === type);
+  return snapshot.consents.find((item) => item.type === type) ?? null;
+}
+
+export function isLiveConsentEffective(
+  snapshot: LiveWorkspaceSnapshot,
+  type: ConsentType,
+  externalProcessor?: string,
+  at = Date.now(),
+) {
+  const consent = getLiveConsent(snapshot, type);
   return Boolean(
     consent?.decision === 'granted' &&
+      consent.effectiveAt <= at &&
+      (consent.expiresAt === null || consent.expiresAt > at) &&
       (!externalProcessor || consent.externalProcessor === externalProcessor),
   );
 }
 
-export function getLiveConsentState(snapshot: LiveWorkspaceSnapshot) {
-  const care = effectiveConsent(snapshot, 'care');
-  const transcript = effectiveConsent(snapshot, 'transcript_storage');
-  const localAudio = effectiveConsent(
+export function getLiveConsentState(
+  snapshot: LiveWorkspaceSnapshot,
+  at = Date.now(),
+) {
+  const care = isLiveConsentEffective(snapshot, 'care', undefined, at);
+  const transcript = isLiveConsentEffective(
+    snapshot,
+    'transcript_storage',
+    undefined,
+    at,
+  );
+  const localAudio = isLiveConsentEffective(
     snapshot,
     'transient_audio_processing',
+    undefined,
+    at,
   );
-  const audioRetention = effectiveConsent(snapshot, 'audio_retention');
-  const externalAi = effectiveConsent(
+  const audioRetention = isLiveConsentEffective(
+    snapshot,
+    'audio_retention',
+    undefined,
+    at,
+  );
+  const externalAi = isLiveConsentEffective(
     snapshot,
     'external_ai_processing',
     'groq',
+    at,
   );
   return {
     care,

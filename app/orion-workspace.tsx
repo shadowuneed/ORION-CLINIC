@@ -16,12 +16,16 @@ import type {
   ClinicalSuggestion,
   ClinicalTranscriptSegment,
 } from '../lib/clinical-contract';
+import type { ConsentDecision, ConsentType } from '../lib/domain/consent';
 import type { ClinicalResearchResponse } from '../lib/clinical-research-contract';
 import {
+  getLiveConsent,
   getLiveConsentState,
+  isLiveConsentEffective,
   mapLiveRecommendations,
   mapLiveTranscript,
   mergeLiveTokens,
+  type LiveConsent,
   type LiveRecommendationReference,
   type LiveWorkspaceSnapshot,
 } from '../lib/live-authoritative-workspace';
@@ -89,6 +93,30 @@ type ApiErrorPayload = {
 
 const FIRST_LIVE_ANALYSIS_DELAY_MS = 1_200;
 const LIVE_ANALYSIS_INTERVAL_MS = 12_000;
+const REQUIRED_LIVE_CONSENTS: Array<{
+  type: Extract<
+    ConsentType,
+    'care' | 'transcript_storage' | 'transient_audio_processing'
+  >;
+  title: string;
+  description: string;
+}> = [
+  {
+    type: 'care',
+    title: 'Приём и документация',
+    description: 'Разрешает врачу вести и сохранять запись этого приёма.',
+  },
+  {
+    type: 'transcript_storage',
+    title: 'Хранение расшифровки',
+    description: 'Разрешает сохранить распознанный текст в истории приёма.',
+  },
+  {
+    type: 'transient_audio_processing',
+    title: 'Локальная обработка аудио',
+    description: 'Нужна для передачи коротких фрагментов локальному STT на этом ПК.',
+  },
+];
 const MEDICATION_CHECKS: Array<{ id: MedicationCheck; label: string }> = [
   { id: 'indication', label: 'Показание и цель проверены' },
   { id: 'interactions', label: 'Текущие препараты и взаимодействия проверены' },
@@ -98,6 +126,13 @@ const MEDICATION_CHECKS: Array<{ id: MedicationCheck; label: string }> = [
     label: 'Противопоказания и факторы пациента проверены',
   },
 ];
+
+function liveConsentDecisionLabel(consent: LiveConsent | null) {
+  if (!consent) return 'Решение ещё не зафиксировано';
+  if (consent.decision === 'granted') return `Предоставлено · версия ${consent.version}`;
+  if (consent.decision === 'denied') return `Зафиксирован отказ · версия ${consent.version}`;
+  return `Согласие отозвано · версия ${consent.version}`;
+}
 
 type WorkingClinicalSegment = ClinicalTranscriptSegment & {
   speaker: string | null;
@@ -291,6 +326,16 @@ export function OrionWorkspace({
   const [authoritativeMessage, setAuthoritativeMessage] = useState<string | null>(
     null,
   );
+  const [consentNoticeLanguage, setConsentNoticeLanguage] = useState<'ru' | 'kk'>(
+    'ru',
+  );
+  const [pendingConsentType, setPendingConsentType] =
+    useState<ConsentType | null>(null);
+  const [consentActionMessage, setConsentActionMessage] = useState<string | null>(
+    null,
+  );
+  const [confirmAudioConsentWithdrawal, setConfirmAudioConsentWithdrawal] =
+    useState(false);
   const [persistedSpeechTokens, setPersistedSpeechTokens] = useState<
     LocalSpeechToken[]
   >([]);
@@ -305,6 +350,7 @@ export function OrionWorkspace({
     Record<string, string>
   >({});
   const serverCommandKeys = useRef<Record<string, string>>({});
+  const consentCommandKeys = useRef<Record<string, string>>({});
   const currentEncounterRef = useRef<OrionEncounterRecord | null>(null);
   const handlePersistedSegment = useCallback((persistedSegment: LocalSpeechToken) => {
     setPersistedSpeechTokens((current) => mergeLiveTokens(current, [persistedSegment]));
@@ -395,6 +441,10 @@ export function OrionWorkspace({
       setPatientName(snapshot.encounter.patient.displayName);
       setConsentConfirmed(consent.speechReady);
       setAudioConsentConfirmed(consent.audioRetention);
+      setConsentNoticeLanguage(
+        getLiveConsent(snapshot, 'care')?.noticeLanguage ?? 'ru',
+      );
+      setConfirmAudioConsentWithdrawal(false);
       setEncounterId(resolvedEncounterId);
       setEncounterStartedAt(startedAt);
       setEncounterEndedAt(null);
@@ -436,6 +486,89 @@ export function OrionWorkspace({
       return false;
     }
   }, []);
+
+  async function recordLiveConsentDecision(
+    consentType: ConsentType,
+    decision: ConsentDecision,
+  ) {
+    if (
+      !authoritativeEncounterId ||
+      !authoritativeSnapshot ||
+      authoritativeLoadState !== 'ready' ||
+      pendingConsentType
+    ) {
+      return;
+    }
+
+    const current = getLiveConsent(authoritativeSnapshot, consentType);
+    const expectedVersion = current?.version ?? 0;
+    const fingerprint = `${authoritativeEncounterId}:${consentType}:${decision}:${expectedVersion}:${consentNoticeLanguage}`;
+    const idempotencyKey =
+      consentCommandKeys.current[fingerprint] ?? crypto.randomUUID();
+    consentCommandKeys.current[fingerprint] = idempotencyKey;
+
+    setPendingConsentType(consentType);
+    setConsentActionMessage(null);
+
+    try {
+      const response = await fetch('/api/workspace/consents/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encounterId: authoritativeEncounterId,
+          consentType,
+          decision,
+          noticeLanguage: consentNoticeLanguage,
+          source: 'verbal',
+          expectedVersion,
+          idempotencyKey,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | ({ consent?: LiveConsent } & ApiErrorPayload)
+        | null;
+
+      if (response.status === 409) {
+        delete consentCommandKeys.current[fingerprint];
+        await loadAuthoritativeWorkspace(authoritativeEncounterId);
+        setConsentActionMessage(
+          payload?.error?.message ??
+            'Решение изменилось в другой вкладке. Загружена актуальная версия.',
+        );
+        return;
+      }
+
+      if (!response.ok || !payload?.consent) {
+        if (response.status < 500) {
+          delete consentCommandKeys.current[fingerprint];
+        }
+        setConsentActionMessage(
+          payload?.error?.message ?? 'Не удалось сохранить решение пациента.',
+        );
+        return;
+      }
+
+      delete consentCommandKeys.current[fingerprint];
+      await loadAuthoritativeWorkspace(authoritativeEncounterId);
+      setConsentActionMessage(
+        decision === 'granted'
+          ? `Согласие «${
+              consentType === 'audio_retention'
+                ? 'локальная аудиозапись'
+                : REQUIRED_LIVE_CONSENTS.find((item) => item.type === consentType)
+                    ?.title ?? consentType
+            }» зафиксировано в D1.`
+          : 'Отзыв согласия на локальную аудиозапись зафиксирован в D1.',
+      );
+    } catch {
+      setConsentActionMessage(
+        'Ответ сервера не получен. Обновите состояние приёма перед повтором.',
+      );
+    } finally {
+      setPendingConsentType(null);
+      setConfirmAudioConsentWithdrawal(false);
+    }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1684,6 +1817,21 @@ export function OrionWorkspace({
   const authoritativeConsent = authoritativeSnapshot
     ? getLiveConsentState(authoritativeSnapshot)
     : null;
+  const requiredConsentRows = REQUIRED_LIVE_CONSENTS.map((purpose) => ({
+    ...purpose,
+    consent: authoritativeSnapshot
+      ? getLiveConsent(authoritativeSnapshot, purpose.type)
+      : null,
+    effective: authoritativeSnapshot
+      ? isLiveConsentEffective(authoritativeSnapshot, purpose.type)
+      : false,
+  }));
+  const missingRequiredConsents = requiredConsentRows.filter(
+    (purpose) => !purpose.effective,
+  );
+  const audioRetentionConsent = authoritativeSnapshot
+    ? getLiveConsent(authoritativeSnapshot, 'audio_retention')
+    : null;
   const authoritativeEncounterIsActive =
     authoritativeSnapshot?.encounter.status === 'in_progress';
   const authoritativeReviewLocked = Boolean(
@@ -1693,6 +1841,9 @@ export function OrionWorkspace({
     authoritativeLoadState === 'ready' &&
       authoritativeEncounterIsActive &&
       authoritativeConsent?.speechReady,
+  );
+  const canManageLiveConsents = Boolean(
+    authoritativeLoadState === 'ready' && authoritativeEncounterIsActive,
   );
 
   return (
@@ -1858,27 +2009,153 @@ export function OrionWorkspace({
               <h2>Спокойный разговор.<br />Точная поддержка.</h2>
               <p className="stage-description">Ассистент не вмешивается в беседу. Он фиксирует контекст и готовит варианты для решения врача.</p>
 
-              <div className="consent-stack">
-                <label className="consent-control">
-                  <input
-                    type="checkbox"
-                    checked={consentConfirmed}
-                    disabled={Boolean(authoritativeSnapshot)}
-                    onChange={(event) => setConsentConfirmed(event.target.checked)}
-                  />
-                  <span className="consent-box" aria-hidden="true">✓</span>
-                  <span><strong>Согласия для локальной расшифровки</strong><small>Читаются из D1; изменить их можно в клинической записи</small></span>
-                </label>
-                <label className="consent-control is-optional">
-                  <input
-                    type="checkbox"
-                    checked={audioConsentConfirmed}
-                    disabled={Boolean(authoritativeSnapshot)}
-                    onChange={(event) => setAudioConsentConfirmed(event.target.checked)}
-                  />
-                  <span className="consent-box" aria-hidden="true">✓</span>
-                  <span><strong>Локально записывать аудио</strong><small>Только при отдельном действующем согласии в D1</small></span>
-                </label>
+              <div
+                className="live-consent-preflight"
+                aria-labelledby="live-consent-title"
+                id="live-consents"
+              >
+                <div className="live-consent-preflight__header">
+                  <span>
+                    <strong id="live-consent-title">Решения пациента перед записью</strong>
+                    <small>
+                      Врач фиксирует ответ пациента. Каждое действие создаёт новую версию в D1.
+                    </small>
+                  </span>
+                  <div className="live-consent-language" aria-label="Язык уведомления пациенту">
+                    <small>Язык</small>
+                    {(['ru', 'kk'] as const).map((language) => (
+                      <button
+                        aria-pressed={consentNoticeLanguage === language}
+                        className={consentNoticeLanguage === language ? 'is-active' : ''}
+                        disabled={Boolean(pendingConsentType)}
+                        key={language}
+                        onClick={() => setConsentNoticeLanguage(language)}
+                        type="button"
+                      >
+                        {language === 'ru' ? 'RU' : 'ҚАЗ'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="live-consent-list">
+                  {requiredConsentRows.map((purpose) => (
+                    <div
+                      className={`live-consent-row${purpose.effective ? ' is-granted' : ' is-missing'}`}
+                      key={purpose.type}
+                    >
+                      <span className="live-consent-row__state" aria-hidden="true">
+                        {purpose.effective ? '✓' : '!'}
+                      </span>
+                      <span className="live-consent-row__copy">
+                        <strong>{purpose.title}</strong>
+                        <small>{purpose.description}</small>
+                        <em>{liveConsentDecisionLabel(purpose.consent)}</em>
+                      </span>
+                      {purpose.effective ? (
+                        <span className="live-consent-row__badge">Готово</span>
+                      ) : (
+                        <button
+                          className="live-consent-row__action"
+                          disabled={!canManageLiveConsents || Boolean(pendingConsentType)}
+                          onClick={() =>
+                            void recordLiveConsentDecision(purpose.type, 'granted')
+                          }
+                          type="button"
+                        >
+                          {pendingConsentType === purpose.type
+                            ? 'Сохраняем…'
+                            : 'Зафиксировать предоставление'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  <div
+                    className={`live-consent-row is-optional${authoritativeConsent?.audioRetention ? ' is-granted' : ''}`}
+                  >
+                    <span className="live-consent-row__state" aria-hidden="true">
+                      {authoritativeConsent?.audioRetention ? '●' : '○'}
+                    </span>
+                    <span className="live-consent-row__copy">
+                      <strong>Сохранять локальный аудиофайл <b>необязательно</b></strong>
+                      <small>Аудио останется только в локальной истории этого браузера.</small>
+                      <em>{liveConsentDecisionLabel(audioRetentionConsent)}</em>
+                    </span>
+                    {authoritativeConsent?.audioRetention ? (
+                      <button
+                        className="live-consent-row__secondary"
+                        disabled={!canManageLiveConsents || Boolean(pendingConsentType)}
+                        onClick={() => setConfirmAudioConsentWithdrawal(true)}
+                        type="button"
+                      >
+                        Не записывать
+                      </button>
+                    ) : (
+                      <button
+                        className="live-consent-row__action"
+                        disabled={!canManageLiveConsents || Boolean(pendingConsentType)}
+                        onClick={() =>
+                          void recordLiveConsentDecision('audio_retention', 'granted')
+                        }
+                        type="button"
+                      >
+                        {pendingConsentType === 'audio_retention'
+                          ? 'Сохраняем…'
+                          : 'Включить с согласия пациента'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {confirmAudioConsentWithdrawal && (
+                  <div className="live-consent-confirm" role="alertdialog" aria-modal="true">
+                    <strong>Перестать сохранять аудио этого приёма?</strong>
+                    <small>
+                      Будет зафиксирован отзыв. Расшифровка сможет продолжаться без создания аудиофайла.
+                    </small>
+                    <span>
+                      <button
+                        disabled={Boolean(pendingConsentType)}
+                        onClick={() =>
+                          void recordLiveConsentDecision('audio_retention', 'withdrawn')
+                        }
+                        type="button"
+                      >
+                        Да, зафиксировать отзыв
+                      </button>
+                      <button
+                        disabled={Boolean(pendingConsentType)}
+                        onClick={() => setConfirmAudioConsentWithdrawal(false)}
+                        type="button"
+                      >
+                        Отмена
+                      </button>
+                    </span>
+                  </div>
+                )}
+
+                <div className="live-consent-preflight__footer">
+                  <span>
+                    {missingRequiredConsents.length === 0
+                      ? 'Три обязательных решения действуют — можно запускать STT.'
+                      : `Нужно зафиксировать ещё: ${missingRequiredConsents.length}.`}
+                  </span>
+                  <a
+                    href={
+                      authoritativeEncounterId
+                        ? `/?encounterId=${encodeURIComponent(authoritativeEncounterId)}#patient-consents`
+                        : '/#patient-consents'
+                    }
+                  >
+                    Все согласия и история отзывов
+                  </a>
+                </div>
+                {consentActionMessage && (
+                  <p className="live-consent-message" role="status" aria-live="polite">
+                    {consentActionMessage}
+                  </p>
+                )}
               </div>
 
               <button
@@ -1897,7 +2174,9 @@ export function OrionWorkspace({
                       ? 'Сначала откройте доступную запись пациента'
                     : !authoritativeEncounterIsActive
                       ? 'Сначала переведите приём в статус «идёт» в клинической записи'
-                      : 'Не хватает действующих согласий в D1'}
+                      : missingRequiredConsents.length > 0
+                        ? `Зафиксируйте: ${missingRequiredConsents.map((item) => item.title).join(', ')}`
+                        : 'Проверяем готовность локального речевого контура'}
                 </small>
               )}
             </div>

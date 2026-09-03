@@ -749,6 +749,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-03 | Final unified-shell stabilization `pnpm verify:ci` | PASS | Secret policy covered 236 tracked/untracked files, dependency audit found no known vulnerabilities, lint/strict types passed, 25 files/119 tests passed including clinician-only compatibility-tool authorization and photo-query preservation, Drizzle reported no drift, all Vinext routes built, and the isolated recovery drill destroyed its source before restoring and matching 36 tables, 112 rows, 16 migrations, three R2 objects and 167,195 backup bytes. |
 | 2026-09-03 | Partial-start and stale Vinext lock recovery | PASS | A failed web start had left STT ready and a Vinext lock whose PID had been reused by an unrelated Windows service. The launcher verified that port 3200 was free and the recorded process did not belong to this checkout, removed only that exact lock, reused the ready ORION STT, started the web process, and then returned success without duplication on a second `START_ORION.bat` invocation. |
 | 2026-09-03 | Exact D1 live workspace, responsive audit and final `pnpm verify:ci` | PASS | `/live` reused the exact authorized D1 encounter and clinician-controlled analysis/review path; desktop/tablet/mobile browser checks found no final body overflow or console warnings/errors. Secret policy covered 243 tracked/untracked files, dependency audit found no known vulnerabilities, lint/strict types passed, 26 files/132 tests passed, Drizzle reported no drift, all Vinext routes built, and isolated recovery matched 36 tables/119 rows/17 migrations/three R2 objects/172,788 bytes after destroying its disposable source. |
+| 2026-09-03 | Operational live controls, sign-out and requirements-gap final `pnpm verify:ci` | PASS | Secret policy covered 248 tracked/untracked files, dependency audit found no known vulnerabilities, lint/strict types passed, 27 files/135 tests passed, Drizzle reported no drift, all Vinext routes built, and isolated recovery destroyed its disposable source before matching 36 tables/119 rows/17 migrations/three R2 objects/172,788 bytes. Browser QA verified enabled D1-gated STT without starting the microphone, top-context sign-out, patient search/dialogs, live rail/history/theme and clinical-section edit/cancel with no warning/error logs. |
 
 ## 14. Risk register
 
@@ -840,7 +841,9 @@ control, detection, response, and residual acceptance.
   recovery and non-destructive archive in addition to consent, microphone ownership,
   local no-retention STT, transcript review, explicit Groq launch and failure
   behavior. Nineteen verified desktop/mobile PNGs are retained with the guide;
-  screenshots 18-19 show the versioned and archived patient states.
+  screenshots 18-19 show the versioned and archived patient states. Screenshots
+  20-21 document the actionable `/live` consent gate and the eight-section
+  clinical-record review guide.
 - Verification evidence on 2026-09-02: `pnpm verify:ci` passed secret scanning for
   183 tracked and untracked repository files, zero known dependency advisories,
   lint, strict types, 20 test files/97 tests, Drizzle drift check, every Vinext
@@ -887,9 +890,9 @@ control, detection, response, and residual acceptance.
   a real stale-write conflict in two tabs. The first tab preserved its unsaved values
   and then loaded the second tab's server version. Browser logs contained no error or
   warning; no real patient data or external service was used.
-- Latest final gate on 2026-09-03: `pnpm verify:ci` passed secret policy for 243
+- Latest final gate on 2026-09-03: `pnpm verify:ci` passed secret policy for 248
   tracked and untracked files, zero known dependency advisories, lint, strict types,
-  26 test files/132 tests, Drizzle drift check and every production route build. The
+  27 test files/135 tests, Drizzle drift check and every production route build. The
   isolated destructive-source recovery matched 36 tables, 119 rows, 17 migrations,
   three R2 objects and 172,788 backup bytes after destroying only its disposable
   source environment.
@@ -921,12 +924,32 @@ control, detection, response, and residual acceptance.
   workday editor clipping, long-page recommendation visibility and the compact live
   header were corrected. Final pages had no body-level horizontal overflow and the
   browser warning/error log was empty. Microphone permission was not granted.
-- Exact next task: create the repeatable synthetic RU/KK/MIXED STT and speaker
-  attribution evaluation harness plus an approved corpus manifest, without adding
-  real patient audio. Record WER/CER, language-switch, timing, negation, medicine and
-  speaker-confusion results before changing the pinned model or claiming Phase 3
-  speech validation. Referrals, scheduling, monitoring and external clinic adapters
-  remain outside this task until their named requirements and contracts are approved.
+- Completed current defect checkpoint: `/live` no longer renders inert consent
+  checkboxes. It exposes separate version-aware D1 commands for care/documentation,
+  transcript storage and local transient-audio processing, plus an independent
+  optional audio-retention decision. The start control unlocks only when the exact
+  required current consent heads are effective. The shared shell now performs Sites
+  sign-out at the top browsing context and keeps the action visible on mobile.
+- Synthetic browser/API proof advanced only the artificial
+  `encounter-a-lifecycle` care-consent head to version 8; it performed no microphone
+  capture, external Groq call, protocol acceptance or real-patient mutation.
+- Completed current usability checkpoint: the former ambiguous "Structured note"
+  panel is now labelled as an eight-section clinical record and explains the
+  edit/explicitly-absent/review sequence, current progress and the reason a section
+  cannot yet be reviewed. This changes no clinical decision automatically.
+- Requirements audit: `docs/requirements/implementation-gap-audit-2026-09-03.md`
+  maps every clinic-leadership request to implemented, partial, not-started or
+  external-input-blocked status. The working product is still the encounter core;
+  referrals/orders/results, scheduling/queue, chronic care, communications,
+  observations and transfer remain absent as operational modules.
+- Exact next task: implement the first Phase 4 provider-neutral D1 vertical slice:
+  clinician-authored laboratory/ECG/service orders and referrals, immutable versions,
+  explicit doctor confirmation, lifecycle/status history, manual result attachment
+  and reconciliation, facility/encounter authorization, behavioral tests and one
+  integrated `Направления` screen. Do not call an external clinic system until its
+  source-of-truth contract and legal basis are named. The synthetic RU/KK/MIXED
+  speech-quality harness remains a required Phase 3 validation task and must precede
+  any speech-model change or clinical accuracy claim.
 
 ### Historical checkpoint superseded on 2026-08-31
 
@@ -1112,11 +1135,12 @@ Do not touch:
 
 ## 16. Last handoff
 
-- Date: 2026-09-03, exact D1 live-workspace and full local audit checkpoint.
+- Date: 2026-09-03, operational live controls, sign-out and requirements-gap
+  checkpoint.
 - Agent: Codex.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`.
 - Product name: **ORION Clinic**; **ORION** is the short product mark.
-- Branch/baseline commit: `main` at `0f1bc95`; Git identity is repository-local
+- Branch/baseline before this checkpoint: `main` at `bb050ac`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
@@ -1128,6 +1152,18 @@ Do not touch:
 
 Completed in this checkpoint:
 
+- replaced the non-interactive `/live` consent display with four independent,
+  version-aware D1 actions: the three exact required decisions gate local STT and
+  optional audio retention remains a separately revocable choice;
+- made the missing consent names and versions visible, kept RU/KK capture language
+  explicit, and verified that the start button becomes enabled only after the exact
+  current heads are effective without starting the browser microphone;
+- made Sites logout navigate the top-level browsing context, retained the action on
+  compact layouts and added pure fail-closed navigation tests;
+- renamed and documented the eight-section clinical-record review surface, including
+  progress, edit/no-information choices and disabled-review explanations;
+- added an implementation-gap audit covering all clinic-leadership requirements and
+  recorded that Phases 4-8 are not operational product modules yet;
 - bound `/live` to the exact server-authorized D1 encounter, patient, consent,
   transcript, analysis acknowledgement and recommendation-review state;
 - removed random encounter selection and automatic live analysis from authoritative
@@ -1168,8 +1204,8 @@ Completed in this checkpoint:
   and live consultation in screenshots 15-17;
 - hardened `START_ORION.bat` against a verified stale Vinext PID lock and partial
   startup; one recovery start and one idempotent second start completed successfully;
-- verified the final checkpoint with `pnpm verify:ci`: 241 repository files passed
-  secret policy, dependency audit was clean, 25 files/128 tests passed, every route
+- verified the final checkpoint with `pnpm verify:ci`: 248 repository files passed
+  secret policy, dependency audit was clean, 27 files/135 tests passed, every route
   built and isolated D1/R2 recovery matched 36 tables/119 rows/17 migrations/three
   R2 objects/172,788 bytes after disposable-source destruction;
 - added a facility-level authorization boundary independent of any existing
@@ -1226,6 +1262,9 @@ Completed in this checkpoint:
 
 Known limitations and non-claims:
 
+- Phase 4 orders/referrals/results, Phase 5 scheduling/queue, Phase 6 chronic-care
+  and nurse workflows, Phase 7 communications and Phase 8 observations/transfer are
+  still not implemented; disabled navigation is not evidence of these workflows;
 - the unified shell uses the current local Sites identity path; it does not approve
   production provisioning, OIDC/MFA, session policy or clinic role governance, and
   visual consistency is not evidence that every API authorization boundary has
@@ -1263,12 +1302,14 @@ Start-Process http://localhost:3200/patients
 .\scripts\synthetic-stt-smoke.ps1
 ```
 
-The next bounded implementation is a reproducible synthetic RU/KK/MIXED speech
-quality harness and approved corpus manifest. It must report WER/CER, switch-language,
-timing, negation, medicine and speaker-confusion results without real patient audio
-and without replacing the pinned model before measured review. Do not implement
-patient merge or physical deletion, and do not start referrals, schedules, monitoring
-or external clinic integrations in that slice.
+The next bounded implementation is the first provider-neutral Phase 4 D1 vertical
+slice: laboratory/ECG/service orders and referrals, explicit clinician confirmation,
+immutable lifecycle history, manual result attachment/reconciliation, exact scope
+authorization, behavioral tests and one integrated `Направления` screen. No external
+delivery is allowed until a clinic source-of-truth contract and legal basis are named.
+The synthetic RU/KK/MIXED speech-quality harness remains required before any speech
+model change or clinical-accuracy claim. Do not implement patient merge or physical
+deletion.
 
 Do not touch the legacy `ariaproject`, do not add real patient data, do not copy
 legacy/disclosed secrets, and do not start external clinic integrations without

@@ -279,8 +279,7 @@
   .brand { margin-right: auto; }
   .brandCopy,
   .context,
-  .identityCopy,
-  .signOut { display: none; }
+  .identityCopy { display: none; }
   .actions { gap: 7px; }
   .sidebar {
     position: fixed;

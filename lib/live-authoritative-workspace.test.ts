@@ -1,11 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
   getLiveConsentState,
+  getLiveConsent,
+  isLiveConsentEffective,
   mapLiveRecommendations,
   mapLiveTranscript,
   mergeLiveTokens,
   type LiveWorkspaceSnapshot,
 } from './live-authoritative-workspace';
+
+function grantedConsent(
+  type: LiveWorkspaceSnapshot['consents'][number]['type'],
+  externalProcessor: string | null = null,
+): LiveWorkspaceSnapshot['consents'][number] {
+  return {
+    id: `consent-${type}`,
+    type,
+    decision: 'granted',
+    version: 1,
+    noticeLanguage: 'ru',
+    source: 'verbal',
+    policyVersion: 'synthetic-v1',
+    policyHash: 'a'.repeat(64),
+    externalProcessor,
+    capturedBy: 'Тестовый врач',
+    occurredAt: 1_000,
+    effectiveAt: 1_000,
+    expiresAt: null,
+  };
+}
 
 function snapshot(): LiveWorkspaceSnapshot {
   return {
@@ -33,22 +56,10 @@ function snapshot(): LiveWorkspaceSnapshot {
       },
     ],
     consents: [
-      { type: 'care', decision: 'granted', externalProcessor: null },
-      {
-        type: 'transcript_storage',
-        decision: 'granted',
-        externalProcessor: null,
-      },
-      {
-        type: 'transient_audio_processing',
-        decision: 'granted',
-        externalProcessor: null,
-      },
-      {
-        type: 'external_ai_processing',
-        decision: 'granted',
-        externalProcessor: 'groq',
-      },
+      grantedConsent('care'),
+      grantedConsent('transcript_storage'),
+      grantedConsent('transient_audio_processing'),
+      grantedConsent('external_ai_processing', 'groq'),
     ],
     recommendations: [
       {
@@ -71,18 +82,31 @@ function snapshot(): LiveWorkspaceSnapshot {
 
 describe('authoritative live workspace adapters', () => {
   it('requires the exact consent set for speech and Groq analysis', () => {
-    const state = getLiveConsentState(snapshot());
+    const state = getLiveConsentState(snapshot(), 2_000);
     expect(state.speechReady).toBe(true);
     expect(state.analysisReady).toBe(true);
     expect(state.audioRetention).toBe(false);
 
     const changed = snapshot();
-    changed.consents[3] = {
-      type: 'external_ai_processing',
-      decision: 'granted',
-      externalProcessor: 'another-provider',
+    changed.consents[3] = grantedConsent(
+      'external_ai_processing',
+      'another-provider',
+    );
+    expect(getLiveConsentState(changed, 2_000).analysisReady).toBe(false);
+  });
+
+  it('exposes the current version and rejects expired consent', () => {
+    const changed = snapshot();
+    changed.consents[0] = {
+      ...grantedConsent('care'),
+      version: 7,
+      expiresAt: 1_500,
     };
-    expect(getLiveConsentState(changed).analysisReady).toBe(false);
+
+    expect(getLiveConsent(changed, 'care')?.version).toBe(7);
+    expect(isLiveConsentEffective(changed, 'care', undefined, 1_400)).toBe(true);
+    expect(isLiveConsentEffective(changed, 'care', undefined, 1_600)).toBe(false);
+    expect(getLiveConsentState(changed, 1_600).speechReady).toBe(false);
   });
 
   it('keeps immutable transcript identifiers and versions', () => {

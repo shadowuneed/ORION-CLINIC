@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import {
   LayoutDashboard,
   LogOut,
@@ -155,8 +156,10 @@ export function ClinicShell({
           </div>
 
           <a
+            aria-label="Выйти из ORION Clinic"
             className={styles.signOut}
-            href="/signout-with-chatgpt?return_to=%2F"
+            href={chatGPTSignOutPath('/')}
+            target="_top"
             title="Выйти из ORION Clinic"
           >
             <LogOut aria-hidden="true" size={18} />

@@ -2945,7 +2945,11 @@ export function ClinicalWorkspace() {
           </section>
         )}
 
-        <section className={styles.consentPanel} aria-labelledby="consent-title">
+        <section
+          className={styles.consentPanel}
+          aria-labelledby="consent-title"
+          id="patient-consents"
+        >
           <div className={styles.consentPanelHeader}>
             <div>
               <span className={styles.sectionEyebrow}>Перед обработкой данных</span>
@@ -3337,11 +3341,11 @@ export function ClinicalWorkspace() {
             </div>
           </section>
 
-          <section className={styles.notePane}>
+          <section className={styles.notePane} id="clinical-record">
             <div className={styles.paneHeader}>
               <div>
-                <span className={styles.sectionEyebrow}>Черновик врача</span>
-                <h2>Структурированная запись</h2>
+                <span className={styles.sectionEyebrow}>Протокол приёма</span>
+                <h2>Клиническая запись · 8 разделов</h2>
               </div>
               <span
                 className={`${styles.saveState} ${persistenceState === 'saved' ? styles.saveStateSaved : ''} ${persistenceState === 'error' || persistenceState === 'unauthenticated' || persistenceState === 'forbidden' ? styles.saveStateError : ''}`}
@@ -3353,6 +3357,26 @@ export function ClinicalWorkspace() {
                   </a>
                 ) : persistenceLabel}
               </span>
+            </div>
+
+            <div className={styles.noteGuide} role="note">
+              <div>
+                <strong>Что нужно сделать врачу</strong>
+                <p>
+                  Откройте каждый раздел, внесите или исправьте сведения и нажмите
+                  «Проверить раздел». Если данных действительно нет — отдельно
+                  выберите «Сведений нет». Только эти подтверждённые решения войдут
+                  в протокол.
+                </p>
+              </div>
+              <div
+                className={styles.noteGuideProgress}
+                aria-label={`Проверено разделов: ${reviewedSectionCount} из 8`}
+              >
+                <strong>{reviewedSectionCount}<span>/8</span></strong>
+                <small>разделов проверено</small>
+                <progress max={8} value={reviewedSectionCount} />
+              </div>
             </div>
 
             <div className={styles.noteBody}>
@@ -3547,7 +3571,9 @@ export function ClinicalWorkspace() {
                         <small>
                           {selectedSection.reviewedBy && selectedSection.reviewedAt
                             ? `${selectedSection.reviewedBy} · ${new Date(selectedSection.reviewedAt).toLocaleString('ru-RU')}`
-                            : 'ИИ-черновик не является медицинской записью'}
+                            : selectedDraft.trim()
+                              ? 'Сверьте текст и подтвердите его отдельным действием'
+                              : 'Сначала нажмите «Редактировать» либо подтвердите «Сведений нет»'}
                         </small>
                       </span>
                     </div>
@@ -3574,6 +3600,11 @@ export function ClinicalWorkspace() {
                           (selectedSection.reviewState === 'reviewed' && !selectedDraftIsDirty)
                         }
                         onClick={() => void commitSection(selectedSection, 'mark_reviewed')}
+                        title={
+                          !selectedDraft.trim()
+                            ? 'Чтобы проверить раздел, сначала внесите текст или выберите «Сведений нет»'
+                            : undefined
+                        }
                         type="button"
                       >
                         <Check size={16} />

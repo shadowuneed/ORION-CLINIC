@@ -1107,6 +1107,17 @@
 .editorHeader { align-items: flex-end; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .editorHeader span { color: var(--ink-muted); font-size: 10px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
 .editorHeader h3 { margin: 5px 0 0; font-size: 21px; font-weight: 650; letter-spacing: -0.015em; }
+.noteGuide { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 18px; align-items: center; padding: 14px 17px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--brand-soft) 62%, var(--surface)); }
+.noteGuide > div:first-child > strong { display: block; color: var(--brand-strong); font-size: 11px; }
+.noteGuide p { max-width: 720px; margin: 5px 0 0; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.noteGuideProgress { display: grid; grid-template: auto auto / auto 1fr; column-gap: 8px; align-items: end; justify-self: stretch; }
+.noteGuideProgress > strong { grid-row: 1 / 3; color: var(--brand-strong); font-size: 24px; line-height: 1; letter-spacing: -0.04em; }
+.noteGuideProgress > strong span { color: var(--ink-muted); font-size: 13px; }
+.noteGuideProgress > small { color: var(--ink-muted); font-size: 9px; }
+.noteGuideProgress progress { grid-column: 2; width: 100%; height: 5px; margin-top: 5px; overflow: hidden; border: 0; border-radius: 999px; background: var(--line); }
+.noteGuideProgress progress::-webkit-progress-bar { border-radius: 999px; background: var(--line); }
+.noteGuideProgress progress::-webkit-progress-value { border-radius: 999px; background: var(--brand); }
+.noteGuideProgress progress::-moz-progress-bar { border-radius: 999px; background: var(--brand); }
 .editorHeader .sectionBadge { display: inline-flex; margin-top: 9px; padding: 5px 8px; border-radius: 999px; font-size: 9px; letter-spacing: 0.01em; text-transform: none; }
 .sectionBadge_reviewed { color: var(--brand-strong) !important; background: var(--success-soft); }
 .sectionBadge_absent { color: #4d5855 !important; background: #e7ebe9; }
@@ -1313,6 +1324,8 @@
   .vitalsBar { grid-template-columns: repeat(2, 1fr); }
   .vitalsBar > div { border-bottom: 1px solid var(--line); }
   .noteBody { grid-template-columns: 1fr; }
+  .noteGuide { grid-template-columns: 1fr; }
+  .noteGuideProgress { justify-self: stretch; max-width: 220px; }
   .sectionRail { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
   .sectionTab { min-width: 180px; }
   .reviewRow { align-items: flex-start; flex-direction: column; }
