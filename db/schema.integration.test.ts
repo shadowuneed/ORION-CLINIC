@@ -63,6 +63,52 @@ function seedEncounter(target: DatabaseSync) {
   `);
 }
 
+function seedOrderContext(target: DatabaseSync) {
+  seedEncounter(target);
+  target.exec(`
+    insert into consent_events (
+      id, organization_id, facility_id, patient_id, encounter_id, version,
+      consent_type, decision, captured_by_membership_id, policy_version,
+      policy_hash, notice_language, source, occurred_at, effective_at
+    ) values (
+      'order-consent-v1', 'org-a', 'fac-a', 'patient-a', 'encounter-a', 1,
+      'care', 'granted', 'membership-a', 'test-v1', 'order-consent-hash',
+      'ru', 'verbal', 1000, 1000
+    );
+    insert into consent_heads (
+      id, organization_id, facility_id, patient_id, encounter_id,
+      consent_type, current_consent_event_id, lock_version, created_at, updated_at
+    ) values (
+      'order-consent-head', 'org-a', 'fac-a', 'patient-a', 'encounter-a',
+      'care', 'order-consent-v1', 1, 1000, 1000
+    );
+    insert into service_requests (
+      id, organization_id, facility_id, patient_id, encounter_id,
+      request_kind, created_by_membership_id, created_at
+    ) values (
+      'order-a', 'org-a', 'fac-a', 'patient-a', 'encounter-a',
+      'laboratory', 'membership-a', 2000
+    );
+    insert into service_request_versions (
+      id, organization_id, facility_id, service_request_id, version,
+      status, priority, requested_service, medical_justification,
+      status_reason, authored_by_membership_id, created_at
+    ) values (
+      'order-a-v1', 'org-a', 'fac-a', 'order-a', 1,
+      'draft', 'routine', 'Synthetic test',
+      'Synthetic medical justification', 'Draft created',
+      'membership-a', 2000
+    );
+    insert into service_request_heads (
+      id, organization_id, facility_id, service_request_id,
+      current_version_id, lock_version, created_at, updated_at
+    ) values (
+      'order-a-head', 'org-a', 'fac-a', 'order-a', 'order-a-v1', 1,
+      2000, 2000
+    );
+  `);
+}
+
 function seedSuggestion(target: DatabaseSync, options?: { future?: boolean }) {
   const suffix = options?.future ? 'future' : 'expired';
   const expiresAt = options?.future ? 4_102_444_800_000 : 0;
@@ -1045,6 +1091,322 @@ describe('D1 schema security invariants', () => {
     } finally {
       legacy.close();
     }
+  });
+
+  it('binds every service request to the exact patient of its scoped encounter', () => {
+    seedEncounter(database);
+    database.exec(`
+      insert into patients (
+        id, organization_id, facility_id, medical_record_number, display_name
+      ) values ('patient-a2', 'org-a', 'fac-a', 'A-002', 'Patient A2');
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into service_requests (
+          id, organization_id, facility_id, patient_id, encounter_id,
+          request_kind, created_by_membership_id, created_at
+        ) values (
+          'order-mismatch', 'org-a', 'fac-a', 'patient-a2', 'encounter-a',
+          'laboratory', 'membership-a', 2000
+        );
+      `),
+    ).toThrow(/patient must match the exact scoped encounter/i);
+  });
+
+  it('rejects order mutations after care consent is withdrawn', () => {
+    seedOrderContext(database);
+    database.exec(`
+      insert into consent_events (
+        id, organization_id, facility_id, patient_id, encounter_id, version,
+        consent_type, decision, captured_by_membership_id, policy_version,
+        policy_hash, notice_language, source, occurred_at, effective_at,
+        supersedes_consent_event_id
+      ) values (
+        'order-consent-v2', 'org-a', 'fac-a', 'patient-a', 'encounter-a', 2,
+        'care', 'withdrawn', 'membership-a', 'test-v1', 'order-consent-hash',
+        'ru', 'verbal', 2500, 2500, 'order-consent-v1'
+      );
+      update consent_heads
+      set current_consent_event_id = 'order-consent-v2', lock_version = 2,
+        updated_at = 2500
+      where id = 'order-consent-head';
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into service_request_versions (
+          id, organization_id, facility_id, service_request_id, version,
+          supersedes_version_id, status, priority, requested_service,
+          medical_justification, status_reason, authored_by_membership_id,
+          created_at
+        ) values (
+          'order-a-v2', 'org-a', 'fac-a', 'order-a', 2, 'order-a-v1',
+          'revoked', 'routine', 'Synthetic test',
+          'Synthetic medical justification', 'Consent withdrawn',
+          'membership-a', 3000
+        );
+      `),
+    ).toThrow(/effective care consent/i);
+  });
+
+  it('requires a current reviewed final result before completing a request', () => {
+    seedOrderContext(database);
+    database.exec(`
+      insert into service_request_versions (
+        id, organization_id, facility_id, service_request_id, version,
+        supersedes_version_id, status, priority, requested_service,
+        medical_justification, status_reason, authored_by_membership_id,
+        approved_by_membership_id, approved_at, created_at
+      ) values (
+        'order-a-v2', 'org-a', 'fac-a', 'order-a', 2, 'order-a-v1',
+        'active', 'routine', 'Synthetic test',
+        'Synthetic medical justification', 'Approved by doctor',
+        'membership-a', 'membership-a', 2500, 2500
+      );
+      update service_request_heads
+      set current_version_id = 'order-a-v2', lock_version = 2, updated_at = 2500
+      where id = 'order-a-head';
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into service_request_versions (
+          id, organization_id, facility_id, service_request_id, version,
+          supersedes_version_id, status, priority, requested_service,
+          medical_justification, status_reason, authored_by_membership_id,
+          approved_by_membership_id, approved_at, created_at
+        ) values (
+          'order-a-v3', 'org-a', 'fac-a', 'order-a', 3, 'order-a-v2',
+          'completed', 'routine', 'Synthetic test',
+          'Synthetic medical justification', 'Completed without result',
+          'membership-a', 'membership-a', 2500, 3000
+        );
+      `),
+    ).toThrow(/current reviewed final result/i);
+  });
+
+  it('preserves the exact pending result payload during review', () => {
+    seedOrderContext(database);
+    database.exec(`
+      insert into diagnostic_reports (
+        id, organization_id, facility_id, service_request_id,
+        created_by_membership_id, created_at
+      ) values (
+        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a', 2100
+      );
+      insert into diagnostic_report_artifacts (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, object_key, file_name, mime_type, sha256,
+        byte_size, created_by_membership_id, created_at
+      ) values
+        (
+          'artifact-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a',
+          'diagnostic-results/org-a/fac-a/artifact-a-v1.pdf',
+          'result-v1.pdf', 'application/pdf',
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          128, 'membership-a', 2150
+        ),
+        (
+          'artifact-a-bypass', 'org-a', 'fac-a', 'order-a', 'report-a',
+          'diagnostic-results/org-a/fac-a/artifact-a-bypass.pdf',
+          'result-bypass.pdf', 'application/pdf',
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          128, 'membership-a', 2150
+        );
+      insert into diagnostic_report_versions (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, version, report_status, conclusion, artifact_id,
+        review_state, change_reason, created_by_membership_id, created_at
+      ) values (
+        'report-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a', 1,
+        'preliminary', 'Original pending conclusion', 'artifact-a-v1',
+        'pending', 'Result attached', 'membership-a', 2200
+      );
+      insert into diagnostic_report_heads (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, current_version_id, lock_version,
+        created_at, updated_at
+      ) values (
+        'report-a-head', 'org-a', 'fac-a', 'order-a',
+        'report-a', 'report-a-v1', 1, 2200, 2200
+      );
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into diagnostic_report_versions (
+          id, organization_id, facility_id, service_request_id,
+          diagnostic_report_id, version, supersedes_version_id,
+          report_status, conclusion, artifact_id, review_state, change_reason,
+          created_by_membership_id, reviewed_by_membership_id, reviewed_at,
+          created_at
+        ) values (
+          'report-a-v2-payload-bypass', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
+          'report-a-v1', 'final', 'Changed during review', 'artifact-a-bypass',
+          'reviewed', 'Payload-changing review attempted',
+          'membership-a', 'membership-a', 2250, 2250
+        );
+      `),
+    ).toThrow(/preserve the exact pending payload/i);
+
+    database.exec(`
+      insert into diagnostic_report_versions (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, version, supersedes_version_id,
+        report_status, conclusion, artifact_id, review_state,
+        change_reason, created_by_membership_id, reviewed_by_membership_id,
+        reviewed_at, created_at
+      ) values (
+        'report-a-v2', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
+        'report-a-v1', 'preliminary', 'Original pending conclusion',
+        'artifact-a-v1', 'reviewed', 'Reviewed without changing payload',
+        'membership-a', 'membership-a', 2300, 2300
+      );
+      update diagnostic_report_heads
+      set current_version_id = 'report-a-v2', lock_version = 2, updated_at = 2300
+      where id = 'report-a-head';
+    `);
+
+    expect(
+      database.prepare(`
+        select report_status as reportStatus, conclusion, artifact_id as artifactId,
+          review_state as reviewState
+        from diagnostic_report_versions where id = 'report-a-v2'
+      `).get(),
+    ).toMatchObject({
+      reportStatus: 'preliminary',
+      conclusion: 'Original pending conclusion',
+      artifactId: 'artifact-a-v1',
+      reviewState: 'reviewed',
+    });
+  });
+
+  it('requires a new pending result version after reconciliation', () => {
+    seedOrderContext(database);
+    database.exec(`
+      insert into diagnostic_reports (
+        id, organization_id, facility_id, service_request_id,
+        created_by_membership_id, created_at
+      ) values (
+        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a', 2100
+      );
+      insert into diagnostic_report_versions (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, version, report_status, review_state,
+        change_reason, created_by_membership_id, created_at
+      ) values (
+        'report-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a', 1,
+        'preliminary', 'pending', 'Result attached', 'membership-a', 2200
+      );
+      insert into diagnostic_report_heads (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, current_version_id, lock_version,
+        created_at, updated_at
+      ) values (
+        'report-a-head', 'org-a', 'fac-a', 'order-a',
+        'report-a', 'report-a-v1', 1, 2200, 2200
+      );
+      insert into diagnostic_report_versions (
+        id, organization_id, facility_id, service_request_id,
+        diagnostic_report_id, version, supersedes_version_id,
+        report_status, review_state, reconciliation_note, change_reason,
+        created_by_membership_id, reviewed_by_membership_id, reviewed_at,
+        created_at
+      ) values (
+        'report-a-v2', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
+        'report-a-v1', 'preliminary', 'needs_reconciliation',
+        'Patient identity must be reconciled', 'Reconciliation requested',
+        'membership-a', 'membership-a', 2300, 2300
+      );
+      update diagnostic_report_heads
+      set current_version_id = 'report-a-v2', lock_version = 2, updated_at = 2300
+      where id = 'report-a-head';
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into diagnostic_report_versions (
+          id, organization_id, facility_id, service_request_id,
+          diagnostic_report_id, version, supersedes_version_id,
+          report_status, review_state, change_reason,
+          created_by_membership_id, reviewed_by_membership_id, reviewed_at,
+          created_at
+        ) values (
+          'report-a-v3-bypass', 'org-a', 'fac-a', 'order-a', 'report-a', 3,
+          'report-a-v2', 'preliminary', 'reviewed', 'Bypass attempted',
+          'membership-a', 'membership-a', 2400, 2400
+        );
+      `),
+    ).toThrow(/preserve the exact pending payload/i);
+  });
+
+  it('tracks unfinished diagnostic result objects through a guarded cleanup lifecycle', () => {
+    seedOrderContext(database);
+    database.exec(`
+      insert into command_idempotency (
+        id, organization_id, facility_id, actor_membership_id, operation,
+        idempotency_key, request_hash, status, created_at
+      ) values (
+        'upload-command-a', 'org-a', 'fac-a', 'membership-a',
+        'order.result.attach', 'upload-key-a', 'upload-hash-a', 'processing', 2100
+      );
+      insert into diagnostic_result_upload_intents (
+        id, organization_id, facility_id, command_id, service_request_id,
+        artifact_id, object_key, file_name, mime_type, sha256, byte_size,
+        status, created_by_membership_id, created_at, updated_at
+      ) values (
+        'upload-intent-a', 'org-a', 'fac-a', 'upload-command-a', 'order-a',
+        'artifact-upload-a', 'diagnostic-results/org-a/fac-a/upload-a.pdf',
+        'synthetic-result.pdf', 'application/pdf',
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        128, 'reserved', 'membership-a', 2100, 2100
+      );
+    `);
+
+    expect(() =>
+      database.exec(`
+        update diagnostic_result_upload_intents
+        set object_key = 'diagnostic-results/org-a/fac-a/changed.pdf',
+          status = 'object_stored', updated_at = 2200
+        where id = 'upload-intent-a';
+      `),
+    ).toThrow(/transition is invalid/i);
+
+    expect(() =>
+      database.exec(`
+        update diagnostic_result_upload_intents
+        set status = 'committed', updated_at = 2200
+        where id = 'upload-intent-a';
+      `),
+    ).toThrow(/transition is invalid/i);
+
+    database.exec(`
+      update diagnostic_result_upload_intents
+      set status = 'object_stored', updated_at = 2200
+      where id = 'upload-intent-a';
+      update command_idempotency
+      set status = 'failed', response_json = '{"code":"UPLOAD_EXPIRED"}',
+        completed_at = 2300
+      where id = 'upload-command-a';
+      update diagnostic_result_upload_intents
+      set status = 'cleanup_pending', failure_code = 'UPLOAD_EXPIRED',
+        updated_at = 2300
+      where id = 'upload-intent-a';
+      update diagnostic_result_upload_intents
+      set status = 'cleaned', updated_at = 2400
+      where id = 'upload-intent-a';
+    `);
+
+    expect(
+      database.prepare(`
+        select status, failure_code as failureCode
+        from diagnostic_result_upload_intents where id = 'upload-intent-a'
+      `).get(),
+    ).toMatchObject({ status: 'cleaned', failureCode: 'UPLOAD_EXPIRED' });
+    expect(() =>
+      database.exec(`delete from diagnostic_result_upload_intents where id = 'upload-intent-a';`),
+    ).toThrow(/cannot be deleted/i);
   });
 
   it('installs the integrity marker used by readiness checks', () => {

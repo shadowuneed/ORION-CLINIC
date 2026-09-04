@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-03
+- Last updated: 2026-09-04
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -458,14 +458,18 @@ immutable and completely auditable.
 
 ### Phase 4 — Orders, referrals, laboratory, and ECG
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS` for the provider-neutral synthetic local slice. The gate
+remains open until named KMIS/LIS/ECG contracts and sandbox adapters are tested.
 
-- [ ] Service request and referral state machines.
-- [ ] Medical justification and doctor approval.
-- [ ] Laboratory and ECG artifact/result model.
-- [ ] Import PDF/image/structured results with provenance.
-- [ ] Result-ready and clinician-reviewed states.
-- [ ] Cancellation, correction, retry, and reconciliation.
+- [x] Service request and referral state machines in D1 with immutable versions.
+- [x] Medical justification and separate doctor approval.
+- [x] Laboratory and ECG artifact/result model with D1 metadata and R2 bytes.
+- [ ] Import PDF/image/structured results with provenance. Manual verified
+      PDF/JPEG/PNG attachment is implemented; structured vendor import is open.
+- [x] Result-ready, clinician-reviewed and needs-reconciliation states.
+- [ ] Cancellation, correction, retry, and reconciliation. Request revoke,
+      versioned result correction, idempotent retry and manual reconciliation are
+      implemented locally; external cancellation/acknowledgement/retry remain open.
 - [ ] KMIS/LIS/ECG contracts and sandbox adapters.
 - [ ] Keep raw waveform interpretation as a separately validated clinical scope.
 
@@ -750,6 +754,10 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-03 | Partial-start and stale Vinext lock recovery | PASS | A failed web start had left STT ready and a Vinext lock whose PID had been reused by an unrelated Windows service. The launcher verified that port 3200 was free and the recorded process did not belong to this checkout, removed only that exact lock, reused the ready ORION STT, started the web process, and then returned success without duplication on a second `START_ORION.bat` invocation. |
 | 2026-09-03 | Exact D1 live workspace, responsive audit and final `pnpm verify:ci` | PASS | `/live` reused the exact authorized D1 encounter and clinician-controlled analysis/review path; desktop/tablet/mobile browser checks found no final body overflow or console warnings/errors. Secret policy covered 243 tracked/untracked files, dependency audit found no known vulnerabilities, lint/strict types passed, 26 files/132 tests passed, Drizzle reported no drift, all Vinext routes built, and isolated recovery matched 36 tables/119 rows/17 migrations/three R2 objects/172,788 bytes after destroying its disposable source. |
 | 2026-09-03 | Operational live controls, sign-out and requirements-gap final `pnpm verify:ci` | PASS | Secret policy covered 248 tracked/untracked files, dependency audit found no known vulnerabilities, lint/strict types passed, 27 files/135 tests passed, Drizzle reported no drift, all Vinext routes built, and isolated recovery destroyed its disposable source before matching 36 tables/119 rows/17 migrations/three R2 objects/172,788 bytes. Browser QA verified enabled D1-gated STT without starting the microphone, top-context sign-out, patient search/dialogs, live rail/history/theme and clinical-section edit/cancel with no warning/error logs. |
+| 2026-09-04 | Phase 4 repository and authenticated API journey | PASS for synthetic local data | Five repository scenarios covered full request-to-result completion, exact replay/stale writes, registrar/unassigned/no-consent denial, reconciliation and SQLite immutability. A Sites-authenticated journey created `service-request-ed8b257b-a9af-45db-8192-d93d4774b9c8`, separately approved it, attached a synthetic PDF to R2, reviewed it, downloaded byte-identical SHA-256 `BD6BFD81B3C49FC8B1F639DA302C18343B301A87F8305EC86C3AB266D41FAF2B`, and completed version 3. No external system was called. |
+| 2026-09-04 | Phase 4 browser and runtime stability audit | PASS for inspected controls | Authenticated `/orders` rendered the shared shell, real D1 list/detail, R2 download, filters and status history; create modal open/close and light/dark theme were exercised, and browser warning/error logs were empty. A verified Windows `EBUSY` crash caused by watching locked files under `.orion-runtime` was fixed by excluding runtime/storage paths from Vite watch. Screenshot 22 records the loaded result. No new clinical command was submitted through browser automation. |
+| 2026-09-04 | Phase 4 post-audit integrity hardening | PASS for synthetic local data | Independent review findings were reproduced and closed: review successors must preserve the exact pending payload; terminal requests cannot be reviewed; result upload intent is durable before R2, exact retries return the original patient/encounter snapshot, audit-head contention retries fail closed, and UI status choices share domain transition rules. Thirty test files/172 tests, lint, strict types, Drizzle and all Vinext routes passed. |
+| 2026-09-04 | Phase 4 local quality and recovery gates | PASS with external-audit exception | `pnpm verify` passed lint, strict types, 30 test files/172 tests, Drizzle schema check and all Vinext routes including the upload-reconciliation API and `/orders`; `PRAGMA quick_check` returned `ok`; isolated recovery destroyed its source before matching 44 tables/122 rows/20 migrations/three R2 objects/215,011 bytes. Secret policy passed 270 files. `pnpm audit` could not reach npm registry after retries, so aggregate `pnpm verify:ci` is correctly recorded as incomplete rather than passed. |
 
 ## 14. Risk register
 
@@ -778,13 +786,26 @@ control, detection, response, and residual acceptance.
 
 - Active phases: `PHASE_0_IN_PROGRESS` for clinic review/discovery,
   `PHASE_2_IN_PROGRESS` for production identity/consent decisions, and
-  `PHASE_3_IN_PROGRESS` for the synthetic encounter vertical slice. Phase 1 is
-  complete only for the verified synthetic local engineering foundation.
-- Phases 4-10 remain `NOT_STARTED`. Referrals/orders, specialist scheduling,
-  electronic queue, chronic-care monitoring, patient communications, critical
-  transfer/digital twin and production integration/operations are not presented
-  as working navigation until their D1 models, APIs, authorization and behavioral
-  tests exist.
+  `PHASE_3_IN_PROGRESS` for the synthetic encounter vertical slice. Phase 4 is
+  now `IN_PROGRESS` for its provider-neutral local D1/R2 slice. Phase 1 is complete
+  only for the verified synthetic local engineering foundation.
+- Phase 4 now has an operational local `Направления` module, but no
+  external delivery or acknowledgement. Phases 5-10 remain `NOT_STARTED`:
+  specialist scheduling, electronic queue, chronic-care monitoring, patient
+  communications, critical transfer/digital twin and production integration/
+  operations are not presented as working navigation until their D1 models,
+  APIs, authorization and behavioral tests exist.
+- Completed current bounded slice: clinician-authored laboratory, ECG, service
+  and specialist requests have immutable D1 versions, separate doctor approval,
+  status history, manual PDF/JPEG/PNG results in R2, explicit review or
+  reconciliation, audited downloads and a reviewed-final completion gate on the
+  integrated `/orders` screen. Local `active` never claims external transmission.
+  Follow-up migrations `0018`-`0019` bind each request to the exact encounter
+  patient, enforce active care context and exact-payload review in SQLite, and
+  track every R2 write through a durable upload intent. Expired unfinished uploads
+  enter an audited two-pass cleanup state so a concurrent writer cannot leave an
+  unaudited object; committed artifact rows remain immutable and are never cleaned
+  by that path.
 - Completed current bounded slice: every clinician page now uses one authenticated
   ORION Clinic shell. The shared page boundary requires Sites identity before rendering and
   provides the same actual display name/email, active navigation, sign-out,
@@ -843,7 +864,8 @@ control, detection, response, and residual acceptance.
   behavior. Nineteen verified desktop/mobile PNGs are retained with the guide;
   screenshots 18-19 show the versioned and archived patient states. Screenshots
   20-21 document the actionable `/live` consent gate and the eight-section
-  clinical-record review guide.
+  clinical-record review guide. `docs/user-guide/orders-results.ru.md` explains
+  the separate Phase 4 workflow and screenshot 22 records its loaded D1/R2 state.
 - Verification evidence on 2026-09-02: `pnpm verify:ci` passed secret scanning for
   183 tracked and untracked repository files, zero known dependency advisories,
   lint, strict types, 20 test files/97 tests, Drizzle drift check, every Vinext
@@ -896,12 +918,23 @@ control, detection, response, and residual acceptance.
   isolated destructive-source recovery matched 36 tables, 119 rows, 17 migrations,
   three R2 objects and 172,788 backup bytes after destroying only its disposable
   source environment.
+- Phase 4 gate evidence on 2026-09-04: `pnpm verify` passed lint, types, 30 test
+  files/172 tests, Drizzle and the complete Vinext build. D1 `quick_check` returned
+  `ok`; isolated backup/restore matched 44 tables/122 rows/20 migrations/three R2
+  objects/215,011 bytes; and the authenticated local request-to-result API/browser
+  journey passed. Post-audit tests cover concurrent command replay, immutable
+  response context, upload reservation/cleanup, exact review payloads, terminal
+  states and UI transition choices. The external npm advisory endpoint timed out,
+  so the aggregate `verify:ci` command is not labelled PASS for this checkpoint.
 - Current data remains synthetic only. No clinic requirement, consent wording,
   model accuracy, or provider is approved for patient care merely because the
   local path works. Production OIDC/MFA, real patients, retention, legal signature,
   integrations, hosting, monitoring/SLO and clinical validation remain open.
-- Current runtime at checkpoint: local web and STT are intentionally left running.
-  Groq is wired but not runtime-verified because no fresh `GROQ_API_KEY` is present;
+- Current runtime at checkpoint: local web is intentionally left running on 3200.
+  The loopback STT process is reachable on 3101, but its startup log reports that
+  the pinned local model could not be loaded; it is not claimed ready in this
+  checkpoint. Groq is wired but not runtime-verified because no fresh
+  `GROQ_API_KEY` is present;
   previously disclosed keys were not copied. `CONFIGURE_GROQ.bat` is the only
   supported local secret-entry path and requires a restart.
 - Completed current bounded slice: patient profile update and terminal archive are
@@ -939,15 +972,18 @@ control, detection, response, and residual acceptance.
   cannot yet be reviewed. This changes no clinical decision automatically.
 - Requirements audit: `docs/requirements/implementation-gap-audit-2026-09-03.md`
   maps every clinic-leadership request to implemented, partial, not-started or
-  external-input-blocked status. The working product is still the encounter core;
-  referrals/orders/results, scheduling/queue, chronic care, communications,
-  observations and transfer remain absent as operational modules.
-- Exact next task: implement the first Phase 4 provider-neutral D1 vertical slice:
-  clinician-authored laboratory/ECG/service orders and referrals, immutable versions,
-  explicit doctor confirmation, lifecycle/status history, manual result attachment
-  and reconciliation, facility/encounter authorization, behavioral tests and one
-  integrated `Направления` screen. Do not call an external clinic system until its
-  source-of-truth contract and legal basis are named. The synthetic RU/KK/MIXED
+  external-input-blocked status. The working product now includes the encounter
+  core plus the provider-neutral local directions/results slice. External order
+  delivery, scheduling/queue, chronic care, communications, observations and
+  transfer remain absent as operational modules.
+- Exact next implementable task after owner approval: build the first Phase 5
+  synthetic D1 scheduling/queue slice on an approved referral: provider,
+  specialty, service, schedule and slot models; patient preference; idempotent
+  hold/confirm/cancel; concurrency protection; manual-source labelling; and one
+  integrated scheduling surface. Do not invent real availability or call an
+  external clinic system until its source-of-truth contract and legal basis are
+  named. The remaining external part of Phase 4 is blocked on DEC-001/002/005.
+  The synthetic RU/KK/MIXED
   speech-quality harness remains a required Phase 3 validation task and must precede
   any speech-model change or clinical accuracy claim.
 
@@ -1135,23 +1171,46 @@ Do not touch:
 
 ## 16. Last handoff
 
-- Date: 2026-09-03, operational live controls, sign-out and requirements-gap
-  checkpoint.
+- Date: 2026-09-04, hardened provider-neutral orders/referrals/results checkpoint.
 - Agent: Codex.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`.
 - Product name: **ORION Clinic**; **ORION** is the short product mark.
-- Branch/baseline before this checkpoint: `main` at `bb050ac`; Git identity is repository-local
+- Branch/baseline before this checkpoint: `main` at `7f2272c`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
-- Runtime at handoff: local web and STT intentionally running on ports `3200` and
-  `3101`; no deployment was made. Groq is not configured because no fresh ignored
-  local secret is available.
+- Runtime at handoff: local web and the existing ngrok agent are intentionally left
+  running on ports `3200` and `4040`; no production deployment was made. Port `3101`
+  was not listening during this checkpoint and local STT is therefore not claimed
+  ready. Groq was not runtime-tested in this checkpoint; ignored local secrets are
+  never committed.
 
 Completed in this checkpoint:
 
+- added migrations `0017`-`0019`, eight tenant-scoped D1 tables for request/report
+  identity, immutable versions, current heads and R2 artifact metadata, plus
+  durable result-upload intents and database triggers for no-update/no-delete,
+  linear lineage, active-care, exact review-payload and cleanup lifecycle guards;
+- added clinician-only, assigned-encounter and current-care-consent repository/API
+  paths for draft, separate approval, hold/resume/revoke/error/complete, result
+  attachment, review/reconciliation, idempotency, optimistic conflicts and
+  PHI-minimized hash-chained audit;
+- added the integrated `/orders` surface with search, type/status/facility filters,
+  real D1 list/detail/history, creation, status controls, PDF/JPEG/PNG attachment,
+  reviewed-result completion gate, R2 download and light/dark responsive states;
+- verified the full synthetic HTTP journey, byte-identical file download, 172 tests,
+  production build, D1 quick check and 44-table isolated recovery; recorded the npm
+  advisory endpoint timeout separately instead of claiming aggregate CI success;
+- closed the final independent-audit findings: immutable response replay includes
+  the command-time patient/encounter context, terminal requests reject result review,
+  audit contention retries fail closed, UI options reuse domain transitions, and
+  incomplete R2 writes remain traceable through retry and audited expiry cleanup;
+- fixed local Vinext stability by excluding checkout-local runtime, Wrangler,
+  artifact, backup, export and recording paths from the source watcher;
+- added the Phase 4 Russian user guide and verified screenshot 22. The local
+  workflow does not claim KMIS/LIS/ECG transmission or clinical interpretation;
 - replaced the non-interactive `/live` consent display with four independent,
   version-aware D1 actions: the three exact required decisions gate local STT and
   optional audio retention remains a separately revocable choice;
@@ -1262,9 +1321,12 @@ Completed in this checkpoint:
 
 Known limitations and non-claims:
 
-- Phase 4 orders/referrals/results, Phase 5 scheduling/queue, Phase 6 chronic-care
-  and nurse workflows, Phase 7 communications and Phase 8 observations/transfer are
-  still not implemented; disabled navigation is not evidence of these workflows;
+- Phase 4 is only a provider-neutral local D1/R2 slice: no KMIS/LIS/ECG
+  transmission, external acknowledgement/retry, structured vendor import or raw
+  ECG-waveform interpretation is implemented. Phase 5 scheduling/queue, Phase 6
+  chronic-care and nurse workflows, Phase 7 communications and Phase 8
+  observations/transfer are still not implemented; disabled navigation is not
+  evidence of these workflows;
 - the unified shell uses the current local Sites identity path; it does not approve
   production provisioning, OIDC/MFA, session policy or clinic role governance, and
   visual consistency is not evidence that every API authorization boundary has
@@ -1298,15 +1360,18 @@ git diff --check
 .\STOP_ORION_CLINIC.bat
 .\START_ORION.bat
 Invoke-RestMethod http://127.0.0.1:3101/health
-Start-Process http://localhost:3200/patients
-.\scripts\synthetic-stt-smoke.ps1
+Start-Process http://localhost:3200/orders
+pnpm verify
+pnpm backup:drill:local
 ```
 
-The next bounded implementation is the first provider-neutral Phase 4 D1 vertical
-slice: laboratory/ECG/service orders and referrals, explicit clinician confirmation,
-immutable lifecycle history, manual result attachment/reconciliation, exact scope
-authorization, behavioral tests and one integrated `Направления` screen. No external
-delivery is allowed until a clinic source-of-truth contract and legal basis are named.
+The next implementable bounded slice, only after an explicit owner request, is the
+first provider-neutral Phase 5 scheduling/queue workflow backed by synthetic D1:
+provider/specialty/service/schedule/slot, patient preference, idempotent hold and
+confirmation, cancellation, concurrency denial and manual fallback labelling. The
+remaining external portion of Phase 4 is blocked on DEC-001/002/005. No external
+delivery or invented availability is allowed until a clinic source-of-truth contract,
+sandbox and legal basis are named.
 The synthetic RU/KK/MIXED speech-quality harness remains required before any speech
 model change or clinical-accuracy claim. Do not implement patient merge or physical
 deletion.
@@ -1653,3 +1718,31 @@ the named open decisions. This is the current canonical continuation point.
 - Verified baseline: commit `0f1bc95` contains all 243 policy-scanned source,
   migration, documentation and synthetic screenshot files. The final handoff commit
   records the remote and checkpoint after that baseline.
+
+### 2026-09-04 — hardened provider-neutral orders and results checkpoint
+
+- Reason: clinic leadership requires laboratory/ECG/service requests and specialist
+  referrals to become an operational workflow rather than disabled navigation.
+- Decision: implement the complete local human-controlled lifecycle in D1/R2 while
+  refusing to simulate transmission, acknowledgement or availability from an
+  unnamed external clinic system.
+- Added: migrations `0017`-`0019`; immutable request/report versions and heads;
+  result-file metadata, hash validation and durable R2 upload intents; clinician/
+  assignment/consent authorization; exact command-time replay; separate doctor
+  approval; review/reconciliation and completion gates; guarded expiry cleanup;
+  scoped APIs; integrated `/orders`; runtime watcher hardening; user guide and
+  screenshot 22.
+- Verified: authenticated synthetic draft -> approval -> R2 result -> doctor review
+  -> byte-identical download -> completion; 30 test files/172 tests; lint/types/
+  Drizzle/production build; D1 `quick_check`; browser create-modal/theme/list/detail
+  check; and isolated recovery across 44 tables/122 rows/20 migrations/three R2
+  objects/215,011 bytes after disposable-source destruction. Independent audit
+  bypasses for payload-changing review, terminal review, mutable replay context,
+  R2 orphaning, audit contention and invalid UI transitions have behavioral tests.
+- Limitation: the npm advisory endpoint timed out during the final aggregate command;
+  all local gates and secret policy passed, but `pnpm verify:ci` is not claimed as a
+  complete pass. No external KMIS/LIS/ECG adapter, production identity/data,
+  structured vendor import or waveform interpretation is included.
+- Next: after explicit owner approval, implement the first synthetic D1 Phase 5
+  scheduling/queue slice. Finish Phase 4 external delivery only after
+  DEC-001/002/005 are resolved.

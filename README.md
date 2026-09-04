@@ -16,6 +16,7 @@ Operational foundation:
 - [`docs/operations/ci-quality-gates.md`](docs/operations/ci-quality-gates.md)
 - [`docs/runbooks/local-backup-restore.md`](docs/runbooks/local-backup-restore.md)
 - [`docs/user-guide/clinician-workspace.ru.md`](docs/user-guide/clinician-workspace.ru.md)
+- [`docs/user-guide/orders-results.ru.md`](docs/user-guide/orders-results.ru.md)
 
 Clinic requirements and review:
 
@@ -48,7 +49,19 @@ is an additional module at `http://localhost:3200/live`; the dashboard item
 assignment, lifecycle and current consent for every speech, analysis and review
 command. Browser-local history, an optional browser recording and compatibility
 downloads remain convenience artifacts and are explicitly not the signed D1/R2
-medical record. The launcher refuses to replace unrelated
+medical record. The D1/R2-backed Phase 4 local slice is available at
+`http://localhost:3200/orders`: a clinician can create and separately approve a
+laboratory, ECG, service or specialist request, attach a PDF/JPEG/PNG result, mark
+reconciliation or review, and complete only a reviewed final result. Every
+request/report version remains immutable. Before any result bytes are written to
+R2, D1 stores a durable upload intent; exact retries reuse the original
+command-time patient and encounter snapshot. The authenticated, same-origin
+`POST /api/orders/result-uploads/reconcile` maintenance endpoint performs
+two-pass cleanup only for expired, uncommitted uploads. It is not an automatic
+scheduler and never removes committed clinical artifacts. No external
+KMIS/LIS/ECG delivery is connected or claimed by this slice.
+
+The launcher refuses to replace unrelated
 processes on ports `3200` or `3101`, applies forward-only local migrations,
 loads only the idempotent technical bootstrap needed for local sign-in, writes
 logs under `.orion-runtime/logs`, and keeps secrets in the ignored `.dev.vars`

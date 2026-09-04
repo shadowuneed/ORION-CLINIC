@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import {
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -22,6 +23,7 @@ const navigation = [
   { href: '/', label: 'Рабочий день', icon: LayoutDashboard, capability: 'clinician' },
   { href: '/patients', label: 'Пациенты', icon: Users, capability: 'patientDirectory' },
   { href: '/live', label: 'Очный приём', icon: Stethoscope, badge: 'LIVE', capability: 'clinician' },
+  { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {

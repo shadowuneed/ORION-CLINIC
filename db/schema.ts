@@ -652,6 +652,649 @@ export const encounters = sqliteTable(
   ],
 );
 
+export const serviceRequests = sqliteTable(
+  'service_requests',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    encounterId: text('encounter_id')
+      .notNull()
+      .references(() => encounters.id),
+    requestKind: text('request_kind', {
+      enum: ['laboratory', 'ecg', 'service', 'referral'],
+    }).notNull(),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('service_requests_encounter_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.encounterId,
+    ),
+    index('service_requests_patient_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+    ),
+    uniqueIndex('service_requests_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    foreignKey({
+      name: 'service_requests_scope_facility_fk',
+      columns: [table.organizationId, table.facilityId],
+      foreignColumns: [facilities.organizationId, facilities.id],
+    }),
+    foreignKey({
+      name: 'service_requests_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [
+        patients.organizationId,
+        patients.facilityId,
+        patients.id,
+      ],
+    }),
+    foreignKey({
+      name: 'service_requests_scope_encounter_fk',
+      columns: [table.organizationId, table.facilityId, table.encounterId],
+      foreignColumns: [
+        encounters.organizationId,
+        encounters.facilityId,
+        encounters.id,
+      ],
+    }),
+    foreignKey({
+      name: 'service_requests_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('service_requests_kind_enum', table.requestKind, [
+      'laboratory',
+      'ecg',
+      'service',
+      'referral',
+    ]),
+  ],
+);
+
+export const serviceRequestVersions = sqliteTable(
+  'service_request_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => serviceRequestVersions.id,
+    ),
+    status: text('status', {
+      enum: [
+        'draft',
+        'active',
+        'on_hold',
+        'revoked',
+        'completed',
+        'entered_in_error',
+      ],
+    }).notNull(),
+    priority: text('priority', {
+      enum: ['routine', 'urgent', 'asap', 'stat'],
+    }).notNull(),
+    requestedService: text('requested_service').notNull(),
+    targetSpecialty: text('target_specialty'),
+    medicalJustification: text('medical_justification').notNull(),
+    clinicianNote: text('clinician_note'),
+    statusReason: text('status_reason'),
+    authoredByMembershipId: text('authored_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    approvedByMembershipId: text('approved_by_membership_id').references(
+      () => memberships.id,
+    ),
+    approvedAt: integer('approved_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('service_request_versions_scope_request_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+      table.version,
+    ),
+    uniqueIndex('service_request_versions_scope_request_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+      table.id,
+    ),
+    uniqueIndex('service_request_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'service_request_versions_scope_request_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'service_request_versions_scope_author_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.authoredByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'service_request_versions_scope_approver_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.approvedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('service_request_versions_status_enum', table.status, [
+      'draft',
+      'active',
+      'on_hold',
+      'revoked',
+      'completed',
+      'entered_in_error',
+    ]),
+    enumCheck('service_request_versions_priority_enum', table.priority, [
+      'routine',
+      'urgent',
+      'asap',
+      'stat',
+    ]),
+    check('service_request_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'service_request_versions_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'service_request_versions_service_length',
+      sql`length(trim(${table.requestedService})) between 2 and 300`,
+    ),
+    check(
+      'service_request_versions_justification_length',
+      sql`length(trim(${table.medicalJustification})) between 10 and 2000`,
+    ),
+    check(
+      'service_request_versions_draft_not_approved',
+      sql`${table.status} <> 'draft' or (${table.approvedByMembershipId} is null and ${table.approvedAt} is null)`,
+    ),
+    check(
+      'service_request_versions_active_approved',
+      sql`${table.status} not in ('active', 'on_hold', 'completed') or (${table.approvedByMembershipId} is not null and ${table.approvedAt} is not null)`,
+    ),
+  ],
+);
+
+export const serviceRequestHeads = sqliteTable(
+  'service_request_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => serviceRequestVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('service_request_heads_scope_request_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+    ),
+    uniqueIndex('service_request_heads_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    foreignKey({
+      name: 'service_request_heads_scope_request_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'service_request_heads_scope_current_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        serviceRequestVersions.organizationId,
+        serviceRequestVersions.facilityId,
+        serviceRequestVersions.serviceRequestId,
+        serviceRequestVersions.id,
+      ],
+    }),
+    check('service_request_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const diagnosticReports = sqliteTable(
+  'diagnostic_reports',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('diagnostic_reports_scope_request_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+    ),
+    uniqueIndex('diagnostic_reports_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('diagnostic_reports_scope_request_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+      table.id,
+    ),
+    foreignKey({
+      name: 'diagnostic_reports_scope_request_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_reports_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+  ],
+);
+
+export const diagnosticReportArtifacts = sqliteTable(
+  'diagnostic_report_artifacts',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    diagnosticReportId: text('diagnostic_report_id')
+      .notNull()
+      .references(() => diagnosticReports.id),
+    objectKey: text('object_key').notNull(),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type', {
+      enum: ['application/pdf', 'image/jpeg', 'image/png'],
+    }).notNull(),
+    sha256: text('sha256').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    source: text('source', { enum: ['manual_upload'] })
+      .notNull()
+      .default('manual_upload'),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('diagnostic_report_artifacts_scope_object_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.objectKey,
+    ),
+    uniqueIndex('diagnostic_report_artifacts_scope_report_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.diagnosticReportId,
+      table.id,
+    ),
+    index('diagnostic_report_artifacts_request_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+    ),
+    foreignKey({
+      name: 'diagnostic_report_artifacts_scope_request_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_artifacts_scope_report_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+        table.diagnosticReportId,
+      ],
+      foreignColumns: [
+        diagnosticReports.organizationId,
+        diagnosticReports.facilityId,
+        diagnosticReports.serviceRequestId,
+        diagnosticReports.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_artifacts_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('diagnostic_report_artifacts_mime_enum', table.mimeType, [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+    ]),
+    enumCheck('diagnostic_report_artifacts_source_enum', table.source, [
+      'manual_upload',
+    ]),
+    check('diagnostic_report_artifacts_sha256_length', sql`length(${table.sha256}) = 64`),
+    check('diagnostic_report_artifacts_size_positive', sql`${table.byteSize} > 0`),
+    check(
+      'diagnostic_report_artifacts_file_name_length',
+      sql`length(trim(${table.fileName})) between 1 and 180`,
+    ),
+  ],
+);
+
+export const diagnosticReportVersions = sqliteTable(
+  'diagnostic_report_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    diagnosticReportId: text('diagnostic_report_id')
+      .notNull()
+      .references(() => diagnosticReports.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => diagnosticReportVersions.id,
+    ),
+    reportStatus: text('report_status', {
+      enum: [
+        'registered',
+        'preliminary',
+        'final',
+        'amended',
+        'corrected',
+        'cancelled',
+        'entered_in_error',
+      ],
+    }).notNull(),
+    conclusion: text('conclusion'),
+    artifactId: text('artifact_id').references(() => diagnosticReportArtifacts.id),
+    reviewState: text('review_state', {
+      enum: ['pending', 'reviewed', 'needs_reconciliation'],
+    })
+      .notNull()
+      .default('pending'),
+    reconciliationNote: text('reconciliation_note'),
+    changeReason: text('change_reason').notNull(),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    reviewedByMembershipId: text('reviewed_by_membership_id').references(
+      () => memberships.id,
+    ),
+    reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('diagnostic_report_versions_scope_report_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.diagnosticReportId,
+      table.version,
+    ),
+    uniqueIndex('diagnostic_report_versions_scope_report_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.diagnosticReportId,
+      table.id,
+    ),
+    uniqueIndex('diagnostic_report_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'diagnostic_report_versions_scope_report_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+        table.diagnosticReportId,
+      ],
+      foreignColumns: [
+        diagnosticReports.organizationId,
+        diagnosticReports.facilityId,
+        diagnosticReports.serviceRequestId,
+        diagnosticReports.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_versions_scope_artifact_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.diagnosticReportId,
+        table.artifactId,
+      ],
+      foreignColumns: [
+        diagnosticReportArtifacts.organizationId,
+        diagnosticReportArtifacts.facilityId,
+        diagnosticReportArtifacts.diagnosticReportId,
+        diagnosticReportArtifacts.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_versions_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_versions_scope_reviewer_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.reviewedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('diagnostic_report_versions_status_enum', table.reportStatus, [
+      'registered',
+      'preliminary',
+      'final',
+      'amended',
+      'corrected',
+      'cancelled',
+      'entered_in_error',
+    ]),
+    enumCheck('diagnostic_report_versions_review_enum', table.reviewState, [
+      'pending',
+      'reviewed',
+      'needs_reconciliation',
+    ]),
+    check('diagnostic_report_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'diagnostic_report_versions_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'diagnostic_report_versions_review_consistent',
+      sql`(${table.reviewState} = 'pending' and ${table.reviewedByMembershipId} is null and ${table.reviewedAt} is null) or (${table.reviewState} <> 'pending' and ${table.reviewedByMembershipId} is not null and ${table.reviewedAt} is not null)`,
+    ),
+    check(
+      'diagnostic_report_versions_reconciliation_note',
+      sql`${table.reviewState} <> 'needs_reconciliation' or length(trim(${table.reconciliationNote})) between 3 and 1000`,
+    ),
+    check(
+      'diagnostic_report_versions_change_reason',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const diagnosticReportHeads = sqliteTable(
+  'diagnostic_report_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    diagnosticReportId: text('diagnostic_report_id')
+      .notNull()
+      .references(() => diagnosticReports.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => diagnosticReportVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('diagnostic_report_heads_scope_report_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.diagnosticReportId,
+    ),
+    uniqueIndex('diagnostic_report_heads_scope_request_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceRequestId,
+    ),
+    foreignKey({
+      name: 'diagnostic_report_heads_scope_report_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+        table.diagnosticReportId,
+      ],
+      foreignColumns: [
+        diagnosticReports.organizationId,
+        diagnosticReports.facilityId,
+        diagnosticReports.serviceRequestId,
+        diagnosticReports.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_report_heads_scope_current_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.diagnosticReportId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        diagnosticReportVersions.organizationId,
+        diagnosticReportVersions.facilityId,
+        diagnosticReportVersions.diagnosticReportId,
+        diagnosticReportVersions.id,
+      ],
+    }),
+    check('diagnostic_report_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
 export const consentEvents = sqliteTable(
   'consent_events',
   {
@@ -2990,6 +3633,126 @@ export const commandIdempotency = sqliteTable(
       'failed',
     ]),
     jsonCheck('command_idempotency_response_json', table.responseJson, true),
+  ],
+);
+
+export const diagnosticResultUploadIntents = sqliteTable(
+  'diagnostic_result_upload_intents',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    commandId: text('command_id')
+      .notNull()
+      .references(() => commandIdempotency.id),
+    serviceRequestId: text('service_request_id')
+      .notNull()
+      .references(() => serviceRequests.id),
+    artifactId: text('artifact_id').notNull(),
+    objectKey: text('object_key').notNull(),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type', {
+      enum: ['application/pdf', 'image/jpeg', 'image/png'],
+    }).notNull(),
+    sha256: text('sha256').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    status: text('status', {
+      enum: [
+        'reserved',
+        'object_stored',
+        'committed',
+        'cleanup_pending',
+        'cleaned',
+      ],
+    })
+      .notNull()
+      .default('reserved'),
+    failureCode: text('failure_code'),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('diagnostic_result_upload_intents_scope_command_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.commandId,
+    ),
+    uniqueIndex('diagnostic_result_upload_intents_scope_object_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.objectKey,
+    ),
+    index('diagnostic_result_upload_intents_reconcile_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.status,
+      table.updatedAt,
+    ),
+    foreignKey({
+      name: 'diagnostic_result_upload_intents_scope_command_fk',
+      columns: [table.organizationId, table.facilityId, table.commandId],
+      foreignColumns: [
+        commandIdempotency.organizationId,
+        commandIdempotency.facilityId,
+        commandIdempotency.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_result_upload_intents_scope_request_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.serviceRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'diagnostic_result_upload_intents_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('diagnostic_result_upload_intents_mime_enum', table.mimeType, [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+    ]),
+    enumCheck('diagnostic_result_upload_intents_status_enum', table.status, [
+      'reserved',
+      'object_stored',
+      'committed',
+      'cleanup_pending',
+      'cleaned',
+    ]),
+    check(
+      'diagnostic_result_upload_intents_sha256_length',
+      sql`length(${table.sha256}) = 64`,
+    ),
+    check(
+      'diagnostic_result_upload_intents_size_positive',
+      sql`${table.byteSize} > 0`,
+    ),
+    check(
+      'diagnostic_result_upload_intents_file_name_length',
+      sql`length(trim(${table.fileName})) between 1 and 180`,
+    ),
+    check(
+      'diagnostic_result_upload_intents_failure_consistent',
+      sql`(${table.status} in ('cleanup_pending', 'cleaned') and ${table.failureCode} is not null) or (${table.status} not in ('cleanup_pending', 'cleaned') and ${table.failureCode} is null)`,
+    ),
   ],
 );
 

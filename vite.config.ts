@@ -12,6 +12,21 @@ const { d1, r2 } = hostingConfig;
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === 'seatbelt';
 
+// Runtime state is intentionally kept inside the checkout so that the local
+// launcher remains portable. None of it is application source, and some files
+// (browser cookies, SQLite journals, model logs) can be exclusively locked on
+// Windows. Watching those paths can terminate Vite with EBUSY while ORION is
+// otherwise healthy.
+const ignoredRuntimePaths = [
+  '**/.orion-runtime/**',
+  '**/.wrangler/**',
+  '**/artifacts/**',
+  '**/backups/**',
+  '**/exports/**',
+  '**/recordings/**',
+  '**/tmp/**',
+];
+
 const localBindingConfig = {
   main: 'vinext/server/app-router-entry',
   vars: {
@@ -53,11 +68,11 @@ export default defineConfig(async () => {
     server: {
       watch: isCodexSeatbeltSandbox
         ? {
-            ignored: ['**/tmp/**'],
+            ignored: ignoredRuntimePaths,
             useFsEvents: false,
             usePolling: true,
           }
-        : { ignored: ['**/tmp/**'] },
+        : { ignored: ignoredRuntimePaths },
     },
     plugins: [
       vinext(),

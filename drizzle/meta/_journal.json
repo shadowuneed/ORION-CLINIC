@@ -120,6 +120,27 @@
       "when": 1788425751219,
       "tag": "0016_last_hemingway",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788441869813,
+      "tag": "0017_wooden_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1788514206953,
+      "tag": "0018_order_integrity_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788515194478,
+      "tag": "0019_jittery_kid_colt",
+      "breakpoints": true
     }
   ]
 }

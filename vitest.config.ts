@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['lib/**/*.test.ts', 'db/**/*.test.ts'],
+    include: ['lib/**/*.test.ts', 'db/**/*.test.ts', 'app/**/*.test.ts'],
     passWithNoTests: false,
   },
 });
