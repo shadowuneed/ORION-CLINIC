@@ -1178,6 +1178,8 @@ Do not touch:
 - Branch/baseline before this checkpoint: `main` at `7f2272c`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
+- Verified Phase 4 implementation commit: `0f65a58` (`feat: complete hardened
+  orders and results workflow`).
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.

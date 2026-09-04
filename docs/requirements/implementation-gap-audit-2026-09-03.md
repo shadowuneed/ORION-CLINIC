@@ -2,6 +2,7 @@
 
 - Дата последней проверки: `2026-09-04`
 - Базовый commit до Phase 4 checkpoint: `7f2272c`
+- Проверенный commit локального Phase 4 checkpoint: `0f65a58`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
