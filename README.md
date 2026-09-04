@@ -18,6 +18,7 @@ Operational foundation:
 - [`docs/user-guide/clinician-workspace.ru.md`](docs/user-guide/clinician-workspace.ru.md)
 - [`docs/user-guide/orders-results.ru.md`](docs/user-guide/orders-results.ru.md)
 - [`docs/user-guide/scheduling-queue.ru.md`](docs/user-guide/scheduling-queue.ru.md)
+- [`docs/user-guide/chronic-care.ru.md`](docs/user-guide/chronic-care.ru.md)
 
 Clinic requirements and review:
 
@@ -71,6 +72,17 @@ Every slot is labelled **«Тестовое ручное расписание ·
 availability, real KMIS booking, notification delivery, waitlist/rescheduling or
 automatic expired-hold worker is connected or claimed.
 
+The Phase 6 local chronic-care slice is available at
+`http://localhost:3200/care`. A doctor can create a registry enrollment only
+from the current signed protocol assigned to that doctor, sign immutable care
+plan versions, and assign dated follow-up/control tasks to an active doctor or
+nurse. D1 derives due, due-soon and overdue cohorts from the facility date and
+retains the plan version that created every task. A nurse sees only assigned
+tasks, records a structured patient-reported response and escalates concerns;
+the managing doctor alone resolves the escalation. ERDB, PUZ, free-medication
+eligibility/refill, real notifications and external registries remain visibly
+`Не подключено` and are not simulated.
+
 The launcher refuses to replace unrelated
 processes on ports `3200` or `3101`, applies forward-only local migrations,
 loads only the idempotent technical bootstrap needed for local sign-in, writes
@@ -108,6 +120,16 @@ pnpm db:seed:scheduling:local
 ```
 
 It is never run by normal startup and must not be treated as clinic availability.
+
+A separate rerunnable chronic-care fixture adds one explicitly artificial signed
+protocol, enrollment, signed plan and three dated staff tasks:
+
+```powershell
+pnpm db:seed:care:local
+```
+
+It is also never run by normal startup and does not represent a real registry,
+diagnosis, prescription or patient.
 
 The local workspace is available at `http://localhost:3200/`. Verify a checkout
 with:

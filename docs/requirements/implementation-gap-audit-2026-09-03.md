@@ -1,8 +1,8 @@
 # ORION Clinic — аудит реализации требований руководителя клиники
 
-- Дата последней проверки: `2026-09-04`
+- Дата последней проверки: `2026-09-05`
 - Базовый commit до Phase 4 checkpoint: `7f2272c`
-- Проверенный commit локального Phase 4 checkpoint: `0f65a58`
+- Проверенный commit локального Phase 5 checkpoint: `3439e21`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -10,13 +10,14 @@
 ## 1. Вывод
 
 Текущая платформа всё ещё не реализует полный процесс из сообщений
-руководителя клиники. Помимо клинического вертикального среза приёма работает
-защищённый локальный срез Phase 4: версия запроса, отдельное решение врача,
-ручное прикрепление PDF/JPEG/PNG, проверка/сверка, неизменяемая история и аудит
-в D1/R2. Загрузка результата резервирует durable intent до записи в R2; точный
-повтор возвращает снимок контекста на момент команды, а незавершённые загрузки
-имеют двухэтапную проверяемую очистку. Внешняя отправка/подтверждение в
-КМИС/LIS/ЭКГ не подключены, а фазы 5–8 отсутствуют как рабочие модули.
+руководителя клиники. Помимо клинического вертикального среза приёма работают
+защищённые локальные срезы направлений/результатов, записи/очереди и
+диспансерного наблюдения. Последний связывает решение врача с текущим
+подписанным протоколом, сохраняет неизменяемые версии плана, создаёт задачи
+только из подписанного плана и вычисляет объяснимые группы по срокам. Медсестра
+фиксирует только ответ пациента и эскалацию; клиническое решение остаётся у
+врача. Внешние КМИС/LIS/ЭКГ, ЭРДБ/ПУЗ, уведомления и реальные регистры не
+подключены, а фазы 7–8 отсутствуют как рабочие модули.
 
 ## 2. Что подтверждено кодом и проверками
 
@@ -31,6 +32,13 @@
 | Протокол и файлы | `CTX-005/007` | `IMPLEMENTED_SYNTHETIC` | DOCX/PDF/TXT/audit JSON/ZIP, SHA-256, R2, access audit; юридическая электронная подпись не подключена |
 | Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, membership/facility/encounter scope и audit существуют; production OIDC/MFA и lifecycle пользователей отсутствуют |
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | D1 request/report version history; separate clinician approval; exact-payload review and terminal-state guards; manual PDF/JPEG/PNG result in R2 through a durable upload intent; immutable command-time replay; reviewed-final completion gate; scoped/audited download; two-pass cleanup for expired uncommitted uploads; integrated `/orders`. Локальный синтетический срез реализован; external delivery/acknowledgement and structured vendor mapping remain open |
+| Диспансерное наблюдение и планы | `REQ-CHR-001..007`, `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | doctor-confirmed enrollment от текущего signed protocol; immutable signed plan versions; dated plan-derived tasks; deterministic due reason; scoped doctor/nurse worklists; structured response, escalation and doctor resolution; D1/API/UI на `/care` |
+
+Phase 6 gate: secret policy covered 313 repository files; dependency audit found
+no known vulnerabilities; lint, strict types, 38 test files/208 tests, Drizzle and
+the production build passed. The isolated recovery drill reproduced 67 tables,
+124 rows, 22 migrations and three R2 objects after destroying only its disposable
+source environment. This evidence applies only to synthetic local data.
 
 ## 3. Что отсутствует или остаётся частичным
 
@@ -38,8 +46,8 @@
 |---|---|---|---|
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | Локальный синтетический D1/R2 срез реализован; внешний gate открыт: нужны контракты и sandbox-адаптеры КМИС/LIS/ЭКГ, external acknowledgement/retry/manual ownership и утверждённые форматы |
 | Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `IN_PROGRESS` | Локальный синтетический D1-срез реализован: маркированное ручное расписание, immutable preferences, hold/confirm/cancel/no-show, защита от двойной записи и queue state machine. Открыты authoritative KMIS source, перенос/waitlist, approved priority policy, уведомления, trusted expiry worker и внешняя сверка |
-| Эндокринолог, диспансерный учёт, планы на месяцы | `REQ-CHR-001..010` | `NOT_STARTED` | scoped specialist workspace, doctor-confirmed enrollment, versioned care plan, repeat tasks, due/overdue cohorts |
-| Работа медсестры | `REQ-NUR-001..002` | `NOT_STARTED` | назначенные worklists, попытки контакта, wellbeing response, human escalation |
+| Эндокринолог, диспансерный учёт, планы на месяцы | `REQ-CHR-001..010` | `IN_PROGRESS` | Локально реализованы решение врача, signed-plan versions, medication/diet/goals, plan-derived follow-up/control tasks и due/overdue cohort. Реальный регистр, ЭРДБ/ПУЗ и источник бесплатных лекарств заблокированы внешними решениями |
+| Работа медсестры | `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | медсестра видит только назначенные задачи, фиксирует способ контакта/wellbeing/ответ, эскалирует; врач отдельно закрывает эскалацию; SLA и автоматические каналы не утверждены |
 | Автообзвон, WhatsApp/Telegram и напоминания | `REQ-COM-001..004`, `REQ-SCH-006` | `NOT_STARTED` | channel consent, approved templates, outbox, delivery/retry/reply/escalation; реальные сообщения до согласования не отправляются |
 | Смотровая: рост/вес/ИМТ/давление | `REQ-OBS-001..004` | `NOT_STARTED` | measurements с единицами, источником, версиями/исправлениями и подтверждаемыми порогами |
 | «Красный» пациент и передача между больницами | `REQ-TRF-001..007` | `NOT_STARTED` | versioned rules, doctor confirmation, transfer packet, delivery/acknowledgement/manual call, read-only chronology |
@@ -66,8 +74,9 @@
    адаптер КМИС, перенос/waitlist, trusted expiry/reconciliation worker и
    подтверждённая политика очереди. Локальный D1-срез не выдавать за реальную
    доступность врача.
-4. Добавить Phase 6: диагноз/registry decision, versioned care plan, follow-up
-   tasks, cohort и nurse worklist.
+4. Внешнюю часть Phase 6 добавлять только после определения ЭРДБ/ПУЗ,
+   источника бесплатных лекарств, legal basis и владельцев интеграции. Локальный
+   план и worklist не выдавать за реальную постановку на учёт.
 5. Добавить Phase 7 через provider-neutral outbox; подключать реальный канал
    только после подтверждения бизнес-аккаунтов, шаблонов и согласий.
 6. Добавить Phase 8: наблюдения, утверждённые правила риска, doctor-confirmed

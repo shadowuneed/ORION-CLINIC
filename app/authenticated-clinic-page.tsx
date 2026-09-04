@@ -9,7 +9,11 @@ import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
 import styles from './authenticated-clinic-page.module.css';
 
-export type ClinicCapability = 'clinician' | 'patient-directory' | 'scheduling';
+export type ClinicCapability =
+  | 'clinician'
+  | 'patient-directory'
+  | 'scheduling'
+  | 'chronic-care';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
@@ -17,6 +21,7 @@ export type AuthenticatedClinicContext = {
     clinician: boolean;
     patientDirectory: boolean;
     scheduling: boolean;
+    chronicCare: boolean;
   };
   accessCheck: 'ready' | 'unavailable';
 };
@@ -51,6 +56,10 @@ export async function getAuthenticatedClinicContext(
         (membership) =>
           membership.role === 'clinician' || membership.role === 'registrar',
       ),
+      chronicCare: memberships.some(
+        (membership) =>
+          membership.role === 'clinician' || membership.role === 'nurse',
+      ),
     },
   };
 }
@@ -68,6 +77,7 @@ export function AuthenticatedClinicPage({
     clinician: context.capabilities.clinician,
     'patient-directory': context.capabilities.patientDirectory,
     scheduling: context.capabilities.scheduling,
+    'chronic-care': context.capabilities.chronicCare,
   }[requiredCapability];
 
   return (
@@ -85,7 +95,9 @@ export function AuthenticatedClinicPage({
           text={
             requiredCapability === 'clinician'
               ? 'Этот раздел доступен только пользователю с активной ролью врача.'
-              : 'Нужна активная роль врача или регистратора в выбранной клинике.'
+              : requiredCapability === 'chronic-care'
+                ? 'Нужна активная роль врача или медсестры в выбранной клинике.'
+                : 'Нужна активная роль врача или регистратора в выбранной клинике.'
           }
         />
       )}

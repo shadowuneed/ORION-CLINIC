@@ -20,6 +20,7 @@
     "db:bootstrap:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/bootstrap.local.sql",
     "db:seed:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/seed.local.sql",
     "db:seed:scheduling:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/seed.scheduling.local.sql",
+    "db:seed:care:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/seed.chronic-care.local.sql",
     "security:secrets": "node scripts/scan-secrets.mjs",
     "security:dependencies": "pnpm audit --audit-level high",
     "backup:drill:local": "node scripts/local-backup-restore-drill.mjs",

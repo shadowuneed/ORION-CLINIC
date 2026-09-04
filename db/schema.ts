@@ -4803,3 +4803,747 @@ export const outboxEvents = sqliteTable(
     jsonCheck('outbox_payload_json', table.payloadJson),
   ],
 );
+
+export const chronicRegistryEnrollments = sqliteTable(
+  'chronic_registry_enrollments',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    registryCode: text('registry_code').notNull(),
+    sourceType: text('source_type', { enum: ['local_test'] }).notNull(),
+    sourceLabel: text('source_label').notNull(),
+    managingClinicianMembershipId: text('managing_clinician_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_enrollments_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('chronic_enrollments_patient_registry_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.registryCode,
+    ),
+    foreignKey({
+      name: 'chronic_enrollments_scope_facility_fk',
+      columns: [table.organizationId, table.facilityId],
+      foreignColumns: [facilities.organizationId, facilities.id],
+    }),
+    foreignKey({
+      name: 'chronic_enrollments_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'chronic_enrollments_scope_manager_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.managingClinicianMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_enrollments_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('chronic_enrollments_source_type_enum', table.sourceType, [
+      'local_test',
+    ]),
+    check(
+      'chronic_enrollments_registry_code_length',
+      sql`length(trim(${table.registryCode})) between 2 and 80`,
+    ),
+  ],
+);
+
+export const chronicRegistryEnrollmentVersions = sqliteTable(
+  'chronic_registry_enrollment_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    enrollmentId: text('enrollment_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollments.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => chronicRegistryEnrollmentVersions.id,
+    ),
+    status: text('status', {
+      enum: ['active', 'paused', 'closed'],
+    }).notNull(),
+    basisEncounterId: text('basis_encounter_id')
+      .notNull()
+      .references(() => encounters.id),
+    basisProtocolVersionId: text('basis_protocol_version_id')
+      .notNull()
+      .references(() => protocolVersions.id),
+    diagnosisDisplay: text('diagnosis_display').notNull(),
+    diagnosisCode: text('diagnosis_code'),
+    diagnosisBasis: text('diagnosis_basis').notNull(),
+    decisionReason: text('decision_reason').notNull(),
+    decidedByMembershipId: text('decided_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    decidedAt: integer('decided_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_enrollment_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.enrollmentId,
+      table.version,
+    ),
+    uniqueIndex('chronic_enrollment_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.enrollmentId,
+      table.id,
+    ),
+    uniqueIndex('chronic_enrollment_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'chronic_enrollment_versions_scope_enrollment_fk',
+      columns: [table.organizationId, table.facilityId, table.enrollmentId],
+      foreignColumns: [
+        chronicRegistryEnrollments.organizationId,
+        chronicRegistryEnrollments.facilityId,
+        chronicRegistryEnrollments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_enrollment_versions_scope_encounter_fk',
+      columns: [table.organizationId, table.facilityId, table.basisEncounterId],
+      foreignColumns: [encounters.organizationId, encounters.facilityId, encounters.id],
+    }),
+    foreignKey({
+      name: 'chronic_enrollment_versions_scope_protocol_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.basisEncounterId,
+        table.basisProtocolVersionId,
+      ],
+      foreignColumns: [
+        protocolVersions.organizationId,
+        protocolVersions.facilityId,
+        protocolVersions.encounterId,
+        protocolVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_enrollment_versions_scope_decider_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.decidedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('chronic_enrollment_versions_status_enum', table.status, [
+      'active',
+      'paused',
+      'closed',
+    ]),
+    check(
+      'chronic_enrollment_versions_version_positive',
+      sql`${table.version} > 0`,
+    ),
+    check(
+      'chronic_enrollment_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'chronic_enrollment_versions_diagnosis_length',
+      sql`length(trim(${table.diagnosisDisplay})) between 3 and 500`,
+    ),
+    check(
+      'chronic_enrollment_versions_basis_length',
+      sql`length(trim(${table.diagnosisBasis})) between 10 and 3000`,
+    ),
+    check(
+      'chronic_enrollment_versions_reason_length',
+      sql`length(trim(${table.decisionReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const chronicRegistryEnrollmentHeads = sqliteTable(
+  'chronic_registry_enrollment_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    enrollmentId: text('enrollment_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollments.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollmentVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_enrollment_heads_scope_enrollment_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.enrollmentId,
+    ),
+    foreignKey({
+      name: 'chronic_enrollment_heads_scope_enrollment_fk',
+      columns: [table.organizationId, table.facilityId, table.enrollmentId],
+      foreignColumns: [
+        chronicRegistryEnrollments.organizationId,
+        chronicRegistryEnrollments.facilityId,
+        chronicRegistryEnrollments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_enrollment_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.enrollmentId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        chronicRegistryEnrollmentVersions.organizationId,
+        chronicRegistryEnrollmentVersions.facilityId,
+        chronicRegistryEnrollmentVersions.enrollmentId,
+        chronicRegistryEnrollmentVersions.id,
+      ],
+    }),
+    check('chronic_enrollment_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const chronicCarePlans = sqliteTable(
+  'chronic_care_plans',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    enrollmentId: text('enrollment_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollments.id),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_plans_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('chronic_care_plans_enrollment_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.enrollmentId,
+    ),
+    foreignKey({
+      name: 'chronic_care_plans_scope_enrollment_fk',
+      columns: [table.organizationId, table.facilityId, table.enrollmentId],
+      foreignColumns: [
+        chronicRegistryEnrollments.organizationId,
+        chronicRegistryEnrollments.facilityId,
+        chronicRegistryEnrollments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_plans_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'chronic_care_plans_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+  ],
+);
+
+export const chronicCarePlanVersions = sqliteTable(
+  'chronic_care_plan_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    carePlanId: text('care_plan_id')
+      .notNull()
+      .references(() => chronicCarePlans.id),
+    enrollmentId: text('enrollment_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollments.id),
+    enrollmentVersionId: text('enrollment_version_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollmentVersions.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => chronicCarePlanVersions.id,
+    ),
+    effectiveFrom: text('effective_from').notNull(),
+    effectiveTo: text('effective_to').notNull(),
+    goalsJson: text('goals_json', { mode: 'json' }).$type<string[]>().notNull(),
+    treatmentPlan: text('treatment_plan').notNull(),
+    dietPlan: text('diet_plan').notNull(),
+    medicationsJson: text('medications_json', { mode: 'json' })
+      .$type<Array<Record<string, unknown>>>()
+      .notNull(),
+    taskBlueprintsJson: text('task_blueprints_json', { mode: 'json' })
+      .$type<Array<Record<string, unknown>>>()
+      .notNull(),
+    contentHash: text('content_hash').notNull(),
+    signedByMembershipId: text('signed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    signedAt: integer('signed_at', { mode: 'timestamp_ms' }).notNull(),
+    changeReason: text('change_reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_plan_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.carePlanId,
+      table.version,
+    ),
+    uniqueIndex('chronic_care_plan_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.carePlanId,
+      table.id,
+    ),
+    uniqueIndex('chronic_care_plan_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'chronic_care_plan_versions_scope_plan_fk',
+      columns: [table.organizationId, table.facilityId, table.carePlanId],
+      foreignColumns: [
+        chronicCarePlans.organizationId,
+        chronicCarePlans.facilityId,
+        chronicCarePlans.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_plan_versions_scope_enrollment_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.enrollmentId,
+        table.enrollmentVersionId,
+      ],
+      foreignColumns: [
+        chronicRegistryEnrollmentVersions.organizationId,
+        chronicRegistryEnrollmentVersions.facilityId,
+        chronicRegistryEnrollmentVersions.enrollmentId,
+        chronicRegistryEnrollmentVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_plan_versions_scope_signer_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.signedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    check('chronic_care_plan_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'chronic_care_plan_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'chronic_care_plan_versions_date_range',
+      sql`length(${table.effectiveFrom}) = 10 and date(${table.effectiveFrom}) is not null and length(${table.effectiveTo}) = 10 and date(${table.effectiveTo}) is not null and date(${table.effectiveTo}) >= date(${table.effectiveFrom})`,
+    ),
+    check(
+      'chronic_care_plan_versions_hash',
+      sql`length(${table.contentHash}) = 64 and lower(${table.contentHash}) = ${table.contentHash}`,
+    ),
+    check(
+      'chronic_care_plan_versions_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+    jsonCheck('chronic_care_plan_versions_goals_json', table.goalsJson),
+    jsonCheck('chronic_care_plan_versions_medications_json', table.medicationsJson),
+    jsonCheck(
+      'chronic_care_plan_versions_task_blueprints_json',
+      table.taskBlueprintsJson,
+    ),
+  ],
+);
+
+export const chronicCarePlanHeads = sqliteTable(
+  'chronic_care_plan_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    carePlanId: text('care_plan_id')
+      .notNull()
+      .references(() => chronicCarePlans.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => chronicCarePlanVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_plan_heads_scope_plan_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.carePlanId,
+    ),
+    foreignKey({
+      name: 'chronic_care_plan_heads_scope_plan_fk',
+      columns: [table.organizationId, table.facilityId, table.carePlanId],
+      foreignColumns: [
+        chronicCarePlans.organizationId,
+        chronicCarePlans.facilityId,
+        chronicCarePlans.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_plan_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.carePlanId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        chronicCarePlanVersions.organizationId,
+        chronicCarePlanVersions.facilityId,
+        chronicCarePlanVersions.carePlanId,
+        chronicCarePlanVersions.id,
+      ],
+    }),
+    check('chronic_care_plan_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const chronicCareTasks = sqliteTable(
+  'chronic_care_tasks',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    enrollmentId: text('enrollment_id')
+      .notNull()
+      .references(() => chronicRegistryEnrollments.id),
+    carePlanId: text('care_plan_id')
+      .notNull()
+      .references(() => chronicCarePlans.id),
+    sourcePlanVersionId: text('source_plan_version_id')
+      .notNull()
+      .references(() => chronicCarePlanVersions.id),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    blueprintKey: text('blueprint_key').notNull(),
+    kind: text('kind', {
+      enum: [
+        'nurse_contact',
+        'follow_up_visit',
+        'control_test',
+        'medication_review',
+      ],
+    }).notNull(),
+    title: text('title').notNull(),
+    ownerRole: text('owner_role', { enum: ['clinician', 'nurse'] }).notNull(),
+    assignedMembershipId: text('assigned_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_tasks_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('chronic_care_tasks_plan_blueprint_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.sourcePlanVersionId,
+      table.blueprintKey,
+    ),
+    index('chronic_care_tasks_assignee_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.assignedMembershipId,
+    ),
+    foreignKey({
+      name: 'chronic_care_tasks_scope_enrollment_fk',
+      columns: [table.organizationId, table.facilityId, table.enrollmentId],
+      foreignColumns: [
+        chronicRegistryEnrollments.organizationId,
+        chronicRegistryEnrollments.facilityId,
+        chronicRegistryEnrollments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_tasks_scope_plan_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.carePlanId,
+        table.sourcePlanVersionId,
+      ],
+      foreignColumns: [
+        chronicCarePlanVersions.organizationId,
+        chronicCarePlanVersions.facilityId,
+        chronicCarePlanVersions.carePlanId,
+        chronicCarePlanVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_tasks_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'chronic_care_tasks_scope_assignee_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.assignedMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('chronic_care_tasks_kind_enum', table.kind, [
+      'nurse_contact',
+      'follow_up_visit',
+      'control_test',
+      'medication_review',
+    ]),
+    enumCheck('chronic_care_tasks_owner_role_enum', table.ownerRole, [
+      'clinician',
+      'nurse',
+    ]),
+    check(
+      'chronic_care_tasks_blueprint_key_length',
+      sql`length(trim(${table.blueprintKey})) between 2 and 80`,
+    ),
+    check(
+      'chronic_care_tasks_title_length',
+      sql`length(trim(${table.title})) between 3 and 240`,
+    ),
+  ],
+);
+
+export const chronicCareTaskVersions = sqliteTable(
+  'chronic_care_task_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => chronicCareTasks.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => chronicCareTaskVersions.id,
+    ),
+    status: text('status', {
+      enum: ['pending', 'in_progress', 'completed', 'escalated', 'cancelled'],
+    }).notNull(),
+    dueDate: text('due_date').notNull(),
+    instructions: text('instructions'),
+    contactMethod: text('contact_method', {
+      enum: ['in_person', 'phone', 'digital'],
+    }),
+    wellbeing: text('wellbeing', {
+      enum: ['stable', 'concerning', 'urgent'],
+    }),
+    responseSummary: text('response_summary'),
+    respondedAt: integer('responded_at', { mode: 'timestamp_ms' }),
+    escalationReason: text('escalation_reason'),
+    escalatedAt: integer('escalated_at', { mode: 'timestamp_ms' }),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_task_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+      table.version,
+    ),
+    uniqueIndex('chronic_care_task_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+      table.id,
+    ),
+    uniqueIndex('chronic_care_task_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'chronic_care_task_versions_scope_task_fk',
+      columns: [table.organizationId, table.facilityId, table.taskId],
+      foreignColumns: [
+        chronicCareTasks.organizationId,
+        chronicCareTasks.facilityId,
+        chronicCareTasks.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_task_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('chronic_care_task_versions_status_enum', table.status, [
+      'pending',
+      'in_progress',
+      'completed',
+      'escalated',
+      'cancelled',
+    ]),
+    enumCheck('chronic_care_task_versions_contact_method_enum', table.contactMethod, [
+      'in_person',
+      'phone',
+      'digital',
+    ]),
+    enumCheck('chronic_care_task_versions_wellbeing_enum', table.wellbeing, [
+      'stable',
+      'concerning',
+      'urgent',
+    ]),
+    check('chronic_care_task_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'chronic_care_task_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'chronic_care_task_versions_due_date',
+      sql`length(${table.dueDate}) = 10 and date(${table.dueDate}) is not null`,
+    ),
+    check(
+      'chronic_care_task_versions_response_consistent',
+      sql`(${table.contactMethod} is null and ${table.wellbeing} is null and ${table.responseSummary} is null and ${table.respondedAt} is null) or (${table.contactMethod} is not null and ${table.wellbeing} is not null and length(trim(${table.responseSummary})) between 3 and 2000 and ${table.respondedAt} is not null)`,
+    ),
+    check(
+      'chronic_care_task_versions_escalation_consistent',
+      sql`(${table.escalationReason} is null and ${table.escalatedAt} is null and ${table.status} <> 'escalated') or (${table.escalationReason} is not null and ${table.escalatedAt} is not null)`,
+    ),
+    check(
+      'chronic_care_task_versions_completion_consistent',
+      sql`(${table.status} = 'completed' and ${table.completedAt} is not null) or (${table.status} <> 'completed' and ${table.completedAt} is null)`,
+    ),
+    check(
+      'chronic_care_task_versions_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const chronicCareTaskHeads = sqliteTable(
+  'chronic_care_task_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => chronicCareTasks.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => chronicCareTaskVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('chronic_care_task_heads_scope_task_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+    ),
+    foreignKey({
+      name: 'chronic_care_task_heads_scope_task_fk',
+      columns: [table.organizationId, table.facilityId, table.taskId],
+      foreignColumns: [
+        chronicCareTasks.organizationId,
+        chronicCareTasks.facilityId,
+        chronicCareTasks.id,
+      ],
+    }),
+    foreignKey({
+      name: 'chronic_care_task_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.taskId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        chronicCareTaskVersions.organizationId,
+        chronicCareTaskVersions.facilityId,
+        chronicCareTaskVersions.taskId,
+        chronicCareTaskVersions.id,
+      ],
+    }),
+    check('chronic_care_task_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);

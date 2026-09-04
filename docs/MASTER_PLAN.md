@@ -499,18 +499,21 @@ slice only; real availability remains blocked on the authoritative KMIS contract
 
 ### Phase 6 — Chronic care and staff worklists
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
 
-- [ ] Doctor-confirmed registry enrollment.
-- [ ] Diagnosis basis, goals, treatment, medication, and diet plan.
-- [ ] Follow-up visits and control tests with due/overdue states.
-- [ ] Nurse tasks, patient responses, escalation, and closure.
-- [ ] Cohort dashboard with reason for inclusion.
-- [ ] Medication adherence/refill and free-medication source integration.
+- [x] Doctor-confirmed registry enrollment for the local synthetic source.
+- [x] Diagnosis basis, goals, treatment, medication, and diet plan.
+- [x] Follow-up visits and control tests with due/overdue states.
+- [x] Nurse tasks, patient responses, escalation, and doctor closure.
+- [x] Cohort dashboard with deterministic reason for inclusion.
+- [x] Medication review/adherence tasks derived from a signed plan.
+- [ ] Refill and free-medication authoritative source integration.
 - [ ] ERDB and PUZ adapters only after access and exact terminology are confirmed.
 
 Gate: every care task derives from a signed plan and overdue cohorts are
-reproducible from deterministic rules.
+reproducible from deterministic rules. This gate passes for the local synthetic
+D1 slice; real registry/refill status remains blocked on authoritative systems,
+legal basis and clinic-approved workflow.
 
 ### Phase 7 — Patient communications
 
@@ -790,16 +793,17 @@ control, detection, response, and residual acceptance.
 ## 15. Current checkpoint
 
 - Active phases: `PHASE_0_IN_PROGRESS` for clinic review/discovery,
-  `PHASE_2_IN_PROGRESS` for production identity/consent decisions, and
-  `PHASE_3_IN_PROGRESS` for the synthetic encounter vertical slice. Phase 4 is
-  now `IN_PROGRESS` for its provider-neutral local D1/R2 slice. Phase 1 is complete
-  only for the verified synthetic local engineering foundation.
-- Phase 4 now has an operational local `Направления` module, but no
-  external delivery or acknowledgement. Phases 5-10 remain `NOT_STARTED`:
-  specialist scheduling, electronic queue, chronic-care monitoring, patient
-  communications, critical transfer/digital twin and production integration/
-  operations are not presented as working navigation until their D1 models,
-  APIs, authorization and behavioral tests exist.
+  `PHASE_2_IN_PROGRESS` for production identity/consent decisions,
+  `PHASE_3_IN_PROGRESS` for the synthetic encounter vertical slice, and
+  `PHASE_4_IN_PROGRESS` through `PHASE_6_IN_PROGRESS` for provider-neutral local
+  slices whose external gates remain open. Phase 1 is complete only for the
+  verified synthetic local engineering foundation.
+- Phase 4 has an operational local `Направления` module without external
+  delivery/acknowledgement. Phase 5 has local scheduling and queue without an
+  authoritative KMIS source. Phase 6 has local signed-plan observation without
+  ERDB/PUZ/free-medication systems. Phases 7-10 remain `NOT_STARTED` and are not
+  represented as connected communications, critical transfer/digital twin or
+  production operations.
 - Completed current bounded slice: clinician-authored laboratory, ECG, service
   and specialist requests have immutable D1 versions, separate doctor approval,
   status history, manual PDF/JPEG/PNG results in R2, explicit review or
@@ -871,6 +875,9 @@ control, detection, response, and residual acceptance.
   20-21 document the actionable `/live` consent gate and the eight-section
   clinical-record review guide. `docs/user-guide/orders-results.ru.md` explains
   the separate Phase 4 workflow and screenshot 22 records its loaded D1/R2 state.
+  `docs/user-guide/scheduling-queue.ru.md` and
+  `docs/user-guide/chronic-care.ru.md` document the local Phase 5 and Phase 6
+  operator paths, role boundaries, retry behavior and external limitations.
 - Verification evidence on 2026-09-02: `pnpm verify:ci` passed secret scanning for
   183 tracked and untracked repository files, zero known dependency advisories,
   lint, strict types, 20 test files/97 tests, Drizzle drift check, every Vinext
@@ -988,10 +995,29 @@ control, detection, response, and residual acceptance.
   auditable queue ticket through arrival, call, service, completion or manual
   exception. Browser QA completed one full synthetic lifecycle. No AI-generated
   slot, real KMIS booking or notification is represented.
-- Exact next implementable task: build the first Phase 6 synthetic D1 chronic-care
-  slice: doctor-confirmed registry enrollment with an explicit diagnosis basis,
-  immutable care-plan versions, deterministic follow-up/control-test due dates and
-  a scoped cohort/worklist. Do not add ERDB/PUZ/free-medication adapters or infer a
+- Completed current bounded slice: `/care` reads a facility-scoped D1 registry,
+  requires the managing doctor and the current doctor-signed protocol for local
+  enrollment, signs immutable care-plan versions, and creates dated tasks only
+  from the exact signed plan. Cohort reasons derive from the facility date. Nurses
+  see only assigned tasks, record sourced patient responses and escalate; the
+  managing doctor alone signs plans and resolves escalation. Browser QA covered
+  the worklist, filters, plan editor, task dialog, responsive 390 px layout and
+  empty warning/error console. ERDB/PUZ/free-medication/notification integrations
+  remain visibly disconnected.
+- Phase 6 gate evidence on 2026-09-05: `pnpm verify:ci` passed secret scanning
+  for 313 tracked and untracked repository files, dependency audit with no known
+  vulnerabilities, lint, strict types, 38 test files/208 tests, Drizzle drift
+  check and the complete Vinext production build. Isolated destructive-source
+  recovery matched 67 tables/124 rows/22 migrations/three R2 objects/316,415
+  bytes. Active D1 `quick_check` returned `ok`, foreign-key check returned no
+  rows, and the explicit rerunnable fixture retained one enrollment, one plan
+  version and three current task versions. An unauthenticated direct API request
+  returned 401 while the authenticated Sites browser loaded the same D1 cohort.
+- Exact next implementable task: build the first provider-neutral Phase 7 local
+  communications outbox with per-channel consent, approved RU/KK template
+  versions, scheduled triggers from signed appointments/plans, delivery/retry/
+  failure/manual-contact states and no real provider call.
+  Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
   clinic scheduling contract.
@@ -1790,3 +1816,26 @@ the named open decisions. This is the current canonical continuation point.
 - Next: implement the first synthetic Phase 6 doctor-confirmed chronic-care
   enrollment and versioned care-plan slice; keep ERDB/PUZ/free-medication adapters
   blocked until the clinic identifies their exact systems and legal basis.
+
+### 2026-09-05 — local synthetic chronic-care and staff-worklist checkpoint
+
+- Reason: clinic leadership requires the endocrinologist's confirmed diagnosis to
+  continue into a multi-month plan, reproducible follow-up cohort and an assigned
+  nurse worklist without allowing AI or a nurse to make the clinical decision.
+- Decision: implement the complete local D1 lifecycle from the current signed
+  doctor protocol while keeping every external registry and messaging action
+  visibly disconnected.
+- Added: migration `0021`; immutable registry enrollment, signed-plan and task
+  versions with guarded heads; deterministic facility-date cohorts; scoped APIs;
+  `/care`; rerunnable explicit fixture; role-specific actions; Russian guide.
+- Verified: doctor enrollment and plan signing, exact task-plan lineage, nurse
+  response/escalation, doctor resolution, stale-plan rejection, revision cleanup,
+  exact idempotent replay, cross-facility denial, D1 migration/seed rerun and
+  browser desktop/mobile behavior with no warning/error console output. The final
+  aggregate gate covered 313 files, 38 test files/208 tests and an isolated
+  restore of 67 tables/124 rows/22 migrations/three R2 objects/316,415 bytes.
+- Limitation: no real ERDB/PUZ/free-medication source, refill workflow, automatic
+  notification, clinic-approved escalation SLA, production identity/data or legal
+  electronic signature is included.
+- Next: implement a provider-neutral synthetic Phase 7 outbox without contacting
+  a real patient or messaging provider.

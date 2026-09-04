@@ -15,6 +15,7 @@ import {
   Stethoscope,
   Sun,
   Users,
+  HeartPulse,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 
@@ -26,6 +27,7 @@ const navigation = [
   { href: '/live', label: 'Очный приём', icon: Stethoscope, badge: 'LIVE', capability: 'clinician' },
   { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
   { href: '/scheduling', label: 'Запись и очередь', icon: CalendarClock, badge: 'D1', capability: 'scheduling' },
+  { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
@@ -64,6 +66,7 @@ export function ClinicShell({
     clinician: boolean;
     patientDirectory: boolean;
     scheduling: boolean;
+    chronicCare: boolean;
   };
   user: { displayName: string; email: string | null };
 }) {
