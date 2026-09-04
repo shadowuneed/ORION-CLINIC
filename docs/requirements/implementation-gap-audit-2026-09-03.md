@@ -37,7 +37,7 @@
 | Блок руководителя клиники | Требования | Состояние на 2026-09-04 | Что должно появиться в продукте |
 |---|---|---|---|
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | Локальный синтетический D1/R2 срез реализован; внешний gate открыт: нужны контракты и sandbox-адаптеры КМИС/LIS/ЭКГ, external acknowledgement/retry/manual ownership и утверждённые форматы |
-| Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `NOT_STARTED` | источник расписания, patient preferences, подтверждаемая запись, queue ticket/state machine, ручной fallback |
+| Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `IN_PROGRESS` | Локальный синтетический D1-срез реализован: маркированное ручное расписание, immutable preferences, hold/confirm/cancel/no-show, защита от двойной записи и queue state machine. Открыты authoritative KMIS source, перенос/waitlist, approved priority policy, уведомления, trusted expiry worker и внешняя сверка |
 | Эндокринолог, диспансерный учёт, планы на месяцы | `REQ-CHR-001..010` | `NOT_STARTED` | scoped specialist workspace, doctor-confirmed enrollment, versioned care plan, repeat tasks, due/overdue cohorts |
 | Работа медсестры | `REQ-NUR-001..002` | `NOT_STARTED` | назначенные worklists, попытки контакта, wellbeing response, human escalation |
 | Автообзвон, WhatsApp/Telegram и напоминания | `REQ-COM-001..004`, `REQ-SCH-006` | `NOT_STARTED` | channel consent, approved templates, outbox, delivery/retry/reply/escalation; реальные сообщения до согласования не отправляются |
@@ -62,8 +62,10 @@
 2. Закрыть внешнюю часть Phase 4 только после ответов по DEC-001/002/005:
    версионный адаптер, sandbox, transmitted/acknowledged/retry и ручной
    владелец сверки. Не выдавать локальный `active` за доказанную отправку.
-3. На подтверждённом referral/order построить Phase 5: расписание, выбор реального
-   source slot, подтверждение записи и электронная очередь.
+3. Закрыть внешний gate Phase 5 после утверждения authoritative schedule:
+   адаптер КМИС, перенос/waitlist, trusted expiry/reconciliation worker и
+   подтверждённая политика очереди. Локальный D1-срез не выдавать за реальную
+   доступность врача.
 4. Добавить Phase 6: диагноз/registry decision, versioned care plan, follow-up
    tasks, cohort и nurse worklist.
 5. Добавить Phase 7 через provider-neutral outbox; подключать реальный канал

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import {
+  CalendarClock,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -24,6 +25,7 @@ const navigation = [
   { href: '/patients', label: 'Пациенты', icon: Users, capability: 'patientDirectory' },
   { href: '/live', label: 'Очный приём', icon: Stethoscope, badge: 'LIVE', capability: 'clinician' },
   { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
+  { href: '/scheduling', label: 'Запись и очередь', icon: CalendarClock, badge: 'D1', capability: 'scheduling' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
@@ -58,7 +60,11 @@ export function ClinicShell({
   user,
 }: {
   children: React.ReactNode;
-  capabilities: { clinician: boolean; patientDirectory: boolean };
+  capabilities: {
+    clinician: boolean;
+    patientDirectory: boolean;
+    scheduling: boolean;
+  };
   user: { displayName: string; email: string | null };
 }) {
   const pathname = usePathname();

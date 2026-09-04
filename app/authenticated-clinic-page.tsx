@@ -9,13 +9,14 @@ import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
 import styles from './authenticated-clinic-page.module.css';
 
-export type ClinicCapability = 'clinician' | 'patient-directory';
+export type ClinicCapability = 'clinician' | 'patient-directory' | 'scheduling';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
   capabilities: {
     clinician: boolean;
     patientDirectory: boolean;
+    scheduling: boolean;
   };
   accessCheck: 'ready' | 'unavailable';
 };
@@ -46,6 +47,10 @@ export async function getAuthenticatedClinicContext(
         (membership) =>
           membership.role === 'clinician' || membership.role === 'registrar',
       ),
+      scheduling: memberships.some(
+        (membership) =>
+          membership.role === 'clinician' || membership.role === 'registrar',
+      ),
     },
   };
 }
@@ -59,10 +64,11 @@ export function AuthenticatedClinicPage({
   context: AuthenticatedClinicContext;
   requiredCapability: ClinicCapability;
 }) {
-  const allowed =
-    requiredCapability === 'clinician'
-      ? context.capabilities.clinician
-      : context.capabilities.patientDirectory;
+  const allowed = {
+    clinician: context.capabilities.clinician,
+    'patient-directory': context.capabilities.patientDirectory,
+    scheduling: context.capabilities.scheduling,
+  }[requiredCapability];
 
   return (
     <ClinicShell capabilities={context.capabilities} user={context.user}>

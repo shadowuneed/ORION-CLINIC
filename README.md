@@ -17,6 +17,7 @@ Operational foundation:
 - [`docs/runbooks/local-backup-restore.md`](docs/runbooks/local-backup-restore.md)
 - [`docs/user-guide/clinician-workspace.ru.md`](docs/user-guide/clinician-workspace.ru.md)
 - [`docs/user-guide/orders-results.ru.md`](docs/user-guide/orders-results.ru.md)
+- [`docs/user-guide/scheduling-queue.ru.md`](docs/user-guide/scheduling-queue.ru.md)
 
 Clinic requirements and review:
 
@@ -61,6 +62,15 @@ two-pass cleanup only for expired, uncommitted uploads. It is not an automatic
 scheduler and never removes committed clinical artifacts. No external
 KMIS/LIS/ECG delivery is connected or claimed by this slice.
 
+The Phase 5 local scheduling and electronic-queue slice is available at
+`http://localhost:3200/scheduling`. It reads approved synthetic referrals from
+D1, captures immutable patient-preference snapshots, performs version-checked
+slot hold/confirmation/cancellation, prevents concurrent double booking, and
+advances an auditable queue ticket through arrival, call, service and completion.
+Every slot is labelled **«Тестовое ручное расписание · не КМИС»**. No AI-generated
+availability, real KMIS booking, notification delivery, waitlist/rescheduling or
+automatic expired-hold worker is connected or claimed.
+
 The launcher refuses to replace unrelated
 processes on ports `3200` or `3101`, applies forward-only local migrations,
 loads only the idempotent technical bootstrap needed for local sign-in, writes
@@ -89,6 +99,15 @@ pnpm dev -- --port 3200
 `pnpm db:seed:local` is an explicit optional fixture command for engineering
 tests and screenshots. Normal startup no longer inserts patient or encounter
 fixtures automatically. Existing local D1 records are preserved.
+
+After the base fixture, a separate rerunnable scheduling fixture can populate one
+approved referral and four explicitly manual test slots:
+
+```powershell
+pnpm db:seed:scheduling:local
+```
+
+It is never run by normal startup and must not be treated as clinic availability.
 
 The local workspace is available at `http://localhost:3200/`. Verify a checkout
 with:

@@ -3570,6 +3570,982 @@ export const accessAuditStreamHeads = sqliteTable(
   ],
 );
 
+const schedulingSourceColumns = () => ({
+  sourceType: text('source_type', { enum: ['manual_test', 'external'] })
+    .notNull()
+    .default('manual_test'),
+  sourceLabel: text('source_label').notNull(),
+  sourceSystem: text('source_system').notNull(),
+  sourceRecordId: text('source_record_id').notNull(),
+  sourceRevision: text('source_revision').notNull(),
+  sourceObservedAt: integer('source_observed_at', {
+    mode: 'timestamp_ms',
+  }).notNull(),
+});
+
+export const schedulingSpecialties = sqliteTable(
+  'scheduling_specialties',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    code: text('code').notNull(),
+    displayName: text('display_name').notNull(),
+    status: text('status', { enum: ['active', 'inactive'] })
+      .notNull()
+      .default('active'),
+    ...schedulingSourceColumns(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('scheduling_specialties_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('scheduling_specialties_scope_code_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.code,
+    ),
+    foreignKey({
+      name: 'scheduling_specialties_scope_facility_fk',
+      columns: [table.organizationId, table.facilityId],
+      foreignColumns: [facilities.organizationId, facilities.id],
+    }),
+    enumCheck('scheduling_specialties_status_enum', table.status, [
+      'active',
+      'inactive',
+    ]),
+    enumCheck('scheduling_specialties_source_type_enum', table.sourceType, [
+      'manual_test',
+      'external',
+    ]),
+    check(
+      'scheduling_specialties_code_length',
+      sql`length(trim(${table.code})) between 1 and 80`,
+    ),
+    check(
+      'scheduling_specialties_name_length',
+      sql`length(trim(${table.displayName})) between 2 and 180`,
+    ),
+  ],
+);
+
+export const schedulingServices = sqliteTable(
+  'scheduling_services',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    specialtyId: text('specialty_id').notNull(),
+    code: text('code').notNull(),
+    displayName: text('display_name').notNull(),
+    durationMinutes: integer('duration_minutes').notNull(),
+    status: text('status', { enum: ['active', 'inactive'] })
+      .notNull()
+      .default('active'),
+    ...schedulingSourceColumns(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('scheduling_services_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('scheduling_services_scope_code_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.code,
+    ),
+    index('scheduling_services_specialty_status_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.specialtyId,
+      table.status,
+    ),
+    foreignKey({
+      name: 'scheduling_services_scope_specialty_fk',
+      columns: [table.organizationId, table.facilityId, table.specialtyId],
+      foreignColumns: [
+        schedulingSpecialties.organizationId,
+        schedulingSpecialties.facilityId,
+        schedulingSpecialties.id,
+      ],
+    }),
+    enumCheck('scheduling_services_status_enum', table.status, [
+      'active',
+      'inactive',
+    ]),
+    enumCheck('scheduling_services_source_type_enum', table.sourceType, [
+      'manual_test',
+      'external',
+    ]),
+    check(
+      'scheduling_services_duration_range',
+      sql`${table.durationMinutes} between 5 and 1440`,
+    ),
+  ],
+);
+
+export const schedulingProviders = sqliteTable(
+  'scheduling_providers',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    specialtyId: text('specialty_id').notNull(),
+    displayName: text('display_name').notNull(),
+    status: text('status', { enum: ['active', 'inactive'] })
+      .notNull()
+      .default('active'),
+    ...schedulingSourceColumns(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('scheduling_providers_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    index('scheduling_providers_specialty_status_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.specialtyId,
+      table.status,
+    ),
+    foreignKey({
+      name: 'scheduling_providers_scope_specialty_fk',
+      columns: [table.organizationId, table.facilityId, table.specialtyId],
+      foreignColumns: [
+        schedulingSpecialties.organizationId,
+        schedulingSpecialties.facilityId,
+        schedulingSpecialties.id,
+      ],
+    }),
+    enumCheck('scheduling_providers_status_enum', table.status, [
+      'active',
+      'inactive',
+    ]),
+    enumCheck('scheduling_providers_source_type_enum', table.sourceType, [
+      'manual_test',
+      'external',
+    ]),
+    check(
+      'scheduling_providers_name_length',
+      sql`length(trim(${table.displayName})) between 2 and 180`,
+    ),
+  ],
+);
+
+export const providerSchedules = sqliteTable(
+  'provider_schedules',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    providerId: text('provider_id').notNull(),
+    serviceId: text('service_id').notNull(),
+    timezone: text('timezone').notNull(),
+    validFrom: integer('valid_from', { mode: 'timestamp_ms' }).notNull(),
+    validTo: integer('valid_to', { mode: 'timestamp_ms' }).notNull(),
+    status: text('status', { enum: ['active', 'withdrawn'] })
+      .notNull()
+      .default('active'),
+    ...schedulingSourceColumns(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('provider_schedules_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('provider_schedules_scope_tuple_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+      table.providerId,
+      table.serviceId,
+    ),
+    index('provider_schedules_provider_window_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.providerId,
+      table.validFrom,
+      table.validTo,
+    ),
+    foreignKey({
+      name: 'provider_schedules_scope_provider_fk',
+      columns: [table.organizationId, table.facilityId, table.providerId],
+      foreignColumns: [
+        schedulingProviders.organizationId,
+        schedulingProviders.facilityId,
+        schedulingProviders.id,
+      ],
+    }),
+    foreignKey({
+      name: 'provider_schedules_scope_service_fk',
+      columns: [table.organizationId, table.facilityId, table.serviceId],
+      foreignColumns: [
+        schedulingServices.organizationId,
+        schedulingServices.facilityId,
+        schedulingServices.id,
+      ],
+    }),
+    enumCheck('provider_schedules_status_enum', table.status, [
+      'active',
+      'withdrawn',
+    ]),
+    enumCheck('provider_schedules_source_type_enum', table.sourceType, [
+      'manual_test',
+      'external',
+    ]),
+    check(
+      'provider_schedules_window_valid',
+      sql`${table.validTo} > ${table.validFrom}`,
+    ),
+  ],
+);
+
+export const appointmentSlots = sqliteTable(
+  'appointment_slots',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    scheduleId: text('schedule_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    serviceId: text('service_id').notNull(),
+    startsAt: integer('starts_at', { mode: 'timestamp_ms' }).notNull(),
+    endsAt: integer('ends_at', { mode: 'timestamp_ms' }).notNull(),
+    ...schedulingSourceColumns(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('appointment_slots_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('appointment_slots_source_locator_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.sourceSystem,
+      table.sourceRecordId,
+      table.sourceRevision,
+    ),
+    index('appointment_slots_provider_time_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.providerId,
+      table.startsAt,
+    ),
+    foreignKey({
+      name: 'appointment_slots_scope_schedule_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.scheduleId,
+        table.providerId,
+        table.serviceId,
+      ],
+      foreignColumns: [
+        providerSchedules.organizationId,
+        providerSchedules.facilityId,
+        providerSchedules.id,
+        providerSchedules.providerId,
+        providerSchedules.serviceId,
+      ],
+    }),
+    enumCheck('appointment_slots_source_type_enum', table.sourceType, [
+      'manual_test',
+      'external',
+    ]),
+    check('appointment_slots_window_valid', sql`${table.endsAt} > ${table.startsAt}`),
+  ],
+);
+
+export const appointmentSlotVersions = sqliteTable(
+  'appointment_slot_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    slotId: text('slot_id').notNull(),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => appointmentSlotVersions.id,
+    ),
+    status: text('status', {
+      enum: ['available', 'held', 'booked', 'withdrawn'],
+    }).notNull(),
+    appointmentId: text('appointment_id'),
+    patientId: text('patient_id'),
+    referralRequestId: text('referral_request_id'),
+    referralVersionId: text('referral_version_id'),
+    heldByMembershipId: text('held_by_membership_id'),
+    holdExpiresAt: integer('hold_expires_at', { mode: 'timestamp_ms' }),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('appointment_slot_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.slotId,
+      table.version,
+    ),
+    uniqueIndex('appointment_slot_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.slotId,
+      table.id,
+    ),
+    uniqueIndex('appointment_slot_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'appointment_slot_versions_scope_slot_fk',
+      columns: [table.organizationId, table.facilityId, table.slotId],
+      foreignColumns: [
+        appointmentSlots.organizationId,
+        appointmentSlots.facilityId,
+        appointmentSlots.id,
+      ],
+    }),
+    foreignKey({
+      name: 'appointment_slot_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('appointment_slot_versions_status_enum', table.status, [
+      'available',
+      'held',
+      'booked',
+      'withdrawn',
+    ]),
+    check('appointment_slot_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'appointment_slot_versions_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'appointment_slot_versions_assignment_consistent',
+      sql`(
+          ${table.status} in ('available', 'withdrawn')
+          and ${table.appointmentId} is null
+          and ${table.patientId} is null
+          and ${table.referralRequestId} is null
+          and ${table.referralVersionId} is null
+          and ${table.heldByMembershipId} is null
+          and ${table.holdExpiresAt} is null
+        ) or (
+          ${table.status} = 'held'
+          and ${table.appointmentId} is not null
+          and ${table.patientId} is not null
+          and ${table.referralRequestId} is not null
+          and ${table.referralVersionId} is not null
+          and ${table.heldByMembershipId} is not null
+          and ${table.holdExpiresAt} > ${table.createdAt}
+        ) or (
+          ${table.status} = 'booked'
+          and ${table.appointmentId} is not null
+          and ${table.patientId} is not null
+          and ${table.referralRequestId} is not null
+          and ${table.referralVersionId} is not null
+          and ${table.heldByMembershipId} is not null
+          and ${table.holdExpiresAt} is null
+        )`,
+    ),
+  ],
+);
+
+export const appointmentSlotHeads = sqliteTable(
+  'appointment_slot_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    slotId: text('slot_id').notNull(),
+    currentVersionId: text('current_version_id').notNull(),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('appointment_slot_heads_scope_slot_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.slotId,
+    ),
+    foreignKey({
+      name: 'appointment_slot_heads_scope_slot_fk',
+      columns: [table.organizationId, table.facilityId, table.slotId],
+      foreignColumns: [
+        appointmentSlots.organizationId,
+        appointmentSlots.facilityId,
+        appointmentSlots.id,
+      ],
+    }),
+    foreignKey({
+      name: 'appointment_slot_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.slotId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        appointmentSlotVersions.organizationId,
+        appointmentSlotVersions.facilityId,
+        appointmentSlotVersions.slotId,
+        appointmentSlotVersions.id,
+      ],
+    }),
+    check('appointment_slot_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const schedulingPreferenceSnapshots = sqliteTable(
+  'scheduling_preference_snapshots',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id').notNull(),
+    referralRequestId: text('referral_request_id').notNull(),
+    referralVersionId: text('referral_version_id').notNull(),
+    version: integer('version').notNull(),
+    supersedesPreferenceId: text('supersedes_preference_id').references(
+      (): AnySQLiteColumn => schedulingPreferenceSnapshots.id,
+    ),
+    preferredDateFrom: text('preferred_date_from').notNull(),
+    preferredDateTo: text('preferred_date_to').notNull(),
+    earliestLocalTime: text('earliest_local_time'),
+    latestLocalTime: text('latest_local_time'),
+    preferredProviderId: text('preferred_provider_id'),
+    notes: text('notes'),
+    noticeLanguage: text('notice_language', { enum: ['ru', 'kk'] }).notNull(),
+    capturedByMembershipId: text('captured_by_membership_id').notNull(),
+    capturedAt: integer('captured_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('scheduling_preferences_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('scheduling_preferences_referral_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.referralRequestId,
+      table.version,
+    ),
+    uniqueIndex('scheduling_preferences_supersedes_once_uidx').on(
+      table.supersedesPreferenceId,
+    ),
+    index('scheduling_preferences_patient_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.capturedAt,
+    ),
+    foreignKey({
+      name: 'scheduling_preferences_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'scheduling_preferences_scope_referral_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.referralRequestId,
+        table.referralVersionId,
+      ],
+      foreignColumns: [
+        serviceRequestVersions.organizationId,
+        serviceRequestVersions.facilityId,
+        serviceRequestVersions.serviceRequestId,
+        serviceRequestVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'scheduling_preferences_scope_provider_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.preferredProviderId,
+      ],
+      foreignColumns: [
+        schedulingProviders.organizationId,
+        schedulingProviders.facilityId,
+        schedulingProviders.id,
+      ],
+    }),
+    foreignKey({
+      name: 'scheduling_preferences_scope_capture_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.capturedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('scheduling_preferences_language_enum', table.noticeLanguage, [
+      'ru',
+      'kk',
+    ]),
+    check('scheduling_preferences_version_positive', sql`${table.version} > 0`),
+    check(
+      'scheduling_preferences_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesPreferenceId} is null) or (${table.version} > 1 and ${table.supersedesPreferenceId} is not null)`,
+    ),
+    check(
+      'scheduling_preferences_date_range',
+      sql`length(${table.preferredDateFrom}) = 10 and date(${table.preferredDateFrom}) is not null and length(${table.preferredDateTo}) = 10 and date(${table.preferredDateTo}) is not null and date(${table.preferredDateTo}) >= date(${table.preferredDateFrom})`,
+    ),
+    check(
+      'scheduling_preferences_time_range',
+      sql`(${table.earliestLocalTime} is null and ${table.latestLocalTime} is null) or (time(${table.earliestLocalTime} || ':00') is not null and time(${table.latestLocalTime} || ':00') is not null and time(${table.latestLocalTime} || ':00') >= time(${table.earliestLocalTime} || ':00'))`,
+    ),
+  ],
+);
+
+export const appointments = sqliteTable(
+  'appointments',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id').notNull(),
+    referralRequestId: text('referral_request_id').notNull(),
+    createdByMembershipId: text('created_by_membership_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('appointments_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    index('appointments_referral_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.referralRequestId,
+    ),
+    index('appointments_patient_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.createdAt,
+    ),
+    foreignKey({
+      name: 'appointments_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'appointments_scope_referral_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.referralRequestId,
+      ],
+      foreignColumns: [
+        serviceRequests.organizationId,
+        serviceRequests.facilityId,
+        serviceRequests.id,
+      ],
+    }),
+    foreignKey({
+      name: 'appointments_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+  ],
+);
+
+export const appointmentVersions = sqliteTable(
+  'appointment_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    appointmentId: text('appointment_id').notNull(),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => appointmentVersions.id,
+    ),
+    status: text('status', {
+      enum: ['held', 'confirmed', 'cancelled', 'expired', 'no_show', 'completed'],
+    }).notNull(),
+    slotId: text('slot_id').notNull(),
+    preferenceSnapshotId: text('preference_snapshot_id').notNull(),
+    referralVersionId: text('referral_version_id').notNull(),
+    holdExpiresAt: integer('hold_expires_at', { mode: 'timestamp_ms' }),
+    confirmationSubject: text('confirmation_subject', {
+      enum: ['patient', 'proxy'],
+    }),
+    confirmationMethod: text('confirmation_method', {
+      enum: ['verbal_in_person', 'verbal_phone', 'digital'],
+    }),
+    confirmationLanguage: text('confirmation_language', { enum: ['ru', 'kk'] }),
+    confirmationStatementVersion: text('confirmation_statement_version'),
+    confirmationStatementHash: text('confirmation_statement_hash'),
+    confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' }),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('appointment_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.appointmentId,
+      table.version,
+    ),
+    uniqueIndex('appointment_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.appointmentId,
+      table.id,
+    ),
+    uniqueIndex('appointment_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'appointment_versions_scope_appointment_fk',
+      columns: [table.organizationId, table.facilityId, table.appointmentId],
+      foreignColumns: [appointments.organizationId, appointments.facilityId, appointments.id],
+    }),
+    foreignKey({
+      name: 'appointment_versions_scope_slot_fk',
+      columns: [table.organizationId, table.facilityId, table.slotId],
+      foreignColumns: [
+        appointmentSlots.organizationId,
+        appointmentSlots.facilityId,
+        appointmentSlots.id,
+      ],
+    }),
+    foreignKey({
+      name: 'appointment_versions_scope_preference_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.preferenceSnapshotId,
+      ],
+      foreignColumns: [
+        schedulingPreferenceSnapshots.organizationId,
+        schedulingPreferenceSnapshots.facilityId,
+        schedulingPreferenceSnapshots.id,
+      ],
+    }),
+    foreignKey({
+      name: 'appointment_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('appointment_versions_status_enum', table.status, [
+      'held',
+      'confirmed',
+      'cancelled',
+      'expired',
+      'no_show',
+      'completed',
+    ]),
+    enumCheck('appointment_versions_confirmation_subject_enum', table.confirmationSubject, [
+      'patient',
+      'proxy',
+    ]),
+    enumCheck('appointment_versions_confirmation_method_enum', table.confirmationMethod, [
+      'verbal_in_person',
+      'verbal_phone',
+      'digital',
+    ]),
+    enumCheck('appointment_versions_confirmation_language_enum', table.confirmationLanguage, [
+      'ru',
+      'kk',
+    ]),
+    check('appointment_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'appointment_versions_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'appointment_versions_hold_consistent',
+      sql`${table.status} <> 'held' or (${table.holdExpiresAt} > ${table.createdAt} and ${table.confirmedAt} is null)`,
+    ),
+    check(
+      'appointment_versions_nonheld_no_expiry',
+      sql`${table.status} = 'held' or ${table.holdExpiresAt} is null`,
+    ),
+    check(
+      'appointment_versions_confirmation_complete',
+      sql`(
+        ${table.confirmationSubject} is null and ${table.confirmationMethod} is null and ${table.confirmationLanguage} is null and ${table.confirmationStatementVersion} is null and ${table.confirmationStatementHash} is null and ${table.confirmedAt} is null
+      ) or (
+        ${table.confirmationSubject} is not null and ${table.confirmationMethod} is not null and ${table.confirmationLanguage} is not null and length(${table.confirmationStatementHash}) = 64 and ${table.confirmedAt} is not null
+      )`,
+    ),
+    check(
+      'appointment_versions_confirmed_has_confirmation',
+      sql`${table.status} not in ('confirmed', 'no_show', 'completed') or ${table.confirmedAt} is not null`,
+    ),
+  ],
+);
+
+export const appointmentHeads = sqliteTable(
+  'appointment_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    appointmentId: text('appointment_id').notNull(),
+    currentVersionId: text('current_version_id').notNull(),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('appointment_heads_scope_appointment_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.appointmentId,
+    ),
+    foreignKey({
+      name: 'appointment_heads_scope_appointment_fk',
+      columns: [table.organizationId, table.facilityId, table.appointmentId],
+      foreignColumns: [appointments.organizationId, appointments.facilityId, appointments.id],
+    }),
+    foreignKey({
+      name: 'appointment_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.appointmentId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        appointmentVersions.organizationId,
+        appointmentVersions.facilityId,
+        appointmentVersions.appointmentId,
+        appointmentVersions.id,
+      ],
+    }),
+    check('appointment_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const queueTickets = sqliteTable(
+  'queue_tickets',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    appointmentId: text('appointment_id').notNull(),
+    patientId: text('patient_id').notNull(),
+    serviceDate: text('service_date').notNull(),
+    sequence: integer('sequence').notNull(),
+    displayNumber: text('display_number').notNull(),
+    createdByMembershipId: text('created_by_membership_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('queue_tickets_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('queue_tickets_scope_appointment_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.appointmentId,
+    ),
+    uniqueIndex('queue_tickets_scope_sequence_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.serviceDate,
+      table.sequence,
+    ),
+    foreignKey({
+      name: 'queue_tickets_scope_appointment_fk',
+      columns: [table.organizationId, table.facilityId, table.appointmentId],
+      foreignColumns: [appointments.organizationId, appointments.facilityId, appointments.id],
+    }),
+    foreignKey({
+      name: 'queue_tickets_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'queue_tickets_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    check('queue_tickets_sequence_positive', sql`${table.sequence} > 0`),
+    check(
+      'queue_tickets_service_date_valid',
+      sql`length(${table.serviceDate}) = 10 and date(${table.serviceDate}) is not null`,
+    ),
+  ],
+);
+
+export const queueTicketVersions = sqliteTable(
+  'queue_ticket_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    queueTicketId: text('queue_ticket_id').notNull(),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => queueTicketVersions.id,
+    ),
+    status: text('status', {
+      enum: ['issued', 'arrived', 'called', 'in_service', 'completed', 'cancelled', 'exception'],
+    }).notNull(),
+    roomLabel: text('room_label'),
+    exceptionCode: text('exception_code'),
+    exceptionNote: text('exception_note'),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('queue_ticket_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.queueTicketId,
+      table.version,
+    ),
+    uniqueIndex('queue_ticket_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.queueTicketId,
+      table.id,
+    ),
+    uniqueIndex('queue_ticket_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    foreignKey({
+      name: 'queue_ticket_versions_scope_ticket_fk',
+      columns: [table.organizationId, table.facilityId, table.queueTicketId],
+      foreignColumns: [
+        queueTickets.organizationId,
+        queueTickets.facilityId,
+        queueTickets.id,
+      ],
+    }),
+    foreignKey({
+      name: 'queue_ticket_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('queue_ticket_versions_status_enum', table.status, [
+      'issued',
+      'arrived',
+      'called',
+      'in_service',
+      'completed',
+      'cancelled',
+      'exception',
+    ]),
+    check('queue_ticket_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'queue_ticket_versions_initial_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'queue_ticket_versions_room_consistent',
+      sql`${table.status} not in ('called', 'in_service', 'completed') or length(trim(${table.roomLabel})) between 1 and 80`,
+    ),
+    check(
+      'queue_ticket_versions_exception_consistent',
+      sql`(${table.status} = 'exception' and length(trim(${table.exceptionCode})) between 2 and 80 and length(trim(${table.exceptionNote})) between 3 and 500) or (${table.status} <> 'exception' and ${table.exceptionCode} is null and ${table.exceptionNote} is null)`,
+    ),
+  ],
+);
+
+export const queueTicketHeads = sqliteTable(
+  'queue_ticket_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    queueTicketId: text('queue_ticket_id').notNull(),
+    currentVersionId: text('current_version_id').notNull(),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('queue_ticket_heads_scope_ticket_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.queueTicketId,
+    ),
+    foreignKey({
+      name: 'queue_ticket_heads_scope_ticket_fk',
+      columns: [table.organizationId, table.facilityId, table.queueTicketId],
+      foreignColumns: [
+        queueTickets.organizationId,
+        queueTickets.facilityId,
+        queueTickets.id,
+      ],
+    }),
+    foreignKey({
+      name: 'queue_ticket_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.queueTicketId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        queueTicketVersions.organizationId,
+        queueTicketVersions.facilityId,
+        queueTicketVersions.queueTicketId,
+        queueTicketVersions.id,
+      ],
+    }),
+    check('queue_ticket_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
 export const commandIdempotency = sqliteTable(
   'command_idempotency',
   {
