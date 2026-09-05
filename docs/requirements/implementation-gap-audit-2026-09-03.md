@@ -52,7 +52,7 @@ source environment. This evidence applies only to synthetic local data.
 | Работа медсестры | `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | медсестра видит только назначенные задачи, фиксирует способ контакта/wellbeing/ответ, эскалирует; врач отдельно закрывает эскалацию; SLA и автоматические каналы не утверждены |
 | Автообзвон, WhatsApp/Telegram и напоминания | `REQ-COM-001..004`, `REQ-SCH-006` | `IN_PROGRESS` | Локальный no-send D1-срез реализован: consent/templates/outbox/quiet hours/retry/manual response. Открыты business accounts, approved production content, protected links, provider adapters, webhooks, receipts and worker SLA |
 | Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | Локальная версионная фиксация с единицами, источником, автором, временем, исправлениями и вычисляемым ИМТ реализована. Открыты approved thresholds, device provenance and production validation |
-| «Красный» пациент и передача между больницами | `REQ-TRF-001..007` | `NOT_STARTED` | versioned rules, doctor confirmation, transfer packet, delivery/acknowledgement/manual call, read-only chronology |
+| «Красный» пациент и передача между больницами | `REQ-TRF-001..007` | `BLOCKED_CLINIC_APPROVAL` | Phase 8B review packet and activation-blocked JSON decision template now define the required rule ownership/versioning, doctor confirmation, SLA, minimum signed packet, receiving-facility acknowledgement/manual fallback and read-only chronology choice. No thresholds, runtime classification, alert, notification or transfer are implemented before `DEC-006`/`DEC-007` signatures |
 | ERDB/ЭРДБ, PUZ/ПУЗ, бесплатные лекарства | `REQ-CHR-008..010` | `BLOCKED_EXTERNAL` | нельзя корректно моделировать адаптер, пока клиника не назовёт системы, владельцев, API, legal basis и source of truth |
 | «Айдын емхана» как референс | `REQ-DIS-001` | `BLOCKED_INPUT` | нужен точный объект/ссылка и разрешённый объём исследования |
 
@@ -82,9 +82,12 @@ source environment. This evidence applies only to synthetic local data.
 5. Закрыть внешний gate Phase 7: подключать реальный канал только после
    подтверждения бизнес-аккаунтов, шаблонов, согласий, delivery receipt,
    reconciliation и владельца сбоя. Локальный outbox не выдавать за доставку.
-6. Продолжить Phase 8 только после `DEC-006`/`DEC-007`: утвердить versioned risk
-   rules, владельца и SLA, затем doctor-confirmed transfer и acknowledgement
-   принимающей стороны. Локальную фиксацию показателей не выдавать за triage.
+6. Провести клинический review по
+   `phase-8b-clinic-decision-packet.ru.md`, заполнить и подписать отдельную копию
+   `phase-8b-decision-record.template.json`. Только после `DEC-006`/`DEC-007`
+   утвердить versioned rules, владельца и SLA, затем отдельными checkpoint
+   реализовать doctor-confirmed transfer и acknowledgement принимающей стороны.
+   Локальную фиксацию показателей не выдавать за triage.
 
 ## 6. Запрещённые заявления
 

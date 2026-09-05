@@ -14,6 +14,11 @@ rules, and legal responsibilities are not invented.
 The catalogue does not authorize real patient data, live integrations,
 autonomous clinical actions, messaging, booking, registration, or transfer.
 
+The focused review artifact for `DEC-006`/`DEC-007` is
+[`phase-8b-clinic-decision-packet.ru.md`](phase-8b-clinic-decision-packet.ru.md).
+Its companion JSON is an unapproved, activation-blocked template; it contains no
+clinical thresholds and cannot activate runtime behavior.
+
 ## 1. Source registry
 
 | Source ID | Artifact | Source content covered | Evidence state |

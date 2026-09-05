@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "orion.phase8b.decision-record.v1",
+  "packetVersion": "0.1-draft",
+  "status": "draft_unapproved",
+  "activationBlocked": true,
+  "dataMode": "synthetic_only",
+  "decisionRecordId": null,
+  "facilityScope": [],
+  "dec006": {
+    "policyId": null,
+    "policyVersion": null,
+    "effectiveFrom": null,
+    "effectiveUntil": null,
+    "clinicalSourceReferences": [],
+    "applicability": {
+      "facilityIds": [],
+      "observationAreaIds": [],
+      "encounterTypes": [],
+      "ageGroups": [],
+      "specialPopulations": [],
+      "exclusions": [],
+      "operatingHours": null,
+      "outOfHoursRoute": null
+    },
+    "rules": [],
+    "repeatMeasurementPolicy": null,
+    "candidateStates": [
+      "not_evaluated",
+      "candidate_rule_match",
+      "repeat_measurement_required",
+      "awaiting_clinician_review",
+      "confirmed_critical",
+      "overridden_not_critical",
+      "closed"
+    ],
+    "sla": {
+      "staffAcknowledgementMinutes": null,
+      "repeatMeasurementMinutes": null,
+      "doctorReviewMinutes": null,
+      "transferDecisionMinutes": null,
+      "notificationMinutes": null,
+      "receivingAcknowledgementMinutes": null,
+      "primaryOwners": [],
+      "fallbackOwners": []
+    },
+    "allowedOverrideReasons": [],
+    "approvals": {
+      "medicalDirector": null,
+      "clinicalPolicyOwner": null,
+      "operationsOwner": null
+    }
+  },
+  "dec007": {
+    "supportedMeaningOptions": [
+      "read_only_sourced_chronology",
+      "synchronized_record_mirror",
+      "predictive_risk_model",
+      "simulation_or_treatment_control"
+    ],
+    "selectedMeaning": null,
+    "transferPacketFields": [],
+    "legalBasisReference": null,
+    "consentPolicyReference": null,
+    "accessDurationMinutes": null,
+    "retentionPolicyReference": null,
+    "receivingFacilities": [],
+    "notificationChannel": null,
+    "acknowledgementSemantics": null,
+    "timeoutPolicy": null,
+    "manualFallback": null,
+    "reconciliationOwner": null,
+    "approvals": {
+      "productOwner": null,
+      "clinicalLead": null,
+      "privacyOrLegalOwner": null,
+      "receivingFacilityOwner": null
+    }
+  },
+  "gate": {
+    "decision": "no_go",
+    "allowedEnvironment": null,
+    "allowedRoles": [],
+    "validFrom": null,
+    "validUntil": null,
+    "limitations": [],
+    "signedRecordReference": null
+  }
+}

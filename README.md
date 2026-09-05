@@ -26,6 +26,7 @@ Clinic requirements and review:
 
 - [`docs/requirements/clinic-leadership-catalogue.md`](docs/requirements/clinic-leadership-catalogue.md)
 - [`docs/requirements/clinic-discovery-pack.md`](docs/requirements/clinic-discovery-pack.md)
+- [`docs/requirements/phase-8b-clinic-decision-packet.ru.md`](docs/requirements/phase-8b-clinic-decision-packet.ru.md)
 
 ## Local development
 
@@ -181,6 +182,11 @@ pnpm db:seed:observations:local
 It is never run by normal startup and does not represent device ingestion or a
 clinically assessed patient. The verified workflow and screenshots are in
 [`docs/user-guide/patient-observations.ru.md`](docs/user-guide/patient-observations.ru.md).
+
+Critical-state rules, alert SLA, receiving-facility acknowledgement and transfer
+remain disabled until the clinic completes and signs the Phase 8B decision
+packet. Its JSON template is deliberately `draft_unapproved` and
+`activationBlocked`; it is not a source of clinical thresholds.
 
 The local workspace is available at `http://localhost:3200/`. Verify a checkout
 with:

@@ -10,6 +10,11 @@ repeatable review process. It is designed so a product owner, clinical lead,
 clinic operations, IT/vendor representative, legal/privacy lead and engineering
 lead can make explicit decisions without relying on assumptions from chat.
 
+For the observation/critical-transfer workshop, use the fillable
+[`phase-8b-clinic-decision-packet.ru.md`](phase-8b-clinic-decision-packet.ru.md)
+and its `phase-8b-decision-record.template.json`. The template remains
+`draft_unapproved` and blocks activation until the named clinic owners sign it.
+
 ## 1. Required workshop participants
 
 | Participant | Required for | Decision authority expected |
