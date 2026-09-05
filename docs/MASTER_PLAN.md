@@ -1288,10 +1288,12 @@ Do not touch:
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
 - Runtime at handoff: local web and loopback speech processes are intentionally left
-  running on ports `3200` and `3101`; no production deployment was made. The ngrok
-  agent was not listening when this continuation began and was not silently exposed
-  without restoring its Basic-auth policy. Speech reachability is not a new RU/KK
-  quality claim; Groq was not runtime-tested because no fresh ignored
+  running on ports `3200` and `3101`; no production deployment was made. The
+  existing reserved ngrok endpoint is running through its external LocalAppData
+  Traffic Policy: an anonymous application request returns Basic-auth `401`, while
+  no credential or policy content is copied into Git. Web/STT readiness is `200`;
+  STT reports local GigaAM/CAMPPlus ready on CUDA, but reachability is not a new
+  RU/KK quality claim. Groq was not runtime-tested because no fresh ignored
   `GROQ_API_KEY` is configured. Ignored local secrets are never committed.
 
 Completed in this checkpoint:
@@ -1308,6 +1310,9 @@ Completed in this checkpoint:
 - passed `pnpm verify:ci`: 363 files scanned, no known dependency vulnerabilities,
   lint/types, 47 test files/269 tests, Drizzle/build and isolated recovery of 80
   tables/128 rows/26 migrations/three R2 objects/389,707 bytes;
+- restored the pre-existing reserved ngrok endpoint against port `3200` using the
+  external LocalAppData Traffic Policy; the post-warning anonymous application
+  request returned `401 Basic`, and no credential entered the repository;
 - added migration `0025` with tenant-scoped observation record, immutable version
   and guarded current-head tables, scaled-unit constraints, derived-BMI checks,
   active-patient/member guards and append-only database triggers;
