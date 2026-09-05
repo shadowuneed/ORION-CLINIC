@@ -19,6 +19,7 @@ Operational foundation:
 - [`docs/user-guide/orders-results.ru.md`](docs/user-guide/orders-results.ru.md)
 - [`docs/user-guide/scheduling-queue.ru.md`](docs/user-guide/scheduling-queue.ru.md)
 - [`docs/user-guide/chronic-care.ru.md`](docs/user-guide/chronic-care.ru.md)
+- [`docs/user-guide/patient-communications.ru.md`](docs/user-guide/patient-communications.ru.md)
 
 Clinic requirements and review:
 
@@ -83,6 +84,21 @@ the managing doctor alone resolves the escalation. ERDB, PUZ, free-medication
 eligibility/refill, real notifications and external registries remain visibly
 `Не подключено` and are not simulated.
 
+The Phase 7 provider-neutral communications slice is available at
+`http://localhost:3200/communications`. It captures a separate RU/KK preference
+and append-only opt-in/opt-out decision for WhatsApp, Telegram, SMS and voice;
+resolves the latest approved local template version for the exact purpose,
+channel and language; and creates reminder intentions only from an actionable
+current confirmed appointment or signed care-plan task that the signed-in role
+is allowed to use. Destinations are fixed synthetic system aliases: the UI does
+not accept a free-form real phone number or account. The D1 outbox records
+quiet-hour deferral, bounded retries, failure ownership, patient response and a
+staff manual fallback that becomes actionable only when the reminder is due and
+the quiet-hours rule permits contact. All external provider adapters are
+deliberately disconnected: the current slice never sends a message, places a
+call, fabricates delivery or exposes a real destination. The reserved
+`provider_unavailable` domain state is not offered as a manual UI command.
+
 The launcher refuses to replace unrelated
 processes on ports `3200` or `3101`, applies forward-only local migrations,
 loads only the idempotent technical bootstrap needed for local sign-in, writes
@@ -130,6 +146,20 @@ pnpm db:seed:care:local
 
 It is also never run by normal startup and does not represent a real registry,
 diagnosis, prescription or patient.
+
+After the base, scheduling and chronic-care fixtures, the separate rerunnable
+communications fixture adds a local quiet-hours policy and 16 approved-test
+RU/KK templates (two purposes × four channels × two languages):
+
+```powershell
+pnpm db:seed:communications:local
+```
+
+It never inserts real addresses, provider credentials or a successful delivery.
+Repeated fixture runs preserve versioned template history; a new reminder pins
+the latest matching `approved_test` version that was current when it was created.
+The reproducible UI and boundary check is documented in
+[`docs/user-guide/patient-communications.ru.md`](docs/user-guide/patient-communications.ru.md#9-пошаговая-проверка-локального-среза).
 
 The local workspace is available at `http://localhost:3200/`. Verify a checkout
 with:

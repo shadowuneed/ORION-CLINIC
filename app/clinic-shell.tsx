@@ -16,6 +16,7 @@ import {
   Sun,
   Users,
   HeartPulse,
+  MessageSquareText,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 
@@ -28,6 +29,7 @@ const navigation = [
   { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
   { href: '/scheduling', label: 'Запись и очередь', icon: CalendarClock, badge: 'D1', capability: 'scheduling' },
   { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
+  { href: '/communications', label: 'Связь с пациентом', icon: MessageSquareText, badge: 'D1', capability: 'communications' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
@@ -67,6 +69,7 @@ export function ClinicShell({
     patientDirectory: boolean;
     scheduling: boolean;
     chronicCare: boolean;
+    communications: boolean;
   };
   user: { displayName: string; email: string | null };
 }) {

@@ -5547,3 +5547,896 @@ export const chronicCareTaskHeads = sqliteTable(
     check('chronic_care_task_heads_lock_positive', sql`${table.lockVersion} > 0`),
   ],
 );
+
+export const communicationPolicyVersions = sqliteTable(
+  'communication_policy_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    policyCode: text('policy_code').notNull(),
+    version: integer('version').notNull(),
+    status: text('status', { enum: ['active_test', 'retired'] }).notNull(),
+    sourceType: text('source_type', { enum: ['local_test'] }).notNull(),
+    quietStartMinute: integer('quiet_start_minute').notNull(),
+    quietEndMinute: integer('quiet_end_minute').notNull(),
+    maxAttempts: integer('max_attempts').notNull(),
+    retryDelayMinutes: integer('retry_delay_minutes').notNull(),
+    protectedLinkMode: text('protected_link_mode', {
+      enum: ['disabled_minimum_content_only'],
+    }).notNull(),
+    approvedByMembershipId: text('approved_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    approvedAt: integer('approved_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('communication_policy_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.policyCode,
+      table.version,
+    ),
+    uniqueIndex('communication_policy_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    foreignKey({
+      name: 'communication_policy_versions_scope_approver_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.approvedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('communication_policy_versions_status_enum', table.status, [
+      'active_test',
+      'retired',
+    ]),
+    enumCheck('communication_policy_versions_source_enum', table.sourceType, [
+      'local_test',
+    ]),
+    enumCheck(
+      'communication_policy_versions_link_mode_enum',
+      table.protectedLinkMode,
+      ['disabled_minimum_content_only'],
+    ),
+    check(
+      'communication_policy_versions_quiet_start_range',
+      sql`${table.quietStartMinute} between 0 and 1439`,
+    ),
+    check(
+      'communication_policy_versions_quiet_end_range',
+      sql`${table.quietEndMinute} between 0 and 1439`,
+    ),
+    check(
+      'communication_policy_versions_attempts_range',
+      sql`${table.maxAttempts} between 1 and 10`,
+    ),
+    check(
+      'communication_policy_versions_retry_range',
+      sql`${table.retryDelayMinutes} between 1 and 1440`,
+    ),
+    check('communication_policy_versions_version_positive', sql`${table.version} > 0`),
+  ],
+);
+
+export const communicationTemplateVersions = sqliteTable(
+  'communication_template_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    templateCode: text('template_code').notNull(),
+    version: integer('version').notNull(),
+    status: text('status', { enum: ['approved_test', 'retired'] }).notNull(),
+    sourceType: text('source_type', { enum: ['local_test'] }).notNull(),
+    purpose: text('purpose', {
+      enum: ['appointment_reminder', 'care_plan_reminder'],
+    }).notNull(),
+    channel: text('channel', {
+      enum: ['whatsapp', 'telegram', 'sms', 'voice'],
+    }).notNull(),
+    language: text('language', { enum: ['ru', 'kk'] }).notNull(),
+    body: text('body').notNull(),
+    placeholdersJson: text('placeholders_json', { mode: 'json' })
+      .$type<string[]>()
+      .notNull(),
+    contentHash: text('content_hash').notNull(),
+    minimumContentOnly: integer('minimum_content_only', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    protectedLinkRequired: integer('protected_link_required', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    approvedByMembershipId: text('approved_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    approvedAt: integer('approved_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('communication_template_versions_scope_code_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.templateCode,
+      table.version,
+    ),
+    uniqueIndex('communication_template_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    index('communication_template_versions_scope_resolution_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.purpose,
+      table.channel,
+      table.language,
+      table.status,
+      table.version,
+    ),
+    uniqueIndex('communication_template_versions_scope_resolution_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.purpose,
+      table.channel,
+      table.language,
+      table.version,
+    ),
+    foreignKey({
+      name: 'communication_template_versions_scope_approver_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.approvedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('communication_template_versions_status_enum', table.status, [
+      'approved_test',
+      'retired',
+    ]),
+    enumCheck('communication_template_versions_source_enum', table.sourceType, [
+      'local_test',
+    ]),
+    enumCheck('communication_template_versions_purpose_enum', table.purpose, [
+      'appointment_reminder',
+      'care_plan_reminder',
+    ]),
+    enumCheck('communication_template_versions_channel_enum', table.channel, [
+      'whatsapp',
+      'telegram',
+      'sms',
+      'voice',
+    ]),
+    enumCheck('communication_template_versions_language_enum', table.language, [
+      'ru',
+      'kk',
+    ]),
+    jsonCheck(
+      'communication_template_versions_placeholders_json',
+      table.placeholdersJson,
+    ),
+    check(
+      'communication_template_versions_body_length',
+      sql`length(trim(${table.body})) between 10 and 1000`,
+    ),
+    check(
+      'communication_template_versions_hash',
+      sql`length(${table.contentHash}) = 64 and lower(${table.contentHash}) = ${table.contentHash}`,
+    ),
+    check('communication_template_versions_version_positive', sql`${table.version} > 0`),
+  ],
+);
+
+export const patientChannelConsentEvents = sqliteTable(
+  'patient_channel_consent_events',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    channel: text('channel', {
+      enum: ['whatsapp', 'telegram', 'sms', 'voice'],
+    }).notNull(),
+    version: integer('version').notNull(),
+    supersedesConsentEventId: text('supersedes_consent_event_id').references(
+      (): AnySQLiteColumn => patientChannelConsentEvents.id,
+    ),
+    decision: text('decision', {
+      enum: ['granted', 'denied', 'withdrawn'],
+    }).notNull(),
+    preferredLanguage: text('preferred_language', { enum: ['ru', 'kk'] }).notNull(),
+    destinationRef: text('destination_ref'),
+    destinationHint: text('destination_hint'),
+    destinationFingerprint: text('destination_fingerprint'),
+    destinationVerifiedAt: integer('destination_verified_at', { mode: 'timestamp_ms' }),
+    noticeVersion: text('notice_version').notNull(),
+    noticeHash: text('notice_hash').notNull(),
+    source: text('source', { enum: ['written', 'verbal', 'digital'] }).notNull(),
+    effectiveAt: integer('effective_at', { mode: 'timestamp_ms' }).notNull(),
+    capturedByMembershipId: text('captured_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    changeReason: text('change_reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_channel_consent_events_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.channel,
+      table.version,
+    ),
+    uniqueIndex('patient_channel_consent_events_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.channel,
+      table.id,
+    ),
+    uniqueIndex('patient_channel_consent_events_supersedes_once_uidx').on(
+      table.supersedesConsentEventId,
+    ),
+    foreignKey({
+      name: 'patient_channel_consent_events_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_channel_consent_events_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.capturedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('patient_channel_consent_events_channel_enum', table.channel, [
+      'whatsapp',
+      'telegram',
+      'sms',
+      'voice',
+    ]),
+    enumCheck('patient_channel_consent_events_decision_enum', table.decision, [
+      'granted',
+      'denied',
+      'withdrawn',
+    ]),
+    enumCheck('patient_channel_consent_events_language_enum', table.preferredLanguage, [
+      'ru',
+      'kk',
+    ]),
+    enumCheck('patient_channel_consent_events_source_enum', table.source, [
+      'written',
+      'verbal',
+      'digital',
+    ]),
+    check('patient_channel_consent_events_version_positive', sql`${table.version} > 0`),
+    check(
+      'patient_channel_consent_events_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesConsentEventId} is null) or (${table.version} > 1 and ${table.supersedesConsentEventId} is not null)`,
+    ),
+    check(
+      'patient_channel_consent_events_destination_consistent',
+      sql`(${table.decision} = 'granted' and ${table.destinationRef} is not null and ${table.destinationHint} is not null and ${table.destinationFingerprint} is not null and ${table.destinationVerifiedAt} is not null) or (${table.decision} <> 'granted' and ${table.destinationRef} is null and ${table.destinationHint} is null and ${table.destinationFingerprint} is null and ${table.destinationVerifiedAt} is null)`,
+    ),
+    check(
+      'patient_channel_consent_events_notice_hash',
+      sql`length(${table.noticeHash}) = 64 and lower(${table.noticeHash}) = ${table.noticeHash}`,
+    ),
+    check(
+      'patient_channel_consent_events_destination_hash',
+      sql`${table.destinationFingerprint} is null or (length(${table.destinationFingerprint}) = 64 and lower(${table.destinationFingerprint}) = ${table.destinationFingerprint})`,
+    ),
+    check(
+      'patient_channel_consent_events_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const patientChannelConsentHeads = sqliteTable(
+  'patient_channel_consent_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    channel: text('channel', {
+      enum: ['whatsapp', 'telegram', 'sms', 'voice'],
+    }).notNull(),
+    currentConsentEventId: text('current_consent_event_id')
+      .notNull()
+      .references(() => patientChannelConsentEvents.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_channel_consent_heads_scope_channel_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.channel,
+    ),
+    foreignKey({
+      name: 'patient_channel_consent_heads_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_channel_consent_heads_scope_event_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.patientId,
+        table.channel,
+        table.currentConsentEventId,
+      ],
+      foreignColumns: [
+        patientChannelConsentEvents.organizationId,
+        patientChannelConsentEvents.facilityId,
+        patientChannelConsentEvents.patientId,
+        patientChannelConsentEvents.channel,
+        patientChannelConsentEvents.id,
+      ],
+    }),
+    check('patient_channel_consent_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const patientNotificationEvents = sqliteTable(
+  'patient_notification_events',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    notificationId: text('notification_id').notNull(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    version: integer('version').notNull(),
+    supersedesNotificationEventId: text('supersedes_notification_event_id').references(
+      (): AnySQLiteColumn => patientNotificationEvents.id,
+    ),
+    state: text('state', {
+      enum: [
+        'scheduled',
+        'deferred_quiet_hours',
+        'retry_scheduled',
+        'delivered',
+        'provider_unavailable',
+        'manual_contact_required',
+        'patient_replied',
+        'manual_contact_completed',
+        'suppressed_opt_out',
+        'cancelled_source',
+        'cancelled_by_staff',
+      ],
+    }).notNull(),
+    purpose: text('purpose', {
+      enum: ['appointment_reminder', 'care_plan_reminder'],
+    }).notNull(),
+    channel: text('channel', {
+      enum: ['whatsapp', 'telegram', 'sms', 'voice'],
+    }).notNull(),
+    language: text('language', { enum: ['ru', 'kk'] }).notNull(),
+    consentEventId: text('consent_event_id')
+      .notNull()
+      .references(() => patientChannelConsentEvents.id),
+    templateVersionId: text('template_version_id')
+      .notNull()
+      .references(() => communicationTemplateVersions.id),
+    policyVersionId: text('policy_version_id')
+      .notNull()
+      .references(() => communicationPolicyVersions.id),
+    sourceType: text('source_type', {
+      enum: ['appointment', 'care_plan_task'],
+    }).notNull(),
+    sourceRecordId: text('source_record_id').notNull(),
+    sourceVersionId: text('source_version_id').notNull(),
+    requestedAt: integer('requested_at', { mode: 'timestamp_ms' }).notNull(),
+    scheduledAt: integer('scheduled_at', { mode: 'timestamp_ms' }).notNull(),
+    nextAttemptAt: integer('next_attempt_at', { mode: 'timestamp_ms' }),
+    destinationHint: text('destination_hint').notNull(),
+    destinationFingerprint: text('destination_fingerprint').notNull(),
+    renderedBody: text('rendered_body').notNull(),
+    templateValuesJson: text('template_values_json', { mode: 'json' })
+      .$type<Record<string, string>>(),
+    contentHash: text('content_hash').notNull(),
+    outboxEventId: text('outbox_event_id')
+      .notNull()
+      .references(() => outboxEvents.id),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    failureOwnerMembershipId: text('failure_owner_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    lastFailureCode: text('last_failure_code'),
+    changedByMembershipId: text('changed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    changeReason: text('change_reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_notification_events_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+      table.version,
+    ),
+    uniqueIndex('patient_notification_events_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+      table.id,
+    ),
+    uniqueIndex('patient_notification_events_source_schedule_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.sourceType,
+      table.sourceRecordId,
+      table.sourceVersionId,
+      table.channel,
+      table.scheduledAt,
+      table.version,
+    ),
+    uniqueIndex('patient_notification_events_supersedes_once_uidx').on(
+      table.supersedesNotificationEventId,
+    ),
+    foreignKey({
+      name: 'patient_notification_events_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_notification_events_scope_consent_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.patientId,
+        table.channel,
+        table.consentEventId,
+      ],
+      foreignColumns: [
+        patientChannelConsentEvents.organizationId,
+        patientChannelConsentEvents.facilityId,
+        patientChannelConsentEvents.patientId,
+        patientChannelConsentEvents.channel,
+        patientChannelConsentEvents.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_notification_events_scope_template_fk',
+      columns: [table.organizationId, table.facilityId, table.templateVersionId],
+      foreignColumns: [
+        communicationTemplateVersions.organizationId,
+        communicationTemplateVersions.facilityId,
+        communicationTemplateVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_notification_events_scope_policy_fk',
+      columns: [table.organizationId, table.facilityId, table.policyVersionId],
+      foreignColumns: [
+        communicationPolicyVersions.organizationId,
+        communicationPolicyVersions.facilityId,
+        communicationPolicyVersions.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_notification_events_scope_failure_owner_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.failureOwnerMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_notification_events_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('patient_notification_events_state_enum', table.state, [
+      'scheduled',
+      'deferred_quiet_hours',
+      'retry_scheduled',
+      'delivered',
+      'provider_unavailable',
+      'manual_contact_required',
+      'patient_replied',
+      'manual_contact_completed',
+      'suppressed_opt_out',
+      'cancelled_source',
+      'cancelled_by_staff',
+    ]),
+    enumCheck('patient_notification_events_purpose_enum', table.purpose, [
+      'appointment_reminder',
+      'care_plan_reminder',
+    ]),
+    enumCheck('patient_notification_events_channel_enum', table.channel, [
+      'whatsapp',
+      'telegram',
+      'sms',
+      'voice',
+    ]),
+    enumCheck('patient_notification_events_language_enum', table.language, [
+      'ru',
+      'kk',
+    ]),
+    enumCheck('patient_notification_events_source_enum', table.sourceType, [
+      'appointment',
+      'care_plan_task',
+    ]),
+    check('patient_notification_events_version_positive', sql`${table.version} > 0`),
+    check(
+      'patient_notification_events_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesNotificationEventId} is null) or (${table.version} > 1 and ${table.supersedesNotificationEventId} is not null)`,
+    ),
+    check(
+      'patient_notification_events_hashes',
+      sql`length(${table.destinationFingerprint}) = 64 and lower(${table.destinationFingerprint}) = ${table.destinationFingerprint} and length(${table.contentHash}) = 64 and lower(${table.contentHash}) = ${table.contentHash}`,
+    ),
+    check(
+      'patient_notification_events_attempts_nonnegative',
+      sql`${table.attemptCount} >= 0`,
+    ),
+    check(
+      'patient_notification_events_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const patientNotificationHeads = sqliteTable(
+  'patient_notification_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    notificationId: text('notification_id').notNull(),
+    currentEventId: text('current_event_id')
+      .notNull()
+      .references(() => patientNotificationEvents.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_notification_heads_scope_notification_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+    ),
+    foreignKey({
+      name: 'patient_notification_heads_scope_event_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.notificationId,
+        table.currentEventId,
+      ],
+      foreignColumns: [
+        patientNotificationEvents.organizationId,
+        patientNotificationEvents.facilityId,
+        patientNotificationEvents.notificationId,
+        patientNotificationEvents.id,
+      ],
+    }),
+    check('patient_notification_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
+export const notificationDeliveryAttempts = sqliteTable(
+  'notification_delivery_attempts',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    notificationId: text('notification_id').notNull(),
+    notificationEventId: text('notification_event_id')
+      .notNull()
+      .references(() => patientNotificationEvents.id),
+    attemptNumber: integer('attempt_number').notNull(),
+    providerAdapter: text('provider_adapter', { enum: ['disconnected'] }).notNull(),
+    outcome: text('outcome', {
+      enum: ['delivered', 'provider_unavailable', 'failed', 'unknown'],
+    }).notNull(),
+    errorCode: text('error_code'),
+    providerMessageId: text('provider_message_id'),
+    nextAttemptAt: integer('next_attempt_at', { mode: 'timestamp_ms' }),
+    recordedByMembershipId: text('recorded_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('notification_delivery_attempts_scope_attempt_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+      table.attemptNumber,
+    ),
+    foreignKey({
+      name: 'notification_delivery_attempts_scope_notification_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.notificationId,
+        table.notificationEventId,
+      ],
+      foreignColumns: [
+        patientNotificationEvents.organizationId,
+        patientNotificationEvents.facilityId,
+        patientNotificationEvents.notificationId,
+        patientNotificationEvents.id,
+      ],
+    }),
+    foreignKey({
+      name: 'notification_delivery_attempts_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.recordedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('notification_delivery_attempts_provider_enum', table.providerAdapter, [
+      'disconnected',
+    ]),
+    enumCheck('notification_delivery_attempts_outcome_enum', table.outcome, [
+      'delivered',
+      'provider_unavailable',
+      'failed',
+      'unknown',
+    ]),
+    check(
+      'notification_delivery_attempts_number_positive',
+      sql`${table.attemptNumber} > 0`,
+    ),
+    check(
+      'notification_delivery_attempts_disconnected_never_delivered',
+      sql`${table.providerAdapter} <> 'disconnected' or ${table.outcome} <> 'delivered'`,
+    ),
+  ],
+);
+
+export const communicationPatientResponses = sqliteTable(
+  'communication_patient_responses',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    notificationId: text('notification_id').notNull(),
+    manualTaskId: text('manual_task_id').notNull(),
+    responseKind: text('response_kind', {
+      enum: ['confirmed', 'declined', 'question', 'callback_requested', 'other'],
+    }).notNull(),
+    language: text('language', { enum: ['ru', 'kk'] }).notNull(),
+    summary: text('summary').notNull(),
+    source: text('source', { enum: ['staff_recorded'] }).notNull(),
+    recordedByMembershipId: text('recorded_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('communication_patient_responses_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('communication_patient_responses_task_notification_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.manualTaskId,
+      table.notificationId,
+      table.id,
+    ),
+    index('communication_patient_responses_notification_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+    ),
+    foreignKey({
+      name: 'communication_patient_responses_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.recordedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('communication_patient_responses_kind_enum', table.responseKind, [
+      'confirmed',
+      'declined',
+      'question',
+      'callback_requested',
+      'other',
+    ]),
+    enumCheck('communication_patient_responses_language_enum', table.language, [
+      'ru',
+      'kk',
+    ]),
+    enumCheck('communication_patient_responses_source_enum', table.source, [
+      'staff_recorded',
+    ]),
+    check(
+      'communication_patient_responses_summary_length',
+      sql`length(trim(${table.summary})) between 3 and 2000`,
+    ),
+  ],
+);
+
+export const communicationManualTaskEvents = sqliteTable(
+  'communication_manual_task_events',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    taskId: text('task_id').notNull(),
+    notificationId: text('notification_id').notNull(),
+    version: integer('version').notNull(),
+    supersedesTaskEventId: text('supersedes_task_event_id').references(
+      (): AnySQLiteColumn => communicationManualTaskEvents.id,
+    ),
+    state: text('state', {
+      enum: ['open', 'in_progress', 'completed', 'escalated', 'cancelled'],
+    }).notNull(),
+    assignedMembershipId: text('assigned_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    dueAt: integer('due_at', { mode: 'timestamp_ms' }).notNull(),
+    failureReason: text('failure_reason').notNull(),
+    responseId: text('response_id').references(() => communicationPatientResponses.id),
+    outcomeSummary: text('outcome_summary'),
+    changedByMembershipId: text('changed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    changeReason: text('change_reason').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('communication_manual_task_events_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+      table.version,
+    ),
+    uniqueIndex('communication_manual_task_events_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+      table.id,
+    ),
+    uniqueIndex('communication_manual_task_events_notification_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.notificationId,
+      table.version,
+    ),
+    uniqueIndex('communication_manual_task_events_supersedes_once_uidx').on(
+      table.supersedesTaskEventId,
+    ),
+    foreignKey({
+      name: 'communication_manual_task_events_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'communication_manual_task_events_scope_assignee_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.assignedMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('communication_manual_task_events_state_enum', table.state, [
+      'open',
+      'in_progress',
+      'completed',
+      'escalated',
+      'cancelled',
+    ]),
+    check('communication_manual_task_events_version_positive', sql`${table.version} > 0`),
+    check(
+      'communication_manual_task_events_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesTaskEventId} is null) or (${table.version} > 1 and ${table.supersedesTaskEventId} is not null)`,
+    ),
+    check(
+      'communication_manual_task_events_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+    check(
+      'communication_manual_task_events_failure_length',
+      sql`length(trim(${table.failureReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const communicationManualTaskHeads = sqliteTable(
+  'communication_manual_task_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    taskId: text('task_id').notNull(),
+    currentEventId: text('current_event_id')
+      .notNull()
+      .references(() => communicationManualTaskEvents.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('communication_manual_task_heads_scope_task_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.taskId,
+    ),
+    foreignKey({
+      name: 'communication_manual_task_heads_scope_event_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.taskId,
+        table.currentEventId,
+      ],
+      foreignColumns: [
+        communicationManualTaskEvents.organizationId,
+        communicationManualTaskEvents.facilityId,
+        communicationManualTaskEvents.taskId,
+        communicationManualTaskEvents.id,
+      ],
+    }),
+    check('communication_manual_task_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);

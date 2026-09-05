@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `communication_template_versions_scope_resolution_version_uidx` ON `communication_template_versions` (`organization_id`,`facility_id`,`purpose`,`channel`,`language`,`version`);

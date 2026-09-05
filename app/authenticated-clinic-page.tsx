@@ -13,7 +13,8 @@ export type ClinicCapability =
   | 'clinician'
   | 'patient-directory'
   | 'scheduling'
-  | 'chronic-care';
+  | 'chronic-care'
+  | 'communications';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
@@ -22,6 +23,7 @@ export type AuthenticatedClinicContext = {
     patientDirectory: boolean;
     scheduling: boolean;
     chronicCare: boolean;
+    communications: boolean;
   };
   accessCheck: 'ready' | 'unavailable';
 };
@@ -60,6 +62,12 @@ export async function getAuthenticatedClinicContext(
         (membership) =>
           membership.role === 'clinician' || membership.role === 'nurse',
       ),
+      communications: memberships.some(
+        (membership) =>
+          membership.role === 'clinician' ||
+          membership.role === 'nurse' ||
+          membership.role === 'registrar',
+      ),
     },
   };
 }
@@ -78,6 +86,7 @@ export function AuthenticatedClinicPage({
     'patient-directory': context.capabilities.patientDirectory,
     scheduling: context.capabilities.scheduling,
     'chronic-care': context.capabilities.chronicCare,
+    communications: context.capabilities.communications,
   }[requiredCapability];
 
   return (
@@ -97,6 +106,8 @@ export function AuthenticatedClinicPage({
               ? 'Этот раздел доступен только пользователю с активной ролью врача.'
               : requiredCapability === 'chronic-care'
                 ? 'Нужна активная роль врача или медсестры в выбранной клинике.'
+                : requiredCapability === 'communications'
+                  ? 'Нужна активная роль врача, медсестры или регистратора в выбранной клинике.'
                 : 'Нужна активная роль врача или регистратора в выбранной клинике.'
           }
         />
