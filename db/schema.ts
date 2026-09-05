@@ -6440,3 +6440,273 @@ export const communicationManualTaskHeads = sqliteTable(
     check('communication_manual_task_heads_lock_positive', sql`${table.lockVersion} > 0`),
   ],
 );
+
+export const patientObservationRecords = sqliteTable(
+  'patient_observation_records',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    sourceType: text('source_type', { enum: ['manual_test'] }).notNull(),
+    sourceLabel: text('source_label').notNull(),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_observation_records_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    index('patient_observation_records_patient_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.createdAt,
+    ),
+    foreignKey({
+      name: 'patient_observation_records_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_observation_records_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('patient_observation_records_source_enum', table.sourceType, [
+      'manual_test',
+    ]),
+    check(
+      'patient_observation_records_source_label_length',
+      sql`length(trim(${table.sourceLabel})) between 3 and 200`,
+    ),
+  ],
+);
+
+export const patientObservationVersions = sqliteTable(
+  'patient_observation_versions',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    observationId: text('observation_id')
+      .notNull()
+      .references(() => patientObservationRecords.id),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => patientObservationVersions.id,
+    ),
+    measuredAt: integer('measured_at', { mode: 'timestamp_ms' }).notNull(),
+    measurementContext: text('measurement_context', {
+      enum: ['pre_visit', 'consultation', 'follow_up', 'other'],
+    }).notNull(),
+    heightMm: integer('height_mm'),
+    heightUnit: text('height_unit', { enum: ['mm'] }),
+    weightGrams: integer('weight_grams'),
+    weightUnit: text('weight_unit', { enum: ['g'] }),
+    bmiHundredths: integer('bmi_hundredths'),
+    bmiUnit: text('bmi_unit', { enum: ['kg_m2'] }),
+    systolicMmhg: integer('systolic_mmhg'),
+    diastolicMmhg: integer('diastolic_mmhg'),
+    pressureUnit: text('pressure_unit', { enum: ['mmHg'] }),
+    temperatureMilliC: integer('temperature_milli_c'),
+    temperatureUnit: text('temperature_unit', { enum: ['milli_celsius'] }),
+    note: text('note'),
+    recordedByMembershipId: text('recorded_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
+    changeReason: text('change_reason').notNull(),
+    inputHash: text('input_hash').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_observation_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.observationId,
+      table.version,
+    ),
+    uniqueIndex('patient_observation_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.observationId,
+      table.id,
+    ),
+    uniqueIndex('patient_observation_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    index('patient_observation_versions_patient_time_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.measuredAt,
+    ),
+    foreignKey({
+      name: 'patient_observation_versions_scope_record_fk',
+      columns: [table.organizationId, table.facilityId, table.observationId],
+      foreignColumns: [
+        patientObservationRecords.organizationId,
+        patientObservationRecords.facilityId,
+        patientObservationRecords.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_observation_versions_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_observation_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.recordedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck(
+      'patient_observation_versions_context_enum',
+      table.measurementContext,
+      ['pre_visit', 'consultation', 'follow_up', 'other'],
+    ),
+    enumCheck('patient_observation_versions_height_unit_enum', table.heightUnit, [
+      'mm',
+    ]),
+    enumCheck('patient_observation_versions_weight_unit_enum', table.weightUnit, [
+      'g',
+    ]),
+    enumCheck('patient_observation_versions_bmi_unit_enum', table.bmiUnit, [
+      'kg_m2',
+    ]),
+    enumCheck(
+      'patient_observation_versions_pressure_unit_enum',
+      table.pressureUnit,
+      ['mmHg'],
+    ),
+    enumCheck(
+      'patient_observation_versions_temperature_unit_enum',
+      table.temperatureUnit,
+      ['milli_celsius'],
+    ),
+    check('patient_observation_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'patient_observation_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'patient_observation_versions_has_measurement',
+      sql`${table.heightMm} is not null or ${table.systolicMmhg} is not null or ${table.temperatureMilliC} is not null`,
+    ),
+    check(
+      'patient_observation_versions_anthropometry_complete',
+      sql`(${table.heightMm} is null and ${table.heightUnit} is null and ${table.weightGrams} is null and ${table.weightUnit} is null and ${table.bmiHundredths} is null and ${table.bmiUnit} is null) or (${table.heightMm} between 400 and 2500 and ${table.heightUnit} = 'mm' and ${table.weightGrams} between 1000 and 500000 and ${table.weightUnit} = 'g' and ${table.bmiHundredths} between 500 and 10000 and ${table.bmiUnit} = 'kg_m2')`,
+    ),
+    check(
+      'patient_observation_versions_bmi_derived',
+      sql`${table.bmiHundredths} is null or ${table.bmiHundredths} = cast(((${table.weightGrams} * 100000.0) / (${table.heightMm} * ${table.heightMm})) + 0.5 as integer)`,
+    ),
+    check(
+      'patient_observation_versions_pressure_complete',
+      sql`(${table.systolicMmhg} is null and ${table.diastolicMmhg} is null and ${table.pressureUnit} is null) or (${table.systolicMmhg} between 40 and 300 and ${table.diastolicMmhg} between 20 and 200 and ${table.systolicMmhg} > ${table.diastolicMmhg} and ${table.pressureUnit} = 'mmHg')`,
+    ),
+    check(
+      'patient_observation_versions_temperature_complete',
+      sql`(${table.temperatureMilliC} is null and ${table.temperatureUnit} is null) or (${table.temperatureMilliC} between 30000 and 45000 and ${table.temperatureUnit} = 'milli_celsius')`,
+    ),
+    check(
+      'patient_observation_versions_note_length',
+      sql`${table.note} is null or length(trim(${table.note})) between 3 and 1000`,
+    ),
+    check(
+      'patient_observation_versions_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+    check(
+      'patient_observation_versions_input_hash',
+      sql`length(${table.inputHash}) = 64 and lower(${table.inputHash}) = ${table.inputHash}`,
+    ),
+  ],
+);
+
+export const patientObservationHeads = sqliteTable(
+  'patient_observation_heads',
+  {
+    id: text('id').primaryKey(),
+    ...tenantScope(),
+    observationId: text('observation_id')
+      .notNull()
+      .references(() => patientObservationRecords.id),
+    patientId: text('patient_id')
+      .notNull()
+      .references(() => patients.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => patientObservationVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('patient_observation_heads_scope_record_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.observationId,
+    ),
+    index('patient_observation_heads_patient_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.patientId,
+      table.updatedAt,
+    ),
+    foreignKey({
+      name: 'patient_observation_heads_scope_record_fk',
+      columns: [table.organizationId, table.facilityId, table.observationId],
+      foreignColumns: [
+        patientObservationRecords.organizationId,
+        patientObservationRecords.facilityId,
+        patientObservationRecords.id,
+      ],
+    }),
+    foreignKey({
+      name: 'patient_observation_heads_scope_patient_fk',
+      columns: [table.organizationId, table.facilityId, table.patientId],
+      foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_observation_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.observationId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        patientObservationVersions.organizationId,
+        patientObservationVersions.facilityId,
+        patientObservationVersions.observationId,
+        patientObservationVersions.id,
+      ],
+    }),
+    check('patient_observation_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);

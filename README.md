@@ -20,6 +20,7 @@ Operational foundation:
 - [`docs/user-guide/scheduling-queue.ru.md`](docs/user-guide/scheduling-queue.ru.md)
 - [`docs/user-guide/chronic-care.ru.md`](docs/user-guide/chronic-care.ru.md)
 - [`docs/user-guide/patient-communications.ru.md`](docs/user-guide/patient-communications.ru.md)
+- [`docs/user-guide/patient-observations.ru.md`](docs/user-guide/patient-observations.ru.md)
 
 Clinic requirements and review:
 
@@ -99,6 +100,15 @@ deliberately disconnected: the current slice never sends a message, places a
 call, fabricates delivery or exposes a real destination. The reserved
 `provider_unavailable` domain state is not offered as a manual UI command.
 
+The Phase 8A patient-observation capture slice is available at
+`http://localhost:3200/observations`. A clinician or nurse can record synthetic
+height/weight, algorithmically derived BMI, blood pressure and temperature for an
+active patient in the current facility. Corrections append an immutable version
+with author, reason, source and timestamp; stale versions and changed
+idempotency-key replays fail closed. The clinic has not approved a criticality
+threshold or SLA (`DEC-006`), so this slice deliberately performs no medical risk
+classification, automatic alert, referral, transfer or hospital notification.
+
 The launcher refuses to replace unrelated
 processes on ports `3200` or `3101`, applies forward-only local migrations,
 loads only the idempotent technical bootstrap needed for local sign-in, writes
@@ -160,6 +170,17 @@ Repeated fixture runs preserve versioned template history; a new reminder pins
 the latest matching `approved_test` version that was current when it was created.
 The reproducible UI and boundary check is documented in
 [`docs/user-guide/patient-communications.ru.md`](docs/user-guide/patient-communications.ru.md#9-пошаговая-проверка-локального-среза).
+
+A separate rerunnable observation fixture adds one explicitly synthetic manual
+measurement for UI and API verification:
+
+```powershell
+pnpm db:seed:observations:local
+```
+
+It is never run by normal startup and does not represent device ingestion or a
+clinically assessed patient. The verified workflow and screenshots are in
+[`docs/user-guide/patient-observations.ru.md`](docs/user-guide/patient-observations.ru.md).
 
 The local workspace is available at `http://localhost:3200/`. Verify a checkout
 with:

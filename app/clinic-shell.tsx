@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import {
   CalendarClock,
+  Activity,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -29,6 +30,7 @@ const navigation = [
   { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
   { href: '/scheduling', label: 'Запись и очередь', icon: CalendarClock, badge: 'D1', capability: 'scheduling' },
   { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
+  { href: '/observations', label: 'Показатели', icon: Activity, badge: 'D1', capability: 'observations' },
   { href: '/communications', label: 'Связь с пациентом', icon: MessageSquareText, badge: 'D1', capability: 'communications' },
 ] as const;
 
@@ -69,6 +71,7 @@ export function ClinicShell({
     patientDirectory: boolean;
     scheduling: boolean;
     chronicCare: boolean;
+    observations: boolean;
     communications: boolean;
   };
   user: { displayName: string; email: string | null };
