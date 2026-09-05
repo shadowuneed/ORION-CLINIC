@@ -1249,8 +1249,8 @@ Do not touch:
 - Branch/baseline before this checkpoint: `main` at `804c3d8`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
-- Phase 7 implementation commit: pending in this working tree until the final
-  verification gate passes; the exact hash must be recorded before handoff closes.
+- Verified Phase 7 implementation commit: `37f151e` (`feat: add audited patient
+  communications outbox`).
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
