@@ -543,6 +543,8 @@ provider, clinic approvals and end-to-end delivery/reconciliation tests exist.
 Status: `IN_PROGRESS`
 
 - [x] BMI, blood pressure, and temperature capture.
+- [x] Clinic review packet and activation-blocked decision template for
+      `DEC-006`/`DEC-007` (prepared, not clinic-approved).
 - [ ] Other clinic-approved observation types and device ingestion.
 - [ ] Clinic-approved deterministic thresholds and versioned rules.
 - [ ] Alert, acknowledgement, escalation, and SLA states.
@@ -781,6 +783,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-05 | Phase 8A observation repository and D1 integrity | PASS for synthetic local capture | Six repository scenarios plus domain/access tests cover scaled values and derived BMI, required measurement groups, role/facility/active-patient boundaries, nurse ownership, exact idempotent replay, changed-key and stale-version conflicts, append-only corrections, direct SQL immutability and guarded head advancement. Migration `0025` applied; its fixture remained one record after two runs; active D1 `quick_check` returned `ok`, foreign-key check returned no rows, and the authenticated browser lifecycle left two records, three versions and two heads. |
 | 2026-09-05 | Phase 8A authenticated browser and responsive audit | PASS for the inspected synthetic workflow | A Sites-authenticated clinician selected an existing artificial patient, recorded 172.4 cm/71.8 kg, algorithmic BMI 24.16, pressure 124/82 and temperature 36.7, then corrected temperature to 36.8 as version 2. Version 1 remained visible with reason/author/time/source; audit recorded read/record/correct events. A 390 px check had no horizontal overflow and browser warning/error logs were empty. Three verified screenshots are retained in the operator guide. No critical status, alert, notification or transfer was created. |
 | 2026-09-05 | Phase 8A final `pnpm verify:ci` and recovery | PASS | Secret policy covered 361 tracked/untracked repository files, dependency audit found no known vulnerabilities, lint/strict types passed, 47 test files/269 tests passed, Drizzle reported no drift, and Vinext built `/observations` plus both observation APIs. Isolated recovery destroyed its disposable source before matching 80 tables, 128 rows, 26 migrations, three R2 objects and 389,707 backup bytes. |
+| 2026-09-05 | Phase 8B clinic decision gate artifact and repository regression | PASS as an unapproved review artifact | The Russian review packet and machine-readable decision template cover deterministic rule scope/version ownership, repeat measurement, doctor confirmation/override, acknowledgement/escalation SLA, minimum signed transfer packet, receiving-facility contract, fallback/reconciliation and four explicit meanings of “digital twin”. Validation confirmed `draft_unapproved`, `activationBlocked: true`, an empty rule set and no preselected `DEC-007` meaning. Full `pnpm verify:ci` then passed secret policy for 363 files, dependency audit, lint/types, 47 test files/269 tests, schema/build and an isolated restore of 80 tables/128 rows/26 migrations/three R2 objects/389,707 bytes. This does not approve clinical thresholds or runtime behavior. |
 
 ## 14. Risk register
 
@@ -818,8 +821,16 @@ control, detection, response, and residual acceptance.
   authoritative KMIS source. Phase 6 has local signed-plan observation without
   ERDB/PUZ/free-medication systems. Phase 7 now has a local no-send communications
   outbox, but no messaging or telephony provider is connected. Phase 8 now has
-  local observation capture without thresholds, alerts or transfer. Phases 9-10
-  remain `NOT_STARTED` and are not represented as production operations.
+  local observation capture plus a completed Phase 8B clinic review packet, but
+  no approved thresholds, alerts or transfer. Phases 9-10 remain `NOT_STARTED`
+  and are not represented as production operations.
+- Completed current bounded slice: the Phase 8B `DEC-006`/`DEC-007` packet now
+  gives clinic owners one fillable decision surface for deterministic rule scope,
+  ownership/versioning, repeat measurement, human confirmation/override, SLA,
+  receiving-facility acknowledgement, minimum signed transfer data, fallback,
+  reconciliation and the exact meaning of “digital twin”. Its companion JSON is
+  `draft_unapproved`, contains no rules or selected meaning and keeps activation
+  blocked. This is governance evidence, not permission to classify or transfer.
 - Completed current bounded slice: clinician-authored laboratory, ECG, service
   and specialist requests have immutable D1 versions, separate doctor approval,
   status history, manual PDF/JPEG/PNG results in R2, explicit review or
@@ -1063,12 +1074,13 @@ control, detection, response, and residual acceptance.
   no warning/error logs or 390 px body overflow. The final aggregate gate covered
   361 files, 47 test files/269 tests and an isolated restore of 80 tables/128 rows/
   26 migrations/three R2 objects/389,707 bytes.
-- Exact next bounded task: prepare the Phase 8B clinic decision packet for
-  `DEC-006` and `DEC-007`—deterministic threshold/rule ownership, version approval,
-  acknowledgement/escalation SLA, receiving-facility contract, minimum transfer
-  packet and explicit meaning of the read-only longitudinal view. Do not implement
-  runtime critical classification, alerting, hospital notification or transfer
-  until named clinic owners approve that packet.
+- Exact next bounded task: clinic owners review, fill and sign
+  `docs/requirements/phase-8b-clinic-decision-packet.ru.md` and a separate approved
+  copy of `phase-8b-decision-record.template.json`. Engineering must not infer
+  signatures from chat. After valid `DEC-006`/`DEC-007` evidence exists, the next
+  code checkpoint is an immutable signed-policy registry with no runtime alerts;
+  critical classification, hospital notification and transfer stay blocked until
+  their later explicit gates pass.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1261,15 +1273,17 @@ Do not touch:
 
 ## 16. Last handoff
 
-- Date: 2026-09-05, versioned synthetic patient-observation checkpoint.
+- Date: 2026-09-05, Phase 8B clinic decision-gate checkpoint.
 - Agent: Codex.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`.
 - Product name: **ORION Clinic**; **ORION** is the short product mark.
-- Branch/baseline before this checkpoint: `main` at `5746a1f`; Git identity is repository-local
+- Branch/baseline before this checkpoint: `main` at `1bada2b`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
 - Verified Phase 8A implementation commit: `89819fe` (`feat: add audited patient
   observation capture`).
+- Verified Phase 8B review-artifact commit: `3ee0f50` (`docs: add phase 8 clinic
+  decision packet`).
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
@@ -1282,6 +1296,18 @@ Do not touch:
 
 Completed in this checkpoint:
 
+- added a Russian, clinic-facing `DEC-006`/`DEC-007` decision packet with explicit
+  owners, evidence, rule/version fields, state transitions, acknowledgement/SLA,
+  override, minimum transfer packet, receiving-facility and sign-off sections;
+- added a machine-readable decision template that is deliberately
+  `draft_unapproved`, activation-blocked, empty of clinical rules and without a
+  preselected “digital twin” meaning;
+- linked the packet from the catalogue, discovery pack and README, and updated
+  the gap audit from `NOT_STARTED` to `BLOCKED_CLINIC_APPROVAL` without claiming
+  any runtime critical-state or transfer capability;
+- passed `pnpm verify:ci`: 363 files scanned, no known dependency vulnerabilities,
+  lint/types, 47 test files/269 tests, Drizzle/build and isolated recovery of 80
+  tables/128 rows/26 migrations/three R2 objects/389,707 bytes;
 - added migration `0025` with tenant-scoped observation record, immutable version
   and guarded current-head tables, scaled-unit constraints, derived-BMI checks,
   active-patient/member guards and append-only database triggers;
@@ -1982,3 +2008,27 @@ the named open decisions. This is the current canonical continuation point.
   claimed.
 - Next: prepare the Phase 8B `DEC-006`/`DEC-007` clinic decision packet. Do not
   activate critical classification or transfer behavior before written approval.
+
+### 2026-09-05 — Phase 8B clinic decision-gate checkpoint
+
+- Reason: critical-state thresholds, response times, transfer acknowledgement and
+  the term “digital twin” are clinical/operational decisions that engineering and
+  AI must not invent.
+- Decision: create a complete review and sign-off artifact before implementing a
+  policy registry, rule evaluator, alert or transfer workflow.
+- Added: `phase-8b-clinic-decision-packet.ru.md` with one-page decisions,
+  deterministic rule contract, proposed human-controlled state models, blank SLA
+  and override tables, minimum signed packet, receiving-facility contract, RACI,
+  acceptance gate and next-agent order; plus an activation-blocked JSON template.
+- Verified: JSON parses; status is `draft_unapproved`; `activationBlocked` is true;
+  the rule list is empty; no `DEC-007` meaning is preselected; all required packet
+  sections exist; whitespace validation passes. Full `pnpm verify:ci` passed
+  secret scanning for 363 files, dependency audit, lint/types, 47 test files/269
+  tests, Drizzle/build and isolated recovery of 80 tables/128 rows/26 migrations,
+  three R2 objects and 389,707 bytes (`runId`
+  `61f532f5-5e40-425f-a31e-c91c6eb20d60`).
+- Limitation: no clinic signatures, clinical thresholds, SLA values, production
+  identity/data, external endpoint, runtime classification, alert, hospital
+  notification, transfer or predictive model is approved or implemented.
+- Next: named clinic owners fill and sign the packet. Only then may engineering
+  implement the immutable signed-policy registry as a separate checkpoint.
