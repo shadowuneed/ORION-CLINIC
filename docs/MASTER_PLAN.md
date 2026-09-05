@@ -540,9 +540,10 @@ provider, clinic approvals and end-to-end delivery/reconciliation tests exist.
 
 ### Phase 8 — Observation, critical patients, and transfer
 
-Status: `NOT_STARTED`
+Status: `IN_PROGRESS`
 
-- [ ] BMI, blood pressure, temperature, and other observation capture.
+- [x] BMI, blood pressure, and temperature capture.
+- [ ] Other clinic-approved observation types and device ingestion.
 - [ ] Clinic-approved deterministic thresholds and versioned rules.
 - [ ] Alert, acknowledgement, escalation, and SLA states.
 - [ ] Doctor confirmation of critical status and transfer decision.
@@ -777,6 +778,9 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-05 | Phase 7 focused communications regression | PASS | Sixteen repository scenarios covered exact confirmed-appointment and signed-plan sources; stale/cancelled source rejection without outbox or audit mutation; separate channel consent; latest-template retirement; due-time and quiet-hour enforcement; disconnected-provider retry; exact fallback owner; response/completion/escalation; opt-out suppression; cross-task linkage and direct SQL body/payload/purpose/destination guards. The communication audit sequence and hash links advance through the complete local lifecycle while escalation leaves the signed care plan unchanged. |
 | 2026-09-05 | Phase 7 D1 and authenticated browser audit | PASS for the inspected local no-send slice | Forward-only migrations `0022`-`0024` applied; the rerunnable fixture retained one active local policy and 16 RU/KK `approved_test` templates; `PRAGMA quick_check` returned `ok` and foreign-key check returned no rows. Authenticated `/communications` loaded five authorized synthetic patients, three current signed-plan sources for `SYN-CARE-01`, a fixed system-destination consent dialog and a 390 px layout without horizontal overflow or warning/error logs. No browser command changed consent or created a notification. |
 | 2026-09-05 | Phase 7 final `pnpm verify:ci` and recovery | PASS | Resource-safe single-worker Vitest kept web/STT running while secret policy covered 341 tracked/untracked repository files, dependency audit found no known vulnerabilities, lint/strict types passed, 43 test files/253 tests passed, Drizzle reported no drift, and every Vinext route built including `/communications` plus five communication APIs. Isolated recovery destroyed its disposable source before matching 77 tables, 127 rows, 25 migrations, three R2 objects and 373,097 backup bytes. |
+| 2026-09-05 | Phase 8A observation repository and D1 integrity | PASS for synthetic local capture | Six repository scenarios plus domain/access tests cover scaled values and derived BMI, required measurement groups, role/facility/active-patient boundaries, nurse ownership, exact idempotent replay, changed-key and stale-version conflicts, append-only corrections, direct SQL immutability and guarded head advancement. Migration `0025` applied; its fixture remained one record after two runs; active D1 `quick_check` returned `ok`, foreign-key check returned no rows, and the authenticated browser lifecycle left two records, three versions and two heads. |
+| 2026-09-05 | Phase 8A authenticated browser and responsive audit | PASS for the inspected synthetic workflow | A Sites-authenticated clinician selected an existing artificial patient, recorded 172.4 cm/71.8 kg, algorithmic BMI 24.16, pressure 124/82 and temperature 36.7, then corrected temperature to 36.8 as version 2. Version 1 remained visible with reason/author/time/source; audit recorded read/record/correct events. A 390 px check had no horizontal overflow and browser warning/error logs were empty. Three verified screenshots are retained in the operator guide. No critical status, alert, notification or transfer was created. |
+| 2026-09-05 | Phase 8A final `pnpm verify:ci` and recovery | PASS | Secret policy covered 361 tracked/untracked repository files, dependency audit found no known vulnerabilities, lint/strict types passed, 47 test files/269 tests passed, Drizzle reported no drift, and Vinext built `/observations` plus both observation APIs. Isolated recovery destroyed its disposable source before matching 80 tables, 128 rows, 26 migrations, three R2 objects and 389,707 backup bytes. |
 
 ## 14. Risk register
 
@@ -806,16 +810,16 @@ control, detection, response, and residual acceptance.
 - Active phases: `PHASE_0_IN_PROGRESS` for clinic review/discovery,
   `PHASE_2_IN_PROGRESS` for production identity/consent decisions,
   `PHASE_3_IN_PROGRESS` for the synthetic encounter vertical slice, and
-  `PHASE_4_IN_PROGRESS` through `PHASE_7_IN_PROGRESS` for provider-neutral local
+  `PHASE_4_IN_PROGRESS` through `PHASE_8_IN_PROGRESS` for provider-neutral local
   slices whose external gates remain open. Phase 1 is complete only for the
   verified synthetic local engineering foundation.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
   ERDB/PUZ/free-medication systems. Phase 7 now has a local no-send communications
-  outbox, but no messaging or telephony provider is connected. Phases 8-10 remain
-  `NOT_STARTED` and are not represented as critical transfer/digital twin or
-  production operations.
+  outbox, but no messaging or telephony provider is connected. Phase 8 now has
+  local observation capture without thresholds, alerts or transfer. Phases 9-10
+  remain `NOT_STARTED` and are not represented as production operations.
 - Completed current bounded slice: clinician-authored laboratory, ECG, service
   and specialist requests have immutable D1 versions, separate doctor approval,
   status history, manual PDF/JPEG/PNG results in R2, explicit review or
@@ -890,6 +894,8 @@ control, detection, response, and residual acceptance.
   `docs/user-guide/scheduling-queue.ru.md` and
   `docs/user-guide/chronic-care.ru.md` document the local Phase 5 and Phase 6
   operator paths, role boundaries, retry behavior and external limitations.
+  `docs/user-guide/patient-observations.ru.md` documents Phase 8A capture,
+  correction/history behavior, safety boundary and three verified screenshots.
 - Verification evidence on 2026-09-02: `pnpm verify:ci` passed secret scanning for
   183 tracked and untracked repository files, zero known dependency advisories,
   lint, strict types, 20 test files/97 tests, Drizzle drift check, every Vinext
@@ -1044,12 +1050,25 @@ control, detection, response, and residual acceptance.
   three exact signed-plan sources for `SYN-CARE-01`, the consent dialog and 390 px
   layout without warning/error logs or horizontal overflow; no consent or message
   command was submitted by browser automation.
-- Exact next implementable task after this checkpoint: begin Phase 8 with
-  facility-scoped, versioned synthetic observation capture for BMI, blood pressure
-  and temperature plus provenance, idempotency, stale-write and access tests. Do
-  not classify a patient as critical, notify another hospital or initiate transfer
-  until clinic-approved deterministic thresholds, owners, SLA and receiving-
-  facility contract are accepted under DEC-006/DEC-007.
+- Completed current bounded slice: `/observations` now reads and writes
+  facility-scoped synthetic measurements in D1. Height/weight, derived BMI, blood
+  pressure and temperature retain explicit scaled units, source, recorder and
+  measurement/recording times. Corrections append a version and advance one guarded
+  head; no mutation or delete endpoint exists. Clinician/nurse permissions,
+  idempotency, optimistic concurrency, active-patient scope and hash-chained audit
+  are rechecked on the server.
+- Phase 8A evidence on 2026-09-05: migration `0025` and its rerunnable fixture
+  passed active D1 integrity; the authenticated browser completed create -> reload
+  -> correct -> history for an artificial patient, showed versions 2 and 1, and had
+  no warning/error logs or 390 px body overflow. The final aggregate gate covered
+  361 files, 47 test files/269 tests and an isolated restore of 80 tables/128 rows/
+  26 migrations/three R2 objects/389,707 bytes.
+- Exact next bounded task: prepare the Phase 8B clinic decision packet for
+  `DEC-006` and `DEC-007`—deterministic threshold/rule ownership, version approval,
+  acknowledgement/escalation SLA, receiving-facility contract, minimum transfer
+  packet and explicit meaning of the read-only longitudinal view. Do not implement
+  runtime critical classification, alerting, hospital notification or transfer
+  until named clinic owners approve that packet.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1242,29 +1261,42 @@ Do not touch:
 
 ## 16. Last handoff
 
-- Date: 2026-09-05, provider-neutral patient-communications checkpoint.
+- Date: 2026-09-05, versioned synthetic patient-observation checkpoint.
 - Agent: Codex.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`.
 - Product name: **ORION Clinic**; **ORION** is the short product mark.
-- Branch/baseline before this checkpoint: `main` at `804c3d8`; Git identity is repository-local
+- Branch/baseline before this checkpoint: `main` at `5746a1f`; Git identity is repository-local
   and derived from the authenticated owner `shadowuneed`, leaving global Git
   configuration unchanged.
-- Verified Phase 7 implementation commit: `37f151e` (`feat: add audited patient
-  communications outbox`).
+- Verified Phase 8A implementation commit: `89819fe` (`feat: add audited patient
+  observation capture`).
 - Private remote: `https://github.com/shadowuneed/ORION-CLINIC`.
 - Owner working-tree note: the pre-existing standalone `a` under the risk-register
   heading remains deliberately unstaged and was neither removed nor staged.
-- Runtime at handoff: local web, loopback speech service and the existing ngrok agent
-  are intentionally left running on ports `3200`, `3101` and `4040`; no production
-  deployment was made. Local web liveness/readiness return 200; the public tunnel
-  `https://down-outfield-regular.ngrok-free.dev` forwards to `127.0.0.1:3200` and
-  returns 401 without its Basic-auth credentials. The speech process is live but
-  its model is currently `unavailable`: `large_ctc/cuda` failed with out-of-memory
-  and `ctc/cpu` with an OS load error, so STT is not claimed ready. Groq was not
-  runtime-tested in this checkpoint; ignored local secrets are never committed.
+- Runtime at handoff: local web and loopback speech processes are intentionally left
+  running on ports `3200` and `3101`; no production deployment was made. The ngrok
+  agent was not listening when this continuation began and was not silently exposed
+  without restoring its Basic-auth policy. Speech reachability is not a new RU/KK
+  quality claim; Groq was not runtime-tested because no fresh ignored
+  `GROQ_API_KEY` is configured. Ignored local secrets are never committed.
 
 Completed in this checkpoint:
 
+- added migration `0025` with tenant-scoped observation record, immutable version
+  and guarded current-head tables, scaled-unit constraints, derived-BMI checks,
+  active-patient/member guards and append-only database triggers;
+- added authenticated `GET/POST /api/observations` and version-checked
+  `PATCH /api/observations/:observationId` with facility scope, clinician/nurse
+  authorization, idempotency, optimistic concurrency and correlated audit;
+- added the responsive `/observations` workspace with real D1 patient search,
+  create/correct/history flows, light/dark support and an explicit no-interpretation
+  boundary while `DEC-006` remains open;
+- added the rerunnable observation fixture and Russian operator guide with verified
+  desktop/form/mobile screenshots; a browser journey persisted a synthetic record,
+  corrected it as version 2 and retained version 1 without console errors;
+- passed the final `pnpm verify:ci`: 361 files scanned, no known dependency
+  vulnerabilities, lint/types, 47 files/269 tests, Drizzle/build and isolated
+  recovery of 80 tables/128 rows/26 migrations/three R2 objects/389,707 bytes;
 - added the Phase 7 `/communications` workspace and provider-neutral D1 lifecycle
   for separate channel/language consent, signed-source scheduling, immutable
   outbox intent, quiet hours, bounded disconnected-provider retry, response and
@@ -1419,7 +1451,9 @@ Known limitations and non-claims:
   local synthetic D1 only. Phase 7 communications is a local no-send outbox with
   exact test aliases and a disconnected provider; it has no WhatsApp Business,
   Telegram, SMS, telephony, delivery receipt, protected-link host or approved
-  production content/account. Phase 8 observations/transfer is still absent;
+  production content/account. Phase 8A observation capture is local synthetic D1
+  only; clinic-approved thresholds, critical status, alert/SLA, receiving-hospital
+  acknowledgement, transfer packet and longitudinal handoff remain absent;
 - the unified shell uses the current local Sites identity path; it does not approve
   production provisioning, OIDC/MFA, session policy or clinic role governance, and
   visual consistency is not evidence that every API authorization boundary has
@@ -1452,24 +1486,26 @@ git status --short
 git diff --check
 .\START_ORION.bat
 Invoke-RestMethod http://127.0.0.1:3101/health
-Start-Process http://localhost:3200/communications
+Start-Process http://localhost:3200/observations
 pnpm db:seed:local
 pnpm db:seed:scheduling:local
 pnpm db:seed:care:local
 pnpm db:seed:communications:local
+pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next implementable bounded slice is Phase 8 observation capture backed by
-synthetic D1: facility-scoped, append-only/versioned BMI, blood-pressure and
-temperature observations with exact source, recorder, timestamp, units,
-idempotency, optimistic concurrency, role authorization and audit. Do not classify
-critical status, notify another hospital or initiate transfer until the clinic
-approves deterministic thresholds, owners, SLA and the receiving-facility contract
-under DEC-006/DEC-007. The external portions of Phases 4-7 remain blocked on their
-named decisions and provider contracts. No external delivery, invented availability,
-inferred diagnosis or ERDB/PUZ/free-medication claim is allowed until its source of
-truth, sandbox, legal basis and human owner are named.
+The next bounded slice is the Phase 8B clinic decision packet for DEC-006/DEC-007:
+define proposed deterministic observation rules, rule-version approval and owner,
+alert acknowledgement/escalation SLA, doctor confirmation/override, receiving-
+facility contract, minimum signed transfer packet and the exact non-predictive
+meaning of the longitudinal view. This is a review artifact, not permission to
+activate clinical automation. Do not classify critical status, notify another
+hospital or initiate transfer until named clinic owners approve it. The external
+portions of Phases 4-7 remain blocked on their named decisions and provider
+contracts. No external delivery, invented availability, inferred diagnosis or
+ERDB/PUZ/free-medication claim is allowed until its source of truth, sandbox, legal
+basis and human owner are named.
 The synthetic RU/KK/MIXED speech-quality harness remains required before any speech
 model change or clinical-accuracy claim. Do not implement patient merge or physical
 deletion.
@@ -1922,3 +1958,27 @@ the named open decisions. This is the current canonical continuation point.
 - Next: implement only versioned synthetic Phase 8 observation capture and its
   access/provenance contract. Keep critical classification, hospital notification
   and transfer blocked until DEC-006/DEC-007 are resolved by clinic owners.
+
+### 2026-09-05 — versioned synthetic patient-observation checkpoint
+
+- Reason: clinic leadership requires pre-visit height/weight/ИМТ, blood pressure
+  and temperature to become durable clinical-workspace data instead of a static
+  presentation, while interpretation and escalation remain human-controlled.
+- Decision: implement only facility-scoped capture and correction history in local
+  synthetic D1. Derive BMI algorithmically from exact inputs and expose no risk
+  class, alert, notification or transfer before clinic policy approval.
+- Added: migration `0025`; immutable observation versions and guarded heads;
+  scaled units and BMI invariant; active-patient/member triggers; clinician/nurse
+  access; idempotent/optimistic APIs; `/observations`; rerunnable fixture; Russian
+  guide and three screenshots.
+- Verified: exact replay/conflict and nurse-ownership scenarios; direct SQL
+  immutability; active D1 integrity and fixture rerun; authenticated create ->
+  correct -> history browser journey; light/dark and 390 px behavior without
+  horizontal overflow or warning/error logs; final 47-file/269-test aggregate gate
+  and isolated recovery of 80 tables/128 rows/26 migrations/three R2 objects.
+- Limitation: there is no clinic-approved criticality rule, rule owner, SLA,
+  device feed, alert, receiving-facility acknowledgement, transfer packet or
+  predictive digital twin. No production identity/data or medical validation is
+  claimed.
+- Next: prepare the Phase 8B `DEC-006`/`DEC-007` clinic decision packet. Do not
+  activate critical classification or transfer behavior before written approval.
