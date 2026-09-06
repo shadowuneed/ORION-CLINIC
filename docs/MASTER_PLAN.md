@@ -1302,6 +1302,8 @@ Do not touch:
   returning their findings; root independently completed and verified the work.
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC` on
   `main`. The legacy `ariaproject` was not changed.
+- Verified implementation commit: `578a448` (`feat: add department access
+  governance`).
 - Scope: synthetic local D1 only. Added departments, append-only organization /
   facility / membership access assignments, seven stable role categories,
   effective-permission derivation, a minimized authenticated `GET /api/access`
