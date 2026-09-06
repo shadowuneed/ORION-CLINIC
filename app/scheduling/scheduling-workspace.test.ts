@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildSchedulingAccessQuery,
+  buildSchedulingOperationKey,
   isExpiredSchedulingHold,
   nextQueueAction,
   unknownSchedulingOutcomeMessage,
 } from './scheduling-workspace';
 
 describe('scheduling workspace queue flow', () => {
+  it('keeps the exact access assignment in reads and idempotency scope', () => {
+    const query = new URLSearchParams(
+      buildSchedulingAccessQuery({
+        accessAssignmentId: 'assignment-a',
+        facilityId: 'facility-a',
+      }),
+    );
+    expect(query.get('accessAssignmentId')).toBe('assignment-a');
+    expect(query.get('facilityId')).toBe('facility-a');
+    expect(buildSchedulingOperationKey('assignment-a', 'queue:call')).toBe(
+      'assignment-a:queue:call',
+    );
+  });
+
   it('keeps the deterministic queue transition sequence', () => {
     expect(nextQueueAction('issued')).toBe('arrive');
     expect(nextQueueAction('arrived')).toBe('call');

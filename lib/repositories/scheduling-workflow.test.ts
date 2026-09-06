@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import type { SchedulingScope } from '@/lib/auth/scheduling-access';
 import {
   SCHEDULING_CONFIRMATION_STATEMENT_VERSION,
   SYNTHETIC_SCHEDULE_SOURCE_LABEL,
@@ -465,11 +465,12 @@ function seedSchedule(database: DatabaseSync, now: number) {
           id, organization_id, facility_id, slot_id, version,
           supersedes_version_id, status, appointment_id, patient_id,
           referral_request_id, referral_version_id, held_by_membership_id,
-          hold_expires_at, change_reason, changed_by_membership_id, created_at
+          hold_expires_at, change_reason, changed_by_membership_id,
+          access_assignment_id, created_at
         ) values (
           ?, 'org-a', 'fac-a', ?, 1, null, 'available', null, null,
           null, null, null, null, 'Ручное тестовое время доступно',
-          'membership-a', ?
+          'membership-a', 'orders-assignment-a', ?
         )
       `)
       .run(versionId, slotId, now);
@@ -569,11 +570,12 @@ function fixture(
     withdrawCareConsent(database, 'a', 'patient-a', 'encounter-a', now + 10);
   }
   const { firstSlotStartsAt } = seedSchedule(database, Date.now());
-  const scope: FacilityAccessScope = {
+  const scope: SchedulingScope = {
     organizationId: 'org-a',
     facilityId: 'fac-a',
     userId: 'user-a',
     membershipId: 'membership-a',
+    accessAssignmentId: 'orders-assignment-a',
     role: 'clinician',
   };
   const d1 = createD1Adapter(database);
@@ -791,10 +793,51 @@ describe('D1 scheduling workflow', () => {
     expect(
       database.prepare('select count(*) as count from command_idempotency').get(),
     ).toEqual({ count: 8 });
+    expect(
+      database
+        .prepare(`
+          select
+            (select count(*) from scheduling_preference_snapshots
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidPreferences,
+            (select count(*) from appointments
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidAppointments,
+            (select count(*) from appointment_versions
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidAppointmentVersions,
+            (select count(*) from appointment_slot_versions
+              where version > 1 and (access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null)) as invalidSlotVersions,
+            (select count(*) from queue_tickets
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidQueueTickets,
+            (select count(*) from queue_ticket_versions
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidQueueVersions,
+            (select count(*) from command_idempotency
+              where access_assignment_id <> 'orders-assignment-a'
+                or access_assignment_id is null) as invalidCommands,
+            (select count(*) from audit_events
+              where json_extract(metadata_json, '$.accessAssignmentId')
+                <> 'orders-assignment-a') as invalidAuditEvents
+        `)
+        .get(),
+    ).toEqual({
+      invalidPreferences: 0,
+      invalidAppointments: 0,
+      invalidAppointmentVersions: 0,
+      invalidSlotVersions: 0,
+      invalidQueueTickets: 0,
+      invalidQueueVersions: 0,
+      invalidCommands: 0,
+      invalidAuditEvents: 0,
+    });
   });
 
   it('returns the exact committed response on replay and rejects a changed payload', async () => {
-    const { database, repository, primaryReferral, firstSlotStartsAt } = fixture();
+    const { database, d1, repository, scope, primaryReferral, firstSlotStartsAt } =
+      fixture();
     const preferenceCommand = preferenceInput(
       primaryReferral,
       firstSlotStartsAt,
@@ -804,6 +847,13 @@ describe('D1 scheduling workflow', () => {
     await expect(repository.createPreference(preferenceCommand)).resolves.toEqual(
       preference,
     );
+    const switchedAssignmentRepository = new D1SchedulingWorkflowRepository(d1, {
+      ...scope,
+      accessAssignmentId: 'orders-assignment-switched',
+    });
+    await expect(
+      switchedAssignmentRepository.createPreference(preferenceCommand),
+    ).rejects.toBeInstanceOf(SchedulingConflictError);
 
     const holdCommand = {
       serviceRequestId: primaryReferral.requestId,
@@ -1005,11 +1055,12 @@ describe('D1 scheduling workflow', () => {
       idempotencyKey: '00000000-0000-4000-8000-000000000543',
       requestId: 'http-scope-hold',
     });
-    const otherScope: FacilityAccessScope = {
+    const otherScope: SchedulingScope = {
       organizationId: 'org-other',
       facilityId: 'fac-other',
       userId: 'user-other',
       membershipId: 'membership-other',
+      accessAssignmentId: 'orders-assignment-other',
       role: 'clinician',
     };
     const otherRepository = new D1SchedulingWorkflowRepository(
@@ -1017,5 +1068,43 @@ describe('D1 scheduling workflow', () => {
       otherScope,
     );
     await expect(otherRepository.getAppointment(held.id)).resolves.toBeNull();
+  });
+
+  it('rejects direct scheduling writes without an exact access assignment', () => {
+    const { database, primaryReferral } = fixture();
+    expect(() =>
+      database
+        .prepare(`
+          insert into scheduling_preference_snapshots (
+            id, organization_id, facility_id, patient_id,
+            referral_request_id, referral_version_id, version,
+            supersedes_preference_id, preferred_date_from, preferred_date_to,
+            earliest_local_time, latest_local_time, preferred_provider_id,
+            notes, notice_language, captured_by_membership_id,
+            access_assignment_id, captured_at
+          ) values (
+            'direct-preference', 'org-a', 'fac-a', 'patient-a', ?, ?, 1,
+            null, '2026-09-07', '2026-09-07', null, null, null,
+            null, 'ru', 'membership-a', null, ?
+          )
+        `)
+        .run(primaryReferral.requestId, primaryReferral.versionId, Date.now()),
+    ).toThrow(/exact current assignment/);
+
+    expect(() =>
+      database
+        .prepare(`
+          insert into command_idempotency (
+            id, organization_id, facility_id, actor_membership_id,
+            access_assignment_id, operation, idempotency_key, request_hash,
+            status, created_at
+          ) values (
+            'direct-command', 'org-a', 'fac-a', 'membership-a', null,
+            'scheduling.preference.create',
+            '00000000-0000-4000-8000-000000000599', ?, 'processing', ?
+          )
+        `)
+        .run('f'.repeat(64), Date.now()),
+    ).toThrow(/exact current assignment/);
   });
 });

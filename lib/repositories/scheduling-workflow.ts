@@ -1,9 +1,9 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
-import type { FacilityAccessScope } from '@/lib/auth/facility-access';
 import {
   requireSchedulingPermission,
   schedulingCapabilities,
   type SchedulingPermission,
+  type SchedulingScope,
 } from '@/lib/auth/scheduling-access';
 import {
   assertQueueTicketCanBeIssued,
@@ -444,7 +444,7 @@ function toQueueTicket(row: QueueRow): SchedulingQueueTicketRecord {
 export class D1SchedulingWorkflowRepository {
   constructor(
     private readonly database: D1Database,
-    private readonly scope: FacilityAccessScope,
+    private readonly scope: SchedulingScope,
   ) {}
 
   async list(input: SchedulingListInput = {}): Promise<SchedulingWorkspace> {
@@ -703,6 +703,7 @@ export class D1SchedulingWorkflowRepository {
   ): Promise<SchedulingPreferenceSnapshot> {
     requireSchedulingPermission(this.scope.role, 'preference.capture');
     const normalized = {
+      accessAssignmentId: this.scope.accessAssignmentId,
       serviceRequestId: input.serviceRequestId,
       serviceRequestVersionId: input.serviceRequestVersionId,
       preferredDateFrom: input.preferredDateFrom,
@@ -782,6 +783,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'scheduling_preference',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           preferenceVersion: response.version,
           serviceRequestId: response.serviceRequestId,
           dataMode: 'synthetic-only',
@@ -794,9 +796,10 @@ export class D1SchedulingWorkflowRepository {
               referral_request_id, referral_version_id, version,
               supersedes_preference_id, preferred_date_from, preferred_date_to,
               earliest_local_time, latest_local_time, preferred_provider_id,
-              notes, notice_language, captured_by_membership_id, captured_at
+              notes, notice_language, captured_by_membership_id,
+              access_assignment_id, captured_at
             ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-              ?11, ?12, ?13, ?14, ?15, ?16, ?17)`)
+              ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`)
             .bind(
               preferenceId,
               this.scope.organizationId,
@@ -814,6 +817,7 @@ export class D1SchedulingWorkflowRepository {
               response.notes,
               response.noticeLanguage,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
         ],
@@ -842,6 +846,7 @@ export class D1SchedulingWorkflowRepository {
   ): Promise<SchedulingAppointmentRecord> {
     requireSchedulingPermission(this.scope.role, 'appointment.hold');
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       serviceRequestId: input.serviceRequestId,
       slotId: input.slotId,
       preferenceSnapshotId: input.preferenceSnapshotId,
@@ -957,6 +962,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'appointment',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           slotId: slot.id,
           slotVersion: response.current.slotVersion,
           serviceRequestId: referral.serviceRequestId,
@@ -968,8 +974,9 @@ export class D1SchedulingWorkflowRepository {
           this.database
             .prepare(`insert into appointments (
               id, organization_id, facility_id, patient_id,
-              referral_request_id, created_by_membership_id, created_at
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
+              referral_request_id, created_by_membership_id,
+              access_assignment_id, created_at
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
             .bind(
               appointmentId,
               this.scope.organizationId,
@@ -977,6 +984,7 @@ export class D1SchedulingWorkflowRepository {
               referral.patientId,
               referral.serviceRequestId,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -984,9 +992,9 @@ export class D1SchedulingWorkflowRepository {
               id, organization_id, facility_id, appointment_id, version,
               supersedes_version_id, status, slot_id, preference_snapshot_id,
               referral_version_id, hold_expires_at, change_reason,
-              changed_by_membership_id, created_at
+              changed_by_membership_id, access_assignment_id, created_at
             ) values (?1, ?2, ?3, ?4, 1, null, 'held', ?5, ?6, ?7,
-              ?8, ?9, ?10, ?11)`)
+              ?8, ?9, ?10, ?11, ?12)`)
             .bind(
               appointmentVersionId,
               this.scope.organizationId,
@@ -998,6 +1006,7 @@ export class D1SchedulingWorkflowRepository {
               holdExpiresAt,
               reason,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -1018,9 +1027,10 @@ export class D1SchedulingWorkflowRepository {
               id, organization_id, facility_id, slot_id, version,
               supersedes_version_id, status, appointment_id, patient_id,
               referral_request_id, referral_version_id, held_by_membership_id,
-              hold_expires_at, change_reason, changed_by_membership_id, created_at
+              hold_expires_at, change_reason, changed_by_membership_id,
+              access_assignment_id, created_at
             ) values (?1, ?2, ?3, ?4, ?5, ?6, 'held', ?7, ?8, ?9,
-              ?10, ?11, ?12, ?13, ?11, ?14)`)
+              ?10, ?11, ?12, ?13, ?11, ?14, ?15)`)
             .bind(
               slotVersionId,
               this.scope.organizationId,
@@ -1035,6 +1045,7 @@ export class D1SchedulingWorkflowRepository {
               this.scope.membershipId,
               holdExpiresAt,
               reason,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -1075,6 +1086,7 @@ export class D1SchedulingWorkflowRepository {
     requireSchedulingPermission(this.scope.role, 'appointment.confirm');
     const reason = normalizeText(input.reason);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       appointmentId: input.appointmentId,
       expectedAppointmentVersion: input.expectedAppointmentVersion,
       expectedSlotVersion: input.expectedSlotVersion,
@@ -1175,6 +1187,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'appointment',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           appointmentVersion: response.current.version,
           slotId: slot.id,
           slotVersion: response.current.slotVersion,
@@ -1191,9 +1204,10 @@ export class D1SchedulingWorkflowRepository {
               referral_version_id, hold_expires_at, confirmation_subject,
               confirmation_method, confirmation_language,
               confirmation_statement_version, confirmation_statement_hash,
-              confirmed_at, change_reason, changed_by_membership_id, created_at
+              confirmed_at, change_reason, changed_by_membership_id,
+              access_assignment_id, created_at
             ) values (?1, ?2, ?3, ?4, ?5, ?6, 'confirmed', ?7, ?8,
-              ?9, null, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`)
+              ?9, null, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`)
             .bind(
               appointmentVersionId,
               this.scope.organizationId,
@@ -1212,6 +1226,7 @@ export class D1SchedulingWorkflowRepository {
               now,
               reason,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -1235,9 +1250,10 @@ export class D1SchedulingWorkflowRepository {
               id, organization_id, facility_id, slot_id, version,
               supersedes_version_id, status, appointment_id, patient_id,
               referral_request_id, referral_version_id, held_by_membership_id,
-              hold_expires_at, change_reason, changed_by_membership_id, created_at
+              hold_expires_at, change_reason, changed_by_membership_id,
+              access_assignment_id, created_at
             ) values (?1, ?2, ?3, ?4, ?5, ?6, 'booked', ?7, ?8,
-              ?9, ?10, ?11, null, ?12, ?13, ?14)`)
+              ?9, ?10, ?11, null, ?12, ?13, ?14, ?15)`)
             .bind(
               slotVersionId,
               this.scope.organizationId,
@@ -1252,6 +1268,7 @@ export class D1SchedulingWorkflowRepository {
               slot.heldByMembershipId ?? this.scope.membershipId,
               reason,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -1300,6 +1317,7 @@ export class D1SchedulingWorkflowRepository {
     requireSchedulingPermission(this.scope.role, permission[input.action]);
     const reason = normalizeText(input.reason);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       appointmentId: input.appointmentId,
       action: input.action,
       expectedAppointmentVersion: input.expectedAppointmentVersion,
@@ -1395,9 +1413,10 @@ export class D1SchedulingWorkflowRepository {
           referral_version_id, hold_expires_at, confirmation_subject,
           confirmation_method, confirmation_language,
           confirmation_statement_version, confirmation_statement_hash,
-          confirmed_at, change_reason, changed_by_membership_id, created_at
+          confirmed_at, change_reason, changed_by_membership_id,
+          access_assignment_id, created_at
         ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, null,
-          ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`)
+          ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`)
         .bind(
           appointmentVersionId,
           this.scope.organizationId,
@@ -1417,6 +1436,7 @@ export class D1SchedulingWorkflowRepository {
           appointment.confirmedAt,
           reason,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -1450,9 +1470,10 @@ export class D1SchedulingWorkflowRepository {
             id, organization_id, facility_id, slot_id, version,
             supersedes_version_id, status, appointment_id, patient_id,
             referral_request_id, referral_version_id, held_by_membership_id,
-            hold_expires_at, change_reason, changed_by_membership_id, created_at
+            hold_expires_at, change_reason, changed_by_membership_id,
+            access_assignment_id, created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, 'available', null, null,
-            null, null, null, null, ?7, ?8, ?9)`)
+            null, null, null, null, ?7, ?8, ?9, ?10)`)
           .bind(
             slotVersionId,
             this.scope.organizationId,
@@ -1462,6 +1483,7 @@ export class D1SchedulingWorkflowRepository {
             slot.currentVersionId,
             reason,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database
@@ -1489,9 +1511,10 @@ export class D1SchedulingWorkflowRepository {
           .prepare(`insert into queue_ticket_versions (
             id, organization_id, facility_id, queue_ticket_id, version,
             supersedes_version_id, status, room_label, exception_code,
-            exception_note, change_reason, changed_by_membership_id, created_at
+            exception_note, change_reason, changed_by_membership_id,
+            access_assignment_id, created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, 'cancelled', ?7, null,
-            null, ?8, ?9, ?10)`)
+            null, ?8, ?9, ?10, ?11)`)
           .bind(
             queueVersionId,
             this.scope.organizationId,
@@ -1502,6 +1525,7 @@ export class D1SchedulingWorkflowRepository {
             queue.roomLabel,
             reason,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database
@@ -1535,6 +1559,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'appointment',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           action: input.action,
           appointmentVersion: response.current.version,
           slotVersion: response.current.slotVersion,
@@ -1564,6 +1589,7 @@ export class D1SchedulingWorkflowRepository {
   ): Promise<SchedulingQueueTicketRecord> {
     requireSchedulingPermission(this.scope.role, 'queue.issue');
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       appointmentId: input.appointmentId,
       expectedAppointmentVersion: input.expectedAppointmentVersion,
       dataMode: 'synthetic-only',
@@ -1647,6 +1673,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'queue_ticket',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           appointmentId: appointment.id,
           serviceDate,
           sequence,
@@ -1658,8 +1685,8 @@ export class D1SchedulingWorkflowRepository {
             .prepare(`insert into queue_tickets (
               id, organization_id, facility_id, appointment_id, patient_id,
               service_date, sequence, display_number,
-              created_by_membership_id, created_at
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+              created_by_membership_id, access_assignment_id, created_at
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`)
             .bind(
               ticketId,
               this.scope.organizationId,
@@ -1670,15 +1697,17 @@ export class D1SchedulingWorkflowRepository {
               sequence,
               displayNumber,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
             .prepare(`insert into queue_ticket_versions (
               id, organization_id, facility_id, queue_ticket_id, version,
               supersedes_version_id, status, room_label, exception_code,
-              exception_note, change_reason, changed_by_membership_id, created_at
+              exception_note, change_reason, changed_by_membership_id,
+              access_assignment_id, created_at
             ) values (?1, ?2, ?3, ?4, 1, null, 'issued', null, null,
-              null, ?5, ?6, ?7)`)
+              null, ?5, ?6, ?7, ?8)`)
             .bind(
               versionId,
               this.scope.organizationId,
@@ -1686,6 +1715,7 @@ export class D1SchedulingWorkflowRepository {
               ticketId,
               reason,
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database
@@ -1734,6 +1764,7 @@ export class D1SchedulingWorkflowRepository {
     const normalizedExceptionCode = normalizeNullable(input.exceptionCode);
     const normalizedExceptionNote = normalizeNullable(input.exceptionNote);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       ticketId: input.ticketId,
       action: input.action,
       expectedQueueVersion: input.expectedQueueVersion,
@@ -1832,8 +1863,9 @@ export class D1SchedulingWorkflowRepository {
         .prepare(`insert into queue_ticket_versions (
           id, organization_id, facility_id, queue_ticket_id, version,
           supersedes_version_id, status, room_label, exception_code,
-          exception_note, change_reason, changed_by_membership_id, created_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`)
+          exception_note, change_reason, changed_by_membership_id,
+          access_assignment_id, created_at
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`)
         .bind(
           versionId,
           this.scope.organizationId,
@@ -1847,6 +1879,7 @@ export class D1SchedulingWorkflowRepository {
           exceptionNote,
           reason,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -1876,9 +1909,10 @@ export class D1SchedulingWorkflowRepository {
             referral_version_id, hold_expires_at, confirmation_subject,
             confirmation_method, confirmation_language,
             confirmation_statement_version, confirmation_statement_hash,
-            confirmed_at, change_reason, changed_by_membership_id, created_at
+            confirmed_at, change_reason, changed_by_membership_id,
+            access_assignment_id, created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, 'completed', ?7, ?8, ?9,
-            null, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)`)
+            null, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)`)
           .bind(
             appointmentVersionId,
             this.scope.organizationId,
@@ -1897,6 +1931,7 @@ export class D1SchedulingWorkflowRepository {
             appointment.confirmedAt,
             reason,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database
@@ -1929,6 +1964,7 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'queue_ticket',
         requestId: input.requestId,
         metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
           action: input.action,
           queueVersion: response.current.version,
           appointmentCompleted: Boolean(appointment),
@@ -1974,7 +2010,11 @@ export class D1SchedulingWorkflowRepository {
         entityType: 'facility_schedule',
         entityId: this.scope.facilityId,
         requestId: input.requestId,
-        metadata: { resultCount: input.resultCount, dataMode: 'synthetic-only' },
+        metadata: {
+          accessAssignmentId: this.scope.accessAssignmentId,
+          resultCount: input.resultCount,
+          dataMode: 'synthetic-only',
+        },
         occurredAt: Date.now(),
       });
       try {
@@ -2348,13 +2388,15 @@ export class D1SchedulingWorkflowRepository {
     return this.database
       .prepare(`insert into command_idempotency (
         id, organization_id, facility_id, actor_membership_id,
-        operation, idempotency_key, request_hash, status, created_at
-      ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)`)
+        access_assignment_id, operation, idempotency_key, request_hash,
+        status, created_at
+      ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'processing', ?9)`)
       .bind(
         input.id,
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         input.operation,
         input.key,
         input.requestHash,

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CommunicationScope } from '@/lib/auth/communication-access';
-import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import type { SchedulingScope } from '@/lib/auth/scheduling-access';
 import {
   SCHEDULING_CONFIRMATION_STATEMENT_VERSION,
   hashSchedulingConfirmationStatement,
@@ -45,11 +45,12 @@ const nurseScope: CommunicationScope = {
   membershipId: 'membership-care-nurse',
   role: 'nurse',
 };
-const schedulingClinicianScope: FacilityAccessScope = {
+const schedulingClinicianScope: SchedulingScope = {
   organizationId: clinicianScope.organizationId,
   facilityId: clinicianScope.facilityId,
   userId: clinicianScope.userId,
   membershipId: clinicianScope.membershipId,
+  accessAssignmentId: 'access-assignment-a-general-medicine',
   role: 'clinician',
 };
 const uuid = (value: number) =>

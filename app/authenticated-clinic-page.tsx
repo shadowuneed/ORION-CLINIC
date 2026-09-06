@@ -82,9 +82,13 @@ export async function getAuthenticatedClinicContext(
           !assignment.roles.includes('service') &&
           assignment.effectivePermissions.includes('orders.manage'),
       ),
-      scheduling: memberships.some(
-        (membership) =>
-          membership.role === 'clinician' || membership.role === 'registrar',
+      scheduling: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          !assignment.roles.includes('service') &&
+          (assignment.roles.includes('doctor') ||
+            assignment.roles.includes('registrar')) &&
+          assignment.effectivePermissions.includes('scheduling.manage'),
       ),
       chronicCare: memberships.some(
         (membership) =>
@@ -176,7 +180,7 @@ function capabilityDenialMessage(capability: ClinicCapability) {
     case 'orders':
       return 'Нужно действующее назначение врача с правом работы с направлениями.';
     case 'scheduling':
-      return 'Нужна активная роль врача или регистратора в выбранной клинике.';
+      return 'Нужно действующее назначение врача или регистратора с правом работы с расписанием.';
   }
 }
 

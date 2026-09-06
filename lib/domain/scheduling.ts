@@ -111,6 +111,7 @@ export async function hashSchedulingConfirmationStatement(
 export const schedulingListQuerySchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: id.optional(),
     dateFrom: isoDate.optional(),
     dateTo: isoDate.optional(),
     specialtyId: id.optional(),
@@ -165,6 +166,7 @@ export const preferredTimeRangeSchema = z
 export const createSchedulingPreferenceSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: id.optional(),
     serviceRequestId: id,
     serviceRequestVersionId: id,
     preferredDateFrom: isoDate,
@@ -203,6 +205,7 @@ export const createSchedulingPreferenceSchema = z
 
 export const holdSchedulingSlotSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: id.optional(),
   serviceRequestId: id,
   slotId: id,
   preferenceSnapshotId: id,
@@ -213,6 +216,7 @@ export const holdSchedulingSlotSchema = z.object({
 
 export const confirmSchedulingAppointmentSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: id.optional(),
   expectedAppointmentVersion: z.number().int().positive(),
   expectedSlotVersion: z.number().int().positive(),
   confirmation: z.object({
@@ -229,6 +233,7 @@ export const confirmSchedulingAppointmentSchema = z.object({
 
 export const schedulingAppointmentCommandSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: id.optional(),
   action: z.enum(['cancel', 'expire_hold', 'mark_no_show']),
   expectedAppointmentVersion: z.number().int().positive(),
   expectedSlotVersion: z.number().int().positive(),
@@ -238,6 +243,7 @@ export const schedulingAppointmentCommandSchema = z.object({
 
 export const issueSchedulingQueueTicketSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: id.optional(),
   appointmentId: id,
   expectedAppointmentVersion: z.number().int().positive(),
   testDataAcknowledged: z.literal(true),
@@ -247,6 +253,7 @@ export const issueSchedulingQueueTicketSchema = z.object({
 export const schedulingQueueCommandSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: id.optional(),
     action: z.enum([
       'arrive',
       'call',

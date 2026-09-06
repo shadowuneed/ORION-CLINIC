@@ -43,11 +43,12 @@ import {
 } from '@/lib/domain/scheduling';
 import styles from './scheduling.module.css';
 
-type FacilityOption = {
-  organizationId: string;
+type SchedulingAccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: 'clinician' | 'registrar';
 };
 
@@ -55,14 +56,20 @@ type ApiError = {
   code: string;
   message: string;
   requestId?: string;
-  details?: { facilities?: FacilityOption[] };
+  details?: { assignments?: SchedulingAccessAssignmentOption[] };
 };
 
 type SchedulingResponse = Partial<SchedulingWorkspaceData> & {
-  viewer?: { id: string; displayName: string; role: string };
+  viewer?: {
+    id: string;
+    displayName: string;
+    role: string;
+    accessAssignmentId: string;
+  };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignment?: SchedulingAccessAssignmentOption;
+  assignments?: SchedulingAccessAssignmentOption[];
   sourceLabel?: string;
   persistence?: 'd1';
   dataMode?: 'synthetic-only';
@@ -72,7 +79,7 @@ type SchedulingResponse = Partial<SchedulingWorkspaceData> & {
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -125,6 +132,26 @@ export function nextQueueAction(status: SchedulingQueueStatus): QueueAction | nu
 
 export function unknownSchedulingOutcomeMessage() {
   return 'Связь прервалась. Сервер мог сохранить действие. Обновите данные; если изменение не появилось, повторите — ORION использует тот же ключ защиты от дублей.';
+}
+
+export function buildSchedulingAccessQuery(input: {
+  accessAssignmentId?: string;
+  facilityId?: string;
+  limit?: number;
+}) {
+  const params = new URLSearchParams({ limit: String(input.limit ?? 200) });
+  if (input.accessAssignmentId) {
+    params.set('accessAssignmentId', input.accessAssignmentId);
+  }
+  if (input.facilityId) params.set('facilityId', input.facilityId);
+  return params.toString();
+}
+
+export function buildSchedulingOperationKey(
+  accessAssignmentId: string,
+  operation: string,
+) {
+  return `${accessAssignmentId || 'unscoped'}:${operation}`;
 }
 
 export function isExpiredSchedulingHold(
@@ -182,8 +209,10 @@ export function SchedulingWorkspace() {
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<SchedulingResponse>({});
   const [selectedReferralId, setSelectedReferralId] = useState('');
-  const [selectedFacilityId, setSelectedFacilityId] = useState('');
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  const [selectedAccessAssignmentId, setSelectedAccessAssignmentId] = useState('');
+  const [assignmentOptions, setAssignmentOptions] = useState<
+    SchedulingAccessAssignmentOption[]
+  >([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<ApiError | null>(null);
@@ -200,8 +229,11 @@ export function SchedulingWorkspace() {
   const [exceptionNote, setExceptionNote] = useState('Требуется ручная сверка ситуации');
 
   const facilityRef = useRef('');
+  const accessAssignmentRef = useRef('');
   const selectedReferralRef = useRef('');
   const commandKeys = useRef(new Map<string, string>());
+  const loadGeneration = useRef(0);
+  const loadAbort = useRef<AbortController | null>(null);
 
   const selectReferral = useCallback((id: string) => {
     selectedReferralRef.current = id;
@@ -214,24 +246,32 @@ export function SchedulingWorkspace() {
 
   const load = useCallback(
     async (preferredReferralId?: string, options?: { quiet?: boolean }) => {
+      const generation = ++loadGeneration.current;
+      loadAbort.current?.abort();
+      const controller = new AbortController();
+      loadAbort.current = controller;
       if (!options?.quiet) setState('loading');
       try {
-        const params = new URLSearchParams({ limit: '200' });
-        if (facilityRef.current) params.set('facilityId', facilityRef.current);
-        const response = await fetch(`/api/scheduling?${params.toString()}`, {
+        const query = buildSchedulingAccessQuery({
+          accessAssignmentId: accessAssignmentRef.current,
+          facilityId: facilityRef.current,
+        });
+        const response = await fetch(`/api/scheduling?${query}`, {
           cache: 'no-store',
           credentials: 'same-origin',
+          signal: controller.signal,
         });
         const payload = (await response.json()) as SchedulingResponse;
+        if (generation !== loadGeneration.current) return;
         setData(payload);
         if (response.status === 401) {
           setState('unauthenticated');
         } else if (
           response.status === 409 &&
-          payload.error?.code === 'FACILITY_SELECTION_REQUIRED'
+          payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
         ) {
-          setFacilityOptions(payload.error.details?.facilities ?? []);
-          setState('facility');
+          setAssignmentOptions(payload.error.details?.assignments ?? []);
+          setState('assignment');
         } else if (response.status === 403) {
           setState('forbidden');
         } else if (
@@ -246,9 +286,18 @@ export function SchedulingWorkspace() {
           setState('error');
         } else {
           const resolvedFacility = payload.facility?.id ?? facilityRef.current;
+          const resolvedAssignment =
+            payload.viewer?.accessAssignmentId ?? accessAssignmentRef.current;
           facilityRef.current = resolvedFacility;
-          setSelectedFacilityId(resolvedFacility);
-          setFacilityOptions(payload.facilities ?? []);
+          accessAssignmentRef.current = resolvedAssignment;
+          setSelectedAccessAssignmentId(resolvedAssignment);
+          setAssignmentOptions(payload.assignments ?? []);
+          const url = new URL(window.location.href);
+          if (resolvedFacility) url.searchParams.set('facilityId', resolvedFacility);
+          if (resolvedAssignment) {
+            url.searchParams.set('accessAssignmentId', resolvedAssignment);
+          }
+          window.history.replaceState(null, '', url);
           const candidate = preferredReferralId ?? selectedReferralRef.current;
           const nextReferral = payload.eligibleReferrals.some(
             (referral) => referral.serviceRequestId === candidate,
@@ -259,7 +308,14 @@ export function SchedulingWorkspace() {
           setSelectedReferralId(nextReferral);
           setState('ready');
         }
-      } catch {
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          generation !== loadGeneration.current ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return;
+        }
         setState('error');
       }
     },
@@ -270,10 +326,14 @@ export function SchedulingWorkspace() {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       facilityRef.current = params.get('facilityId') ?? '';
-      setSelectedFacilityId(facilityRef.current);
+      accessAssignmentRef.current = params.get('accessAssignmentId') ?? '';
+      setSelectedAccessAssignmentId(accessAssignmentRef.current);
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      loadAbort.current?.abort();
+    };
   }, [load]);
 
   const referrals = data.eligibleReferrals ?? [];
@@ -315,11 +375,21 @@ export function SchedulingWorkspace() {
     );
   });
 
-  function selectFacility(facilityId: string) {
-    facilityRef.current = facilityId;
-    setSelectedFacilityId(facilityId);
+  function selectAccessAssignment(assignmentId: string) {
+    const assignment = assignmentOptions.find(
+      (option) => option.assignmentId === assignmentId,
+    );
+    if (!assignment) return;
+    accessAssignmentRef.current = assignment.assignmentId;
+    facilityRef.current = assignment.facilityId;
+    setSelectedAccessAssignmentId(assignment.assignmentId);
+    selectedReferralRef.current = '';
+    setSelectedReferralId('');
+    setMessage(null);
+    setOperationError(null);
     const url = new URL(window.location.href);
-    url.searchParams.set('facilityId', facilityId);
+    url.searchParams.set('accessAssignmentId', assignment.assignmentId);
+    url.searchParams.set('facilityId', assignment.facilityId);
     window.history.replaceState(null, '', url);
     void load();
   }
@@ -331,8 +401,13 @@ export function SchedulingWorkspace() {
     pick: (response: Record<string, unknown>) => T | undefined,
   ) {
     if (busy) return null;
-    const idempotencyKey = commandKeys.current.get(operation) ?? crypto.randomUUID();
-    commandKeys.current.set(operation, idempotencyKey);
+    const scopedOperation = buildSchedulingOperationKey(
+      accessAssignmentRef.current,
+      operation,
+    );
+    const idempotencyKey =
+      commandKeys.current.get(scopedOperation) ?? crypto.randomUUID();
+    commandKeys.current.set(scopedOperation, idempotencyKey);
     setBusy(operation);
     setMessage(null);
     setOperationError(null);
@@ -343,6 +418,9 @@ export function SchedulingWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
+          ...(accessAssignmentRef.current
+            ? { accessAssignmentId: accessAssignmentRef.current }
+            : {}),
           ...(facilityRef.current ? { facilityId: facilityRef.current } : {}),
           idempotencyKey,
         }),
@@ -350,7 +428,7 @@ export function SchedulingWorkspace() {
       const responsePayload = (await response.json()) as Record<string, unknown> & {
         error?: ApiError;
       };
-      commandKeys.current.delete(operation);
+      commandKeys.current.delete(scopedOperation);
       if (!response.ok) {
         setOperationError(
           responsePayload.error ?? {
@@ -542,10 +620,10 @@ export function SchedulingWorkspace() {
         title: 'Загружаем расписание',
         text: 'Читаем актуальные версии направлений, слотов и очереди из локальной D1.',
       },
-      facility: {
+      assignment: {
         icon: <MapPin aria-hidden="true" size={28} />,
-        title: 'Выберите клинику',
-        text: 'Доступно несколько площадок. Данные между ними не смешиваются.',
+        title: 'Выберите рабочее назначение',
+        text: 'Доступно несколько отделений или ролей. Права между ними не объединяются.',
       },
       unauthenticated: {
         icon: <ShieldCheck aria-hidden="true" size={28} />,
@@ -572,16 +650,20 @@ export function SchedulingWorkspace() {
           title={content.title}
           text={content.text}
           action={
-            state === 'facility' ? (
+            state === 'assignment' ? (
               <div className={styles.facilityChoices}>
-                {facilityOptions.map((facility) => (
+                {assignmentOptions.map((assignment) => (
                   <button
                     className={styles.primaryButton}
-                    key={`${facility.organizationId}:${facility.facilityId}`}
-                    onClick={() => selectFacility(facility.facilityId)}
+                    key={assignment.assignmentId}
+                    onClick={() =>
+                      selectAccessAssignment(assignment.assignmentId)
+                    }
                     type="button"
                   >
-                    {facility.organizationName} · {facility.facilityName}
+                    {assignment.organizationName} · {assignment.facilityName} ·{' '}
+                    {assignment.departmentName} ·{' '}
+                    {assignment.role === 'clinician' ? 'Врач' : 'Регистратор'}
                   </button>
                 ))}
               </div>
@@ -666,10 +748,18 @@ export function SchedulingWorkspace() {
           </span>
         </label>
         <div className={styles.toolbarActions}>
-          {facilityOptions.length > 1 ? (
-            <select aria-label="Клиника" onChange={(event) => selectFacility(event.target.value)} value={selectedFacilityId}>
-              {facilityOptions.map((facility) => (
-                <option key={`${facility.organizationId}:${facility.facilityId}`} value={facility.facilityId}>{facility.facilityName}</option>
+          {assignmentOptions.length > 1 ? (
+            <select
+              aria-label="Рабочее назначение"
+              disabled={Boolean(busy)}
+              onChange={(event) => selectAccessAssignment(event.target.value)}
+              value={selectedAccessAssignmentId}
+            >
+              {assignmentOptions.map((assignment) => (
+                <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                  {assignment.facilityName} · {assignment.departmentName} ·{' '}
+                  {assignment.role === 'clinician' ? 'Врач' : 'Регистратор'}
+                </option>
               ))}
             </select>
           ) : null}

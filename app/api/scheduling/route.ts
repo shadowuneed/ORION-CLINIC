@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { resolveFacilityAccess } from '@/lib/auth/facility-access';
+import { resolveSchedulingAccess } from '@/lib/auth/scheduling-access';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { schedulingListQuerySchema, SYNTHETIC_SCHEDULE_SOURCE_LABEL } from '@/lib/domain/scheduling';
@@ -10,7 +10,7 @@ import {
 } from '@/lib/http/api-response';
 import { schedulingApiFailure } from '@/lib/http/scheduling-api-errors';
 import { D1SchedulingWorkflowRepository } from '@/lib/repositories/scheduling-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = schedulingListQuerySchema.safeParse({
     facilityId: url.searchParams.get('facilityId') ?? undefined,
+    accessAssignmentId: url.searchParams.get('accessAssignmentId') ?? undefined,
     dateFrom: url.searchParams.get('dateFrom') ?? undefined,
     dateTo: url.searchParams.get('dateTo') ?? undefined,
     specialtyId: url.searchParams.get('specialtyId') ?? undefined,
@@ -48,9 +49,10 @@ export async function GET(request: Request) {
     if (!identity) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
-    const access = await resolveFacilityAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+    const access = await resolveSchedulingAccess(
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      parsed.data.accessAssignmentId,
       parsed.data.facilityId,
     );
     const repository = new D1SchedulingWorkflowRepository(env.DB, access.scope);
@@ -66,11 +68,17 @@ export async function GET(request: Request) {
       viewer: {
         id: access.user.id,
         displayName: access.user.displayName,
-        role: access.membership.role,
+        role: access.scope.role,
+        accessAssignmentId: access.scope.accessAssignmentId,
       },
       organization: access.organization,
       facility: access.facility,
-      facilities: access.facilities,
+      accessAssignment: {
+        assignmentId: access.assignment.assignmentId,
+        departmentName: access.assignment.department.name,
+        role: access.scope.role,
+      },
+      assignments: access.assignments,
       sourceLabel: SYNTHETIC_SCHEDULE_SOURCE_LABEL,
       ...workspace,
       persistence: 'd1',

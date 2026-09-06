@@ -1,11 +1,14 @@
 import type { ApiRequestContext } from '@/lib/http/api-response';
 import { apiFailure } from '@/lib/http/api-response';
 import {
-  MultipleFacilitySelectionRequiredError,
-  FacilityAccessNotFoundError,
-  PatientDirectoryMembershipRequiredError,
-} from '@/lib/auth/facility-access';
-import { SchedulingPermissionRequiredError } from '@/lib/auth/scheduling-access';
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
+import {
+  MultipleSchedulingAccessSelectionRequiredError,
+  SchedulingPermissionRequiredError,
+} from '@/lib/auth/scheduling-access';
 import {
   SchedulingAuditUnavailableError,
   SchedulingConflictError,
@@ -21,23 +24,22 @@ export function schedulingApiFailure(
   fallbackCode: string,
   fallbackMessage: string,
 ) {
-  if (error instanceof PatientDirectoryMembershipRequiredError) {
-    return apiFailure(context, 403, 'SCHEDULING_ACCESS_REQUIRED', 'Нет доступа к расписанию.');
-  }
-  if (error instanceof MultipleFacilitySelectionRequiredError) {
+  if (error instanceof MultipleSchedulingAccessSelectionRequiredError) {
     return apiFailure(
       context,
       409,
-      'FACILITY_SELECTION_REQUIRED',
-      'Выберите клинику для работы с расписанием.',
-      { facilities: error.facilities },
+      'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+      'Выберите рабочее назначение для расписания.',
+      { assignments: error.assignments },
     );
   }
-  if (error instanceof FacilityAccessNotFoundError) {
-    return apiFailure(context, 404, 'SCHEDULING_NOT_FOUND', 'Запись не найдена.');
-  }
-  if (error instanceof SchedulingPermissionRequiredError) {
-    return apiFailure(context, 403, 'SCHEDULING_PERMISSION_REQUIRED', 'Недостаточно прав для этого действия.');
+  if (
+    error instanceof AccessMembershipRequiredError ||
+    error instanceof AccessAssignmentNotFoundError ||
+    error instanceof AccessPermissionRequiredError ||
+    error instanceof SchedulingPermissionRequiredError
+  ) {
+    return apiFailure(context, 403, 'SCHEDULING_FORBIDDEN', 'Нет доступа к расписанию.');
   }
   if (error instanceof SchedulingNotFoundError) {
     return apiFailure(context, 404, 'SCHEDULING_NOT_FOUND', 'Запись не найдена.');

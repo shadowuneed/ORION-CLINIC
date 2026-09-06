@@ -4451,6 +4451,9 @@ export const appointmentSlotVersions = sqliteTable(
     holdExpiresAt: integer('hold_expires_at', { mode: 'timestamp_ms' }),
     changeReason: text('change_reason').notNull(),
     changedByMembershipId: text('changed_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -4468,6 +4471,12 @@ export const appointmentSlotVersions = sqliteTable(
     ),
     uniqueIndex('appointment_slot_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('appointment_slot_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'appointment_slot_versions_scope_slot_fk',
@@ -4598,6 +4607,9 @@ export const schedulingPreferenceSnapshots = sqliteTable(
     notes: text('notes'),
     noticeLanguage: text('notice_language', { enum: ['ru', 'kk'] }).notNull(),
     capturedByMembershipId: text('captured_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     capturedAt: integer('captured_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [
@@ -4619,6 +4631,12 @@ export const schedulingPreferenceSnapshots = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.patientId,
+      table.capturedAt,
+    ),
+    index('scheduling_preferences_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
       table.capturedAt,
     ),
     foreignKey({
@@ -4695,6 +4713,9 @@ export const appointments = sqliteTable(
     patientId: text('patient_id').notNull(),
     referralRequestId: text('referral_request_id').notNull(),
     createdByMembershipId: text('created_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -4712,6 +4733,12 @@ export const appointments = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.patientId,
+      table.createdAt,
+    ),
+    index('appointments_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
       table.createdAt,
     ),
     foreignKey({
@@ -4777,6 +4804,9 @@ export const appointmentVersions = sqliteTable(
     confirmedAt: integer('confirmed_at', { mode: 'timestamp_ms' }),
     changeReason: text('change_reason').notNull(),
     changedByMembershipId: text('changed_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -4794,6 +4824,12 @@ export const appointmentVersions = sqliteTable(
     ),
     uniqueIndex('appointment_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('appointment_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'appointment_versions_scope_appointment_fk',
@@ -4936,6 +4972,9 @@ export const queueTickets = sqliteTable(
     sequence: integer('sequence').notNull(),
     displayNumber: text('display_number').notNull(),
     createdByMembershipId: text('created_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -4954,6 +4993,12 @@ export const queueTickets = sqliteTable(
       table.facilityId,
       table.serviceDate,
       table.sequence,
+    ),
+    index('queue_tickets_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'queue_tickets_scope_appointment_fk',
@@ -5004,6 +5049,9 @@ export const queueTicketVersions = sqliteTable(
     exceptionNote: text('exception_note'),
     changeReason: text('change_reason').notNull(),
     changedByMembershipId: text('changed_by_membership_id').notNull(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -5021,6 +5069,12 @@ export const queueTicketVersions = sqliteTable(
     ),
     uniqueIndex('queue_ticket_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('queue_ticket_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'queue_ticket_versions_scope_ticket_fk',

@@ -225,6 +225,13 @@
       "when": 1788699189777,
       "tag": "0031_bouncy_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1788702571399,
+      "tag": "0032_low_amazoness",
+      "breakpoints": true
     }
   ]
 }

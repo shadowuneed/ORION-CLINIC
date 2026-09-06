@@ -168,13 +168,14 @@ INSERT INTO appointment_slot_versions (
   id, organization_id, facility_id, slot_id, version,
   supersedes_version_id, status, appointment_id, patient_id,
   referral_request_id, referral_version_id, held_by_membership_id,
-  hold_expires_at, change_reason, changed_by_membership_id, created_at
+  hold_expires_at, change_reason, changed_by_membership_id,
+  access_assignment_id, created_at
 )
 SELECT
   'version-' || column1 || '-v1', 'org-a', 'fac-a', column1, 1,
   NULL, 'available', NULL, NULL, NULL, NULL, NULL, NULL,
   'Создано из явно обозначенного ручного тестового расписания',
-  'membership-a', 1788595200000
+  'membership-a', 'access-assignment-a-general-medicine', 1788595200000
 FROM (VALUES
   ('slot-endo-2027-01-14-0800'),
   ('slot-endo-2027-01-14-0900'),

@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { resolveFacilityAccess } from '@/lib/auth/facility-access';
+import { resolveSchedulingAccess } from '@/lib/auth/scheduling-access';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { holdSchedulingSlotSchema } from '@/lib/domain/scheduling';
@@ -11,7 +11,7 @@ import {
 } from '@/lib/http/api-response';
 import { schedulingApiFailure } from '@/lib/http/scheduling-api-errors';
 import { D1SchedulingWorkflowRepository } from '@/lib/repositories/scheduling-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,9 +39,10 @@ export async function POST(request: Request) {
     if (!identity) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
-    const access = await resolveFacilityAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+    const access = await resolveSchedulingAccess(
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const appointment = await new D1SchedulingWorkflowRepository(
