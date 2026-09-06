@@ -22,6 +22,7 @@ export const patientBirthDateSchema = z
 
 export const createPatientSchema = z.object({
   facilityId: z.string().min(1).max(100).optional(),
+  accessAssignmentId: z.string().min(1).max(160).optional(),
   displayName: cleanText(2, 160),
   birthDate: patientBirthDateSchema.nullable(),
   sexAtBirth: z.enum(['female', 'male', 'unknown', 'not_recorded']),
@@ -39,6 +40,7 @@ export const createPatientSchema = z.object({
 
 export const createPatientEncounterSchema = z.object({
   facilityId: z.string().min(1).max(100).optional(),
+  accessAssignmentId: z.string().min(1).max(160).optional(),
   reasonForVisit: cleanText(2, 500).nullable(),
   idempotencyKey: z.string().uuid(),
 });
@@ -54,6 +56,7 @@ const patientProfileFields = {
 
 export const updatePatientProfileSchema = z.object({
   facilityId: z.string().min(1).max(100).optional(),
+  accessAssignmentId: z.string().min(1).max(160).optional(),
   ...patientProfileFields,
   changeReason: cleanText(3, 300),
   testDataAcknowledged: z.literal(true),
@@ -63,6 +66,7 @@ export const updatePatientProfileSchema = z.object({
 
 export const archivePatientProfileSchema = z.object({
   facilityId: z.string().min(1).max(100).optional(),
+  accessAssignmentId: z.string().min(1).max(160).optional(),
   changeReason: cleanText(3, 300),
   testDataAcknowledged: z.literal(true),
   expectedVersion: z.number().int().positive(),
@@ -71,6 +75,7 @@ export const archivePatientProfileSchema = z.object({
 
 export const patientListQuerySchema = z.object({
   facilityId: z.string().min(1).max(100).optional(),
+  accessAssignmentId: z.string().min(1).max(160).optional(),
   query: z.string().trim().max(120).optional(),
   status: z.enum(['active', 'inactive', 'merged', 'all']).default('active'),
   limit: z.coerce.number().int().min(1).max(100).default(50),

@@ -1,13 +1,19 @@
 import { env } from 'cloudflare:workers';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import {
-  FacilityAccessNotFoundError,
-  MultipleFacilitySelectionRequiredError,
-  PatientDirectoryMembershipRequiredError,
-  resolveFacilityAccess,
-} from '@/lib/auth/facility-access';
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
+import {
+  MultiplePatientAccessSelectionRequiredError,
+  resolvePatientDirectoryAccess,
+} from '@/lib/auth/patient-directory-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { detectPatientPhotoMime } from '@/lib/domain/patient-photo';
+import {
+  D1AccessGovernanceRepository,
+} from '@/lib/repositories/access-governance';
 import {
   apiBinarySuccess,
   apiFailure,
@@ -21,7 +27,6 @@ import {
   PatientReadAuditUnavailableError,
   sha256Bytes,
 } from '@/lib/repositories/patient-registry';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,13 +37,19 @@ const supportedTypes = new Map([
 ]);
 const maxPhotoBytes = 4 * 1024 * 1024;
 
-async function resolveAccess(request: Request) {
+async function resolveAccess(
+  request: Request,
+  permission: 'patient.directory.read' | 'patient.profile.write',
+) {
   const identity = getSiteIdentity(request);
   if (!identity) return null;
-  return resolveFacilityAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+  const url = new URL(request.url);
+  return resolvePatientDirectoryAccess(
+    new D1AccessGovernanceRepository(env.DB),
     toSiteIdentityPrincipal(identity),
-    new URL(request.url).searchParams.get('facilityId') ?? undefined,
+    permission,
+    url.searchParams.get('accessAssignmentId') ?? undefined,
+    url.searchParams.get('facilityId') ?? undefined,
   );
 }
 
@@ -48,7 +59,7 @@ export async function GET(
 ) {
   const context = createApiRequestContext(request, '/api/patients/:patientId/photo');
   try {
-    const access = await resolveAccess(request);
+    const access = await resolveAccess(request, 'patient.directory.read');
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const { patientId } = await params;
     const repository = new D1PatientRegistryRepository(env.DB, access.scope);
@@ -81,18 +92,19 @@ export async function GET(
     if (error instanceof PatientReadAuditUnavailableError) {
       return apiFailure(context, 503, 'PATIENT_AUDIT_UNAVAILABLE', 'Фотография не выдана: аудит чтения временно недоступен.');
     }
-    if (error instanceof MultipleFacilitySelectionRequiredError) {
+    if (error instanceof MultiplePatientAccessSelectionRequiredError) {
       return apiFailure(
         context,
         409,
-        'FACILITY_SELECTION_REQUIRED',
-        'Выберите филиал.',
-        { facilities: error.facilities },
+        'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+        'Выберите рабочий контур.',
+        { assignments: error.assignments },
       );
     }
     if (
-      error instanceof PatientDirectoryMembershipRequiredError ||
-      error instanceof FacilityAccessNotFoundError
+      error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError
     ) {
       return apiFailure(context, 403, 'PATIENT_DIRECTORY_FORBIDDEN', 'Нет доступа к фотографии.');
     }
@@ -122,7 +134,7 @@ export async function PUT(
     if (!config.syntheticDataOnly) {
       return apiFailure(context, 503, 'DATA_MODE_NOT_APPROVED', 'Загрузка фотографии отключена конфигурацией.');
     }
-    const access = await resolveAccess(request);
+    const access = await resolveAccess(request, 'patient.profile.write');
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const { patientId } = await params;
     const bytes = await request.arrayBuffer();
@@ -154,7 +166,7 @@ export async function PUT(
       return apiSuccess(context, {
         photo: {
           id: photo.id,
-          url: `/api/patients/${encodeURIComponent(patientId)}/photo?facilityId=${encodeURIComponent(access.scope.facilityId)}`,
+          url: `/api/patients/${encodeURIComponent(patientId)}/photo?facilityId=${encodeURIComponent(access.scope.facilityId)}&accessAssignmentId=${encodeURIComponent(access.assignment.assignmentId)}`,
           mimeType: photo.mimeType,
           byteSize: photo.byteSize,
           sha256: photo.sha256,
@@ -172,18 +184,19 @@ export async function PUT(
       return apiFailure(context, 404, 'PATIENT_NOT_FOUND', 'Карточка не найдена.');
     }
     if (
-      error instanceof PatientDirectoryMembershipRequiredError ||
-      error instanceof FacilityAccessNotFoundError
+      error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError
     ) {
       return apiFailure(context, 403, 'PATIENT_DIRECTORY_FORBIDDEN', 'Нет доступа к фотографии.');
     }
-    if (error instanceof MultipleFacilitySelectionRequiredError) {
+    if (error instanceof MultiplePatientAccessSelectionRequiredError) {
       return apiFailure(
         context,
         409,
-        'FACILITY_SELECTION_REQUIRED',
-        'Выберите филиал.',
-        { facilities: error.facilities },
+        'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+        'Выберите рабочий контур.',
+        { assignments: error.assignments },
       );
     }
     return apiFailure(context, 500, 'PATIENT_PHOTO_SAVE_FAILED', 'Не удалось сохранить фотографию.');

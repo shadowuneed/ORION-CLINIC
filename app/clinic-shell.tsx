@@ -19,6 +19,7 @@ import {
   HeartPulse,
   MessageSquareText,
   ShieldCheck,
+  KeyRound,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 
@@ -33,11 +34,13 @@ const navigation = [
   { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
   { href: '/observations', label: 'Показатели', icon: Activity, badge: 'D1', capability: 'observations' },
   { href: '/communications', label: 'Связь с пациентом', icon: MessageSquareText, badge: 'D1', capability: 'communications' },
+  { href: '/access/manage', label: 'Управление доступом', icon: KeyRound, badge: 'D1', capability: 'accessAdministration' },
   { href: '/access', label: 'Мой доступ', icon: ShieldCheck, badge: 'D1', capability: 'accessOverview' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
+  if (href === '/access') return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -76,6 +79,7 @@ export function ClinicShell({
     observations: boolean;
     communications: boolean;
     accessOverview: boolean;
+    accessAdministration: boolean;
   };
   user: { displayName: string; email: string | null };
 }) {

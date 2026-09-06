@@ -1,15 +1,19 @@
 import { env } from 'cloudflare:workers';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import {
-  FacilityAccessNotFoundError,
-  MultipleFacilitySelectionRequiredError,
-  PatientDirectoryMembershipRequiredError,
-  PatientProfilePermissionRequiredError,
-  requirePatientProfilePermission,
-  resolveFacilityAccess,
-} from '@/lib/auth/facility-access';
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
+import {
+  MultiplePatientAccessSelectionRequiredError,
+  resolvePatientDirectoryAccess,
+} from '@/lib/auth/patient-directory-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { archivePatientProfileSchema } from '@/lib/domain/patient';
+import {
+  D1AccessGovernanceRepository,
+} from '@/lib/repositories/access-governance';
 import {
   apiFailure,
   apiSuccess,
@@ -25,7 +29,6 @@ import {
   PatientProfileVersionConflictError,
   PatientRegistryConflictError,
 } from '@/lib/repositories/patient-registry';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,12 +69,13 @@ export async function POST(
         'Архивирование отключено конфигурацией.',
       );
     }
-    const access = await resolveFacilityAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+    const access = await resolvePatientDirectoryAccess(
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      'patient.profile.write',
+      payload.accessAssignmentId,
       payload.facilityId,
     );
-    requirePatientProfilePermission(access.membership.role, 'patient.archive');
     const patient = await new D1PatientRegistryRepository(
       env.DB,
       access.scope,
@@ -136,15 +140,15 @@ export async function POST(
         'Команда конфликтует с уже сохранённым состоянием. Обновите карточку.',
       );
     }
-    if (error instanceof MultipleFacilitySelectionRequiredError) {
-      return apiFailure(context, 409, 'FACILITY_SELECTION_REQUIRED', 'Выберите филиал.', {
-        facilities: error.facilities,
+    if (error instanceof MultiplePatientAccessSelectionRequiredError) {
+      return apiFailure(context, 409, 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED', 'Выберите рабочий контур.', {
+        assignments: error.assignments,
       });
     }
     if (
-      error instanceof PatientDirectoryMembershipRequiredError ||
-      error instanceof FacilityAccessNotFoundError ||
-      error instanceof PatientProfilePermissionRequiredError
+      error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError
     ) {
       return apiFailure(
         context,

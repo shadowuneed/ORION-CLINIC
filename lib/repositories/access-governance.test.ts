@@ -226,7 +226,7 @@ function insertScope(
         roles_json, allow_permissions_json, deny_permissions_json,
         effective_from, effective_until, change_reason,
         changed_by_membership_id, changed_at
-      ) values (?, ?, ?, ?, ?, ?, 1, null, 'active', 'administrator',
+      ) values (?, ?, ?, ?, ?, ?, 1, null, 'active', 'bootstrap',
         ?, ?, ?, ?, null, 'Initial test assignment', ?, ?)
     `)
     .run(
@@ -299,7 +299,7 @@ function insertSuccessor(
         roles_json, allow_permissions_json, deny_permissions_json,
         effective_from, effective_until, change_reason,
         changed_by_membership_id, changed_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'administrator',
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'bootstrap',
         ?, ?, ?, ?, null, 'Updated test assignment', ?, ?)
     `)
     .run(
@@ -341,7 +341,7 @@ describe('D1 access-governance repository', () => {
       assignmentVersionId: scope.versionId,
       assignmentVersion: 1,
       status: 'active',
-      source: 'administrator',
+      source: 'bootstrap',
       organization: { id: scope.organizationId, status: 'active' },
       facility: { id: scope.facilityId, status: 'active' },
       department: { id: scope.departmentId, status: 'active' },

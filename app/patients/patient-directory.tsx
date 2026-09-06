@@ -22,28 +22,32 @@ type DirectoryResponse = {
   viewer?: { id: string; displayName: string; role: string };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignment?: { assignmentId: string };
+  assignments?: AssignmentOption[];
   patients?: PatientSummary[];
   error?: {
     code: string;
     message: string;
     requestId: string;
-    details?: { facilities?: FacilityOption[] };
+    details?: { assignments?: AssignmentOption[] };
   };
 };
 
-type FacilityOption = {
+type AssignmentOption = {
+  assignmentId: string;
   organizationId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
-  role: 'clinician' | 'registrar';
+  departmentId: string;
+  departmentName: string;
+  roles: string[];
 };
 
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -99,15 +103,18 @@ export function PatientDirectory() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOption[]>([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
   const selectedFacilityRef = useRef('');
+  const selectedAssignmentRef = useRef('');
   const statusFilterRef = useRef<PatientListStatus>('active');
   const createKey = useRef<string | null>(null);
 
   const load = useCallback(async (
     search = '',
     facilityId = selectedFacilityRef.current,
+    assignmentId = selectedAssignmentRef.current,
     status = statusFilterRef.current,
   ) => {
     setState('loading');
@@ -115,6 +122,7 @@ export function PatientDirectory() {
       const params = new URLSearchParams({ status, limit: '100' });
       if (search.trim()) params.set('query', search.trim());
       if (facilityId) params.set('facilityId', facilityId);
+      if (assignmentId) params.set('accessAssignmentId', assignmentId);
       const response = await fetch(`/api/patients?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
@@ -124,18 +132,22 @@ export function PatientDirectory() {
       if (response.status === 401) setState('unauthenticated');
       else if (
         response.status === 409 &&
-        payload.error?.code === 'FACILITY_SELECTION_REQUIRED'
+        payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
       ) {
-        setFacilityOptions(payload.error.details?.facilities ?? []);
-        setState('facility');
+        setAssignmentOptions(payload.error.details?.assignments ?? []);
+        setState('assignment');
       }
       else if (response.status === 403) setState('forbidden');
       else if (!response.ok || !payload.patients) setState('error');
       else {
         const resolvedFacilityId = payload.facility?.id ?? facilityId;
-        setFacilityOptions(payload.facilities ?? []);
+        const resolvedAssignmentId =
+          payload.accessAssignment?.assignmentId ?? assignmentId;
+        setAssignmentOptions(payload.assignments ?? []);
         selectedFacilityRef.current = resolvedFacilityId;
+        selectedAssignmentRef.current = resolvedAssignmentId;
         setSelectedFacilityId(resolvedFacilityId);
+        setSelectedAssignmentId(resolvedAssignmentId);
         setState('ready');
       }
     } catch {
@@ -146,28 +158,39 @@ export function PatientDirectory() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const facilityId = params.get('facilityId') ?? '';
+    const assignmentId = params.get('accessAssignmentId') ?? '';
     const requestedStatus = params.get('status');
     const status: PatientListStatus =
       requestedStatus === 'inactive' || requestedStatus === 'all'
         ? requestedStatus
         : 'active';
     selectedFacilityRef.current = facilityId;
+    selectedAssignmentRef.current = assignmentId;
     statusFilterRef.current = status;
     const timer = window.setTimeout(() => {
       setSelectedFacilityId(facilityId);
+      setSelectedAssignmentId(assignmentId);
       setStatusFilter(status);
-      void load('', facilityId, status);
+      void load('', facilityId, assignmentId, status);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  function selectFacility(facilityId: string) {
-    selectedFacilityRef.current = facilityId;
-    setSelectedFacilityId(facilityId);
+  function selectAssignment(assignment: AssignmentOption) {
+    selectedFacilityRef.current = assignment.facilityId;
+    selectedAssignmentRef.current = assignment.assignmentId;
+    setSelectedFacilityId(assignment.facilityId);
+    setSelectedAssignmentId(assignment.assignmentId);
     const url = new URL(window.location.href);
-    url.searchParams.set('facilityId', facilityId);
+    url.searchParams.set('facilityId', assignment.facilityId);
+    url.searchParams.set('accessAssignmentId', assignment.assignmentId);
     window.history.replaceState(null, '', url);
-    void load(appliedQuery, facilityId, statusFilterRef.current);
+    void load(
+      appliedQuery,
+      assignment.facilityId,
+      assignment.assignmentId,
+      statusFilterRef.current,
+    );
   }
 
   function selectStatus(status: PatientListStatus) {
@@ -177,7 +200,12 @@ export function PatientDirectory() {
     if (status === 'active') url.searchParams.delete('status');
     else url.searchParams.set('status', status);
     window.history.replaceState(null, '', url);
-    void load(appliedQuery, selectedFacilityRef.current, status);
+    void load(
+      appliedQuery,
+      selectedFacilityRef.current,
+      selectedAssignmentRef.current,
+      status,
+    );
   }
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
@@ -209,6 +237,7 @@ export function PatientDirectory() {
           email: String(form.get('email') ?? '') || null,
           address: String(form.get('address') ?? '') || null,
           facilityId: selectedFacilityRef.current || undefined,
+          accessAssignmentId: selectedAssignmentRef.current || undefined,
           testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
           idempotencyKey,
         }),
@@ -225,7 +254,7 @@ export function PatientDirectory() {
 
       if (photo) {
         const facilityQuery = selectedFacilityRef.current
-          ? `?facilityId=${encodeURIComponent(selectedFacilityRef.current)}`
+          ? `?facilityId=${encodeURIComponent(selectedFacilityRef.current)}&accessAssignmentId=${encodeURIComponent(selectedAssignmentRef.current)}`
           : '';
         const photoResponse = await fetch(`/api/patients/${encodeURIComponent(payload.patient.id)}/photo${facilityQuery}`, {
           method: 'PUT',
@@ -243,7 +272,7 @@ export function PatientDirectory() {
 
       createKey.current = null;
       const facilityQuery = selectedFacilityRef.current
-        ? `?facilityId=${encodeURIComponent(selectedFacilityRef.current)}`
+          ? `?facilityId=${encodeURIComponent(selectedFacilityRef.current)}&accessAssignmentId=${encodeURIComponent(selectedAssignmentRef.current)}`
         : '';
       router.push(`/patients/${encodeURIComponent(payload.patient.id)}${facilityQuery}`);
     } catch {
@@ -297,17 +326,22 @@ export function PatientDirectory() {
             </button>
           ))}
         </div>
-        {facilityOptions.length > 1 && (
+        {assignmentOptions.length > 1 && (
           <label className={styles.facilitySelect}>
-            <span>Филиал</span>
+            <span>Рабочий контур</span>
             <select
-              aria-label="Филиал реестра"
-              onChange={(event) => selectFacility(event.target.value)}
-              value={selectedFacilityId}
+              aria-label="Рабочий контур реестра"
+              onChange={(event) => {
+                const assignment = assignmentOptions.find(
+                  (candidate) => candidate.assignmentId === event.target.value,
+                );
+                if (assignment) selectAssignment(assignment);
+              }}
+              value={selectedAssignmentId}
             >
-              {facilityOptions.map((facility) => (
-                <option key={`${facility.organizationId}:${facility.facilityId}`} value={facility.facilityId}>
-                  {facility.organizationName} · {facility.facilityName}
+              {assignmentOptions.map((assignment) => (
+                <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                  {assignment.facilityName} · {assignment.departmentName}
                 </option>
               ))}
             </select>
@@ -336,20 +370,21 @@ export function PatientDirectory() {
         </div>
       )}
 
-      {state === 'facility' && (
+      {state === 'assignment' && (
         <div className={styles.statePanel}>
           <ShieldCheck aria-hidden="true" size={30} />
-          <h2>Выберите филиал</h2>
-          <p>У вашей учётной записи есть доступ к нескольким филиалам.</p>
+          <h2>Выберите рабочий контур</h2>
+          <p>Права разных отделений не объединяются автоматически.</p>
           <div className={styles.facilityChoices}>
-            {facilityOptions.map((facility) => (
+            {assignmentOptions.map((assignment) => (
               <button
                 className={styles.secondaryButton}
-                key={`${facility.organizationId}:${facility.facilityId}`}
-                onClick={() => selectFacility(facility.facilityId)}
+                key={assignment.assignmentId}
+                onClick={() => selectAssignment(assignment)}
                 type="button"
               >
-                {facility.organizationName} · {facility.facilityName}
+                {assignment.organizationName} · {assignment.facilityName} ·{' '}
+                {assignment.departmentName}
               </button>
             ))}
           </div>
@@ -426,7 +461,7 @@ export function PatientDirectory() {
               <Link
                 aria-label={`Открыть карточку ${patient.displayName}`}
                 className={styles.rowLink}
-                href={`/patients/${encodeURIComponent(patient.id)}${selectedFacilityId ? `?facilityId=${encodeURIComponent(selectedFacilityId)}` : ''}`}
+                href={`/patients/${encodeURIComponent(patient.id)}${selectedFacilityId ? `?facilityId=${encodeURIComponent(selectedFacilityId)}&accessAssignmentId=${encodeURIComponent(selectedAssignmentId)}` : ''}`}
               >
                 <ArrowRight aria-hidden="true" size={20} />
               </Link>

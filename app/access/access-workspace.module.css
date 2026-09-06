@@ -32,6 +32,8 @@
 .pageHeader p { max-width: 760px; margin: 12px 0 0; color: var(--ink-soft); font-size: 1rem; line-height: 1.55; }
 
 .d1Badge,
+.headerActions,
+.manageLink,
 .summaryGrid article,
 .boundary,
 .sectionTitle,
@@ -40,6 +42,27 @@
   display: flex;
   align-items: center;
 }
+
+.headerActions {
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.manageLink {
+  min-height: 46px;
+  gap: 9px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: .875rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.manageLink:hover { border-color: var(--brand); color: var(--brand); }
 
 .d1Badge {
   flex: 0 0 auto;
@@ -175,7 +198,8 @@
 @media (max-width: 760px) {
   .main { padding: 24px 16px 38px; }
   .pageHeader { flex-direction: column; }
-  .d1Badge { width: 100%; }
+  .headerActions { width: 100%; justify-content: flex-start; }
+  .d1Badge { flex: 1 1 240px; }
   .summaryGrid { grid-template-columns: 1fr; }
   .summaryGrid article + article { border-top: 1px solid var(--line); border-left: 0; }
   .permissionList { grid-template-columns: 1fr; }

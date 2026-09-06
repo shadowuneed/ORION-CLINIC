@@ -1,10 +1,15 @@
 import { env } from 'cloudflare:workers';
 import type { ReactNode } from 'react';
 import {
+  isAccessAssignmentCurrentlyActive,
+  type AccessAssignmentSummary,
+} from '@/lib/auth/access-governance';
+import {
   toSiteIdentityPrincipal,
 } from '@/lib/auth/site-identity';
 import type { ActiveMembership } from '@/lib/auth/workspace-access';
 import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
 import styles from './authenticated-clinic-page.module.css';
@@ -16,7 +21,8 @@ export type ClinicCapability =
   | 'chronic-care'
   | 'observations'
   | 'communications'
-  | 'access';
+  | 'access'
+  | 'access-administration';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
@@ -28,6 +34,7 @@ export type AuthenticatedClinicContext = {
     observations: boolean;
     communications: boolean;
     accessOverview: boolean;
+    accessAdministration: boolean;
   };
   accessCheck: 'ready' | 'unavailable';
 };
@@ -37,12 +44,18 @@ export async function getAuthenticatedClinicContext(
 ): Promise<AuthenticatedClinicContext> {
   const user = await requireChatGPTUser(returnTo);
   let memberships: ActiveMembership[] = [];
+  let accessAssignments: AccessAssignmentSummary[] = [];
   let accessCheck: AuthenticatedClinicContext['accessCheck'] = 'ready';
 
   try {
     memberships = await new D1WorkspaceAccessRepository(
       env.DB,
     ).listActiveMemberships(
+      toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
+    );
+    accessAssignments = await new D1AccessGovernanceRepository(
+      env.DB,
+    ).listPrincipalAssignments(
       toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
     );
   } catch {
@@ -54,9 +67,11 @@ export async function getAuthenticatedClinicContext(
     accessCheck,
     capabilities: {
       clinician: memberships.some((membership) => membership.role === 'clinician'),
-      patientDirectory: memberships.some(
-        (membership) =>
-          membership.role === 'clinician' || membership.role === 'registrar',
+      patientDirectory: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          !assignment.roles.includes('service') &&
+          assignment.effectivePermissions.includes('patient.directory.read'),
       ),
       scheduling: memberships.some(
         (membership) =>
@@ -79,6 +94,12 @@ export async function getAuthenticatedClinicContext(
       // Every authenticated principal may reach the resolver, which then
       // requires a current interactive assignment with access.self.read.
       accessOverview: true,
+      accessAdministration: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          !assignment.roles.includes('service') &&
+          assignment.effectivePermissions.includes('access.manage'),
+      ),
     },
   };
 }
@@ -100,6 +121,7 @@ export function AuthenticatedClinicPage({
     observations: context.capabilities.observations,
     communications: context.capabilities.communications,
     access: context.capabilities.accessOverview,
+    'access-administration': context.capabilities.accessAdministration,
   }[requiredCapability];
 
   return (
@@ -133,7 +155,10 @@ function capabilityDenialMessage(capability: ClinicCapability) {
       return 'Нужна активная роль врача, медсестры или регистратора в выбранной клинике.';
     case 'access':
       return 'Для этого пользователя нет доступного рабочего контура.';
+    case 'access-administration':
+      return 'Нужно действующее полномочие управления доступом в выбранной клинике.';
     case 'patient-directory':
+      return 'Нужно действующее назначение отдела с правом доступа к реестру пациентов.';
     case 'scheduling':
       return 'Нужна активная роль врача или регистратора в выбранной клинике.';
   }

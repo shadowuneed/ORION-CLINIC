@@ -29,8 +29,13 @@ import styles from '../patients.module.css';
 type DetailResponse = {
   viewer?: { id: string; displayName: string; role: string };
   facility?: { id: string; name: string };
+  accessAssignment?: { assignmentId: string };
   patient?: PatientDetail;
-  permissions?: { canUpdate: boolean; canArchive: boolean };
+  permissions?: {
+    canUpdate: boolean;
+    canArchive: boolean;
+    canCreateEncounter: boolean;
+  };
   error?: {
     code?: string;
     message: string;
@@ -81,9 +86,11 @@ function initials(name: string) {
 export function PatientDetailView({
   patientId,
   facilityId,
+  accessAssignmentId,
 }: {
   patientId: string;
   facilityId?: string;
+  accessAssignmentId?: string;
 }) {
   const router = useRouter();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -99,9 +106,12 @@ export function PatientDetailView({
   const encounterKey = useRef<string | null>(null);
   const updateKey = useRef<string | null>(null);
   const archiveKey = useRef<string | null>(null);
-  const facilityQuery = facilityId
-    ? `?facilityId=${encodeURIComponent(facilityId)}`
-    : '';
+  const accessParams = new URLSearchParams();
+  if (facilityId) accessParams.set('facilityId', facilityId);
+  if (accessAssignmentId) {
+    accessParams.set('accessAssignmentId', accessAssignmentId);
+  }
+  const facilityQuery = accessParams.size ? `?${accessParams}` : '';
 
   const load = useCallback(async () => {
     setState('loading');
@@ -139,6 +149,7 @@ export function PatientDetailView({
         body: JSON.stringify({
           reasonForVisit: String(form.get('reasonForVisit') ?? '') || null,
           facilityId,
+          accessAssignmentId,
           idempotencyKey,
         }),
       });
@@ -202,6 +213,7 @@ export function PatientDetailView({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId,
+            accessAssignmentId,
             displayName: String(form.get('displayName') ?? ''),
             birthDate: String(form.get('birthDate') ?? '') || null,
             sexAtBirth: String(form.get('sexAtBirth') ?? 'not_recorded'),
@@ -252,6 +264,7 @@ export function PatientDetailView({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId,
+            accessAssignmentId,
             changeReason: String(form.get('changeReason') ?? ''),
             testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
             expectedVersion: data.patient.version,
@@ -324,7 +337,7 @@ export function PatientDetailView({
                 Архивировать
               </button>
             )}
-            {patient.status === 'active' && data.viewer?.role === 'clinician' && (
+            {patient.status === 'active' && data.permissions?.canCreateEncounter && (
               <button className={styles.primaryButton} onClick={() => setEncounterOpen(true)} type="button">
                 <CalendarPlus aria-hidden="true" size={19} />
                 Новый приём

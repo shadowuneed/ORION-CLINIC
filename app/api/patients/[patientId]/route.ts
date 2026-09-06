@@ -1,16 +1,20 @@
 import { env } from 'cloudflare:workers';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import {
-  FacilityAccessNotFoundError,
-  MultipleFacilitySelectionRequiredError,
-  PatientDirectoryMembershipRequiredError,
-  PatientProfilePermissionRequiredError,
-  patientProfilePermissions,
-  requirePatientProfilePermission,
-  resolveFacilityAccess,
-} from '@/lib/auth/facility-access';
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
+import {
+  MultiplePatientAccessSelectionRequiredError,
+  resolvePatientDirectoryAccess,
+  type PatientDirectoryPermission,
+} from '@/lib/auth/patient-directory-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { updatePatientProfileSchema } from '@/lib/domain/patient';
+import {
+  D1AccessGovernanceRepository,
+} from '@/lib/repositories/access-governance';
 import {
   apiFailure,
   apiSuccess,
@@ -28,16 +32,22 @@ import {
   PatientReadAuditUnavailableError,
   PatientRegistryConflictError,
 } from '@/lib/repositories/patient-registry';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
-async function accessFor(request: Request, facilityId?: string) {
+async function accessFor(
+  request: Request,
+  permission: PatientDirectoryPermission,
+  accessAssignmentId?: string,
+  facilityId?: string,
+) {
   const identity = getSiteIdentity(request);
   if (!identity) return null;
-  return resolveFacilityAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+  return resolvePatientDirectoryAccess(
+    new D1AccessGovernanceRepository(env.DB),
     toSiteIdentityPrincipal(identity),
+    permission,
+    accessAssignmentId,
     facilityId,
   );
 }
@@ -49,9 +59,12 @@ export async function GET(
   const context = createApiRequestContext(request, '/api/patients/:patientId');
   const { patientId } = await params;
   try {
+    const url = new URL(request.url);
     const access = await accessFor(
       request,
-      new URL(request.url).searchParams.get('facilityId') ?? undefined,
+      'patient.directory.read',
+      url.searchParams.get('accessAssignmentId') ?? undefined,
+      url.searchParams.get('facilityId') ?? undefined,
     );
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const repository = new D1PatientRegistryRepository(env.DB, access.scope);
@@ -64,29 +77,42 @@ export async function GET(
       requestId: context.requestId,
     });
     return apiSuccess(context, {
-      viewer: { id: access.user.id, displayName: access.user.displayName, role: access.membership.role },
+      viewer: { id: access.user.id, displayName: access.user.displayName, role: access.assignment.roles.join(', ') },
       organization: access.organization,
       facility: access.facility,
-      patient,
-      permissions: patientProfilePermissions(access.membership.role),
+      accessAssignment: access.assignment,
+      assignments: access.assignments,
+      patient: {
+        ...patient,
+        photoUrl: patient.photoUrl
+          ? `${patient.photoUrl}&accessAssignmentId=${encodeURIComponent(access.assignment.assignmentId)}`
+          : null,
+      },
+      permissions: {
+        canUpdate: access.assignment.effectivePermissions.includes('patient.profile.write'),
+        canArchive: access.assignment.effectivePermissions.includes('patient.profile.write'),
+        canCreateEncounter:
+          access.assignment.effectivePermissions.includes('encounter.manage'),
+      },
       persistence: 'd1',
     });
   } catch (error) {
     if (error instanceof PatientReadAuditUnavailableError) {
       return apiFailure(context, 503, 'PATIENT_AUDIT_UNAVAILABLE', 'Карточка не выдана: аудит чтения временно недоступен.');
     }
-    if (error instanceof MultipleFacilitySelectionRequiredError) {
+    if (error instanceof MultiplePatientAccessSelectionRequiredError) {
       return apiFailure(
         context,
         409,
-        'FACILITY_SELECTION_REQUIRED',
-        'Выберите филиал.',
-        { facilities: error.facilities },
+        'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+        'Выберите рабочий контур.',
+        { assignments: error.assignments },
       );
     }
     if (
-      error instanceof PatientDirectoryMembershipRequiredError ||
-      error instanceof FacilityAccessNotFoundError
+      error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError
     ) {
       return apiFailure(context, 403, 'PATIENT_DIRECTORY_FORBIDDEN', 'Нет доступа к карточке.');
     }
@@ -128,11 +154,15 @@ export async function PATCH(
         'Изменение данных отключено конфигурацией.',
       );
     }
-    const access = await accessFor(request, payload.facilityId);
+    const access = await accessFor(
+      request,
+      'patient.profile.write',
+      payload.accessAssignmentId,
+      payload.facilityId,
+    );
     if (!access) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
-    requirePatientProfilePermission(access.membership.role, 'patient.update');
     const patient = await new D1PatientRegistryRepository(
       env.DB,
       access.scope,
@@ -211,15 +241,15 @@ export async function PATCH(
         'Команда конфликтует с уже сохранённым состоянием. Обновите карточку.',
       );
     }
-    if (error instanceof MultipleFacilitySelectionRequiredError) {
-      return apiFailure(context, 409, 'FACILITY_SELECTION_REQUIRED', 'Выберите филиал.', {
-        facilities: error.facilities,
+    if (error instanceof MultiplePatientAccessSelectionRequiredError) {
+      return apiFailure(context, 409, 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED', 'Выберите рабочий контур.', {
+        assignments: error.assignments,
       });
     }
     if (
-      error instanceof PatientDirectoryMembershipRequiredError ||
-      error instanceof FacilityAccessNotFoundError ||
-      error instanceof PatientProfilePermissionRequiredError
+      error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError
     ) {
       return apiFailure(
         context,

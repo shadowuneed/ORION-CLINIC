@@ -95,6 +95,30 @@ describe('self-access workspace', () => {
     expect(html).not.toContain('Разрешения этого контура');
   });
 
+  it('shows the administration entry only for access.manage', () => {
+    const managed = assignment();
+    managed.effectivePermissions = [
+      ...managed.effectivePermissions,
+      'access.manage',
+    ];
+    const allowed = renderToStaticMarkup(
+      createElement(AccessWorkspace, {
+        assignments: [managed],
+        selected: managed,
+      }),
+    );
+    const denied = renderToStaticMarkup(
+      createElement(AccessWorkspace, {
+        assignments: [assignment()],
+        selected: assignment(),
+      }),
+    );
+
+    expect(allowed).toContain('Управление доступом');
+    expect(allowed).toContain('/access/manage?assignmentId=hidden-assignment-id');
+    expect(denied).not.toContain('Управление доступом');
+  });
+
   it('has a fail-closed operational state', () => {
     const html = renderToStaticMarkup(
       createElement(AccessWorkspaceState, {

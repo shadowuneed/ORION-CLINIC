@@ -68,9 +68,9 @@ export class D1AccessGovernanceRepository
           facility.status as facilityStatus,
           department.id as departmentId,
           department.code as departmentCode,
-          department.name as departmentName,
-          department.kind as departmentKind,
-          department.status as departmentStatus,
+          coalesce(department_version.name, department.name) as departmentName,
+          coalesce(department_version.kind, department.kind) as departmentKind,
+          coalesce(department_version.status, department.status) as departmentStatus,
           membership.id as membershipId,
           membership.role as membershipLegacyRole,
           membership.status as membershipStatus,
@@ -105,6 +105,15 @@ export class D1AccessGovernanceRepository
           on department.organization_id = assignment.organization_id
           and department.facility_id = assignment.facility_id
           and department.id = assignment.department_id
+        left join department_heads department_head
+          on department_head.organization_id = department.organization_id
+          and department_head.facility_id = department.facility_id
+          and department_head.department_id = department.id
+        left join department_versions department_version
+          on department_version.organization_id = department_head.organization_id
+          and department_version.facility_id = department_head.facility_id
+          and department_version.department_id = department_head.department_id
+          and department_version.id = department_head.current_version_id
         where user.external_issuer = ?1
           and user.external_subject = ?2
         order by organization.name, facility.name, department.name,

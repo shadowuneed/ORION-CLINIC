@@ -103,7 +103,7 @@ function versionSql(input: {
     ) values (
       '${input.id}', 'org-a', 'fac-a', 'assignment-a', 'department-a',
       'membership-a', ${input.version}, '${input.supersedesVersionId}',
-      '${input.status ?? 'active'}', 'administrator',
+      '${input.status ?? 'active'}', 'bootstrap',
       '${input.rolesJson ?? '["doctor"]'}',
       '${input.allowPermissionsJson ?? '[]'}',
       '${input.denyPermissionsJson ?? '[]'}',

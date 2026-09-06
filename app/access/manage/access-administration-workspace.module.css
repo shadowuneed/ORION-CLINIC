@@ -1,0 +1,161 @@
+.main { width: min(1540px, 100%); margin: 0 auto; padding: 32px 34px 58px; color: var(--ink); }
+.pageHeader, .metrics, .boundary, .workspace, .panelHeader, .assignmentHeader, .headerActions, .versionLine, .assignmentIdentity, .assignmentTerms, .assignmentActions, .successMessage, .errorMessage, .dialog > header, .dialog > footer, .revokeNotice, .selectionGrid a { display: flex; }
+.pageHeader { align-items: flex-start; justify-content: space-between; gap: 28px; margin-bottom: 20px; }
+.eyebrow { color: var(--brand); font-size: .75rem; font-weight: 780; letter-spacing: .12em; text-transform: uppercase; }
+.pageHeader h1, .panelHeader h2, .assignmentHeader h2, .dialog h2, .state h1 { margin: 0; color: var(--ink); letter-spacing: -.035em; }
+.pageHeader h1 { margin-top: 7px; font-size: clamp(2.15rem, 4vw, 3.35rem); line-height: 1; }
+.pageHeader p { margin: 11px 0 0; color: var(--ink-soft); font-size: 1rem; }
+button, input, select, textarea { font: inherit; }
+button { color: inherit; }
+.primaryButton, .secondaryButton, .dangerButton { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; border-radius: 9px; font-size: .875rem; font-weight: 730; cursor: pointer; }
+.primaryButton { border: 1px solid var(--brand); color: #fff; background: var(--brand); }
+.primaryButton:hover { background: var(--brand-strong); }
+.secondaryButton { border: 1px solid var(--line); background: var(--surface-strong); }
+.secondaryButton:hover { border-color: var(--brand); background: var(--surface-muted); }
+.dangerButton { border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); color: var(--danger); background: var(--danger-soft); }
+.primaryButton:disabled, .secondaryButton:disabled, .dangerButton:disabled { opacity: .55; cursor: not-allowed; }
+
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); margin-bottom: 14px; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-strong); box-shadow: var(--shadow-sm); }
+.metrics article { min-height: 85px; display: flex; align-items: center; gap: 13px; padding: 16px 19px; }
+.metrics article + article { border-left: 1px solid var(--line); }
+.metrics svg { color: var(--brand); }
+.metrics span { display: flex; flex-direction: column; }
+.metrics small { color: var(--ink-muted); font-size: .8rem; }
+.metrics strong { margin-top: 3px; font-size: 1.25rem; }
+.boundary { align-items: center; gap: 12px; margin-bottom: 14px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--line)); border-left: 3px solid var(--brand); border-radius: 10px; color: var(--brand); background: var(--brand-soft); }
+.boundary > div { min-width: 0; flex: 1; }
+.boundary strong { color: var(--ink); font-size: .95rem; }
+.boundary p { margin: 4px 0 0; color: var(--ink-soft); font-size: .875rem; line-height: 1.45; }
+.boundary a { flex: 0 0 auto; color: var(--brand-strong); font-size: .875rem; font-weight: 720; }
+.successMessage, .errorMessage { align-items: flex-start; gap: 10px; margin-bottom: 14px; padding: 12px 14px; border-radius: 9px; }
+.successMessage { border: 1px solid color-mix(in srgb, var(--success) 35%, var(--line)); color: var(--success); background: var(--success-soft); }
+.errorMessage { border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); color: var(--danger); background: var(--danger-soft); }
+.successMessage span, .errorMessage span { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.successMessage strong, .errorMessage strong { font-size: .875rem; }
+.errorMessage small { margin-top: 3px; color: var(--ink-muted); font: .72rem var(--font-mono); }
+.successMessage button, .errorMessage button { border: 0; color: inherit; background: transparent; cursor: pointer; }
+
+.workspace { align-items: flex-start; gap: 14px; }
+.departmentPanel, .assignmentPanel { border: 1px solid var(--line); border-radius: 13px; background: var(--surface-strong); box-shadow: var(--shadow-sm); }
+.departmentPanel { width: 330px; flex: 0 0 330px; overflow: hidden; }
+.assignmentPanel { min-width: 0; min-height: 560px; flex: 1; padding: 20px; }
+.panelHeader { align-items: center; justify-content: space-between; padding: 19px; border-bottom: 1px solid var(--line); }
+.panelHeader small { color: var(--ink-muted); font-size: .72rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.panelHeader h2 { margin-top: 4px; font-size: 1.25rem; }
+.departmentList { display: grid; padding: 8px; }
+.departmentList button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; padding: 13px 12px; border: 1px solid transparent; border-radius: 9px; text-align: left; background: transparent; cursor: pointer; }
+.departmentList button:hover { background: var(--surface-muted); }
+.departmentList .departmentActive { border-color: color-mix(in srgb, var(--brand) 32%, var(--line)); background: var(--brand-soft); }
+.departmentList button > span { min-width: 0; display: flex; flex-direction: column; }
+.departmentList strong { overflow: hidden; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.departmentList small { margin-top: 4px; color: var(--ink-muted); font: .7rem var(--font-mono); }
+.departmentList em { align-self: center; font-size: .7rem; font-style: normal; font-weight: 750; }
+.departmentList b { grid-column: 2; grid-row: 2; color: var(--ink-muted); font-size: .72rem; }
+.statusActive { color: var(--success); }
+.statusDisabled { color: var(--ink-muted); }
+.assignmentHeader { align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.assignmentHeader h2 { margin-top: 5px; font-size: 1.55rem; }
+.assignmentHeader p { margin: 7px 0 0; color: var(--ink-soft); font-size: .875rem; }
+.assignmentHeader code { color: var(--brand); font-family: var(--font-mono); }
+.headerActions { gap: 8px; }
+.versionLine { gap: 16px; padding: 11px 0 15px; color: var(--ink-muted); font-size: .75rem; }
+.versionLine span:first-child { color: var(--brand); font-weight: 720; }
+.assignmentList { display: grid; gap: 9px; }
+.assignmentList article { display: grid; grid-template-columns: minmax(220px, .85fr) minmax(360px, 1.45fr) auto; align-items: center; gap: 17px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.assignmentIdentity { align-items: center; gap: 11px; min-width: 0; }
+.personMark { width: 38px; height: 38px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 9px; color: var(--brand-strong); background: var(--brand-soft); font-weight: 800; }
+.assignmentIdentity > span:last-child { min-width: 0; display: flex; flex-direction: column; }
+.assignmentIdentity strong { overflow: hidden; font-size: .9rem; text-overflow: ellipsis; white-space: nowrap; }
+.assignmentIdentity small { margin-top: 4px; color: var(--ink-muted); font-size: .75rem; }
+.assignmentTerms { gap: 20px; }
+.assignmentTerms > span { min-width: 0; display: flex; flex-direction: column; }
+.assignmentTerms small { color: var(--ink-muted); font-size: .7rem; }
+.assignmentTerms strong { margin-top: 4px; font-size: .78rem; font-weight: 650; line-height: 1.4; }
+.statusTextActive { color: var(--success); }
+.statusTextInactive { color: var(--danger); }
+.assignmentActions { justify-content: flex-end; gap: 7px; }
+.selfBadge { padding: 7px 9px; border-radius: 7px; color: var(--brand); background: var(--brand-soft); font-size: .72rem; font-weight: 720; }
+.empty, .emptyCompact, .state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.empty { min-height: 390px; padding: 35px; }
+.empty svg, .emptyCompact svg, .state svg { margin-bottom: 13px; color: var(--brand); }
+.empty strong, .emptyCompact strong { font-size: 1rem; }
+.empty p, .emptyCompact span { max-width: 480px; margin: 8px 0 17px; color: var(--ink-soft); font-size: .875rem; line-height: 1.5; }
+.emptyCompact { padding: 38px 18px; }
+.emptyCompact span { margin-bottom: 0; }
+
+.overlay { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 24px; background: rgb(12 21 25 / 58%); backdrop-filter: blur(5px); }
+.dialog { width: min(640px, 100%); max-height: calc(100dvh - 48px); overflow-y: auto; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface-strong); box-shadow: 0 24px 80px rgb(0 0 0 / 28%); }
+.dialogWide { width: min(900px, 100%); }
+.dialog > header { position: sticky; z-index: 3; top: 0; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 18px 20px; border-bottom: 1px solid var(--line); background: var(--surface-strong); }
+.dialog h2 { margin-top: 4px; font-size: 1.35rem; }
+.dialog > header > button { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 8px; background: var(--surface-muted); cursor: pointer; }
+.dialog > .errorMessage { margin: 14px 20px 0; }
+.dialog > footer { position: sticky; bottom: 0; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--surface-strong); }
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+.formGrid label, .reasonBlock label { display: flex; flex-direction: column; gap: 7px; }
+.formGrid label > span, .reasonBlock label > span, .formGrid legend { color: var(--ink-soft); font-size: .78rem; font-weight: 700; }
+.formGrid input, .formGrid select, .formGrid textarea, .reasonBlock textarea, .permissionOverrides select { width: 100%; min-height: 43px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface); }
+.formGrid textarea, .reasonBlock textarea { resize: vertical; line-height: 1.5; }
+.fullField { grid-column: 1 / -1; }
+.formGrid fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.roleGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 8px; }
+.roleGrid label { min-height: 40px; flex-direction: row; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.roleGrid input { width: 17px; min-height: 17px; }
+.permissionOverrides > p { margin: 5px 0 10px; color: var(--ink-muted); font-size: .78rem; line-height: 1.45; }
+.permissionOverrides > div { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; }
+.permissionOverrides > div > label { min-height: 54px; flex-direction: row; align-items: center; justify-content: space-between; gap: 15px; padding: 8px 10px; }
+.permissionOverrides > div > label + label { border-top: 1px solid var(--line); }
+.permissionOverrides label > span { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.permissionOverrides strong { color: var(--ink); font-size: .8rem; }
+.permissionOverrides small { margin-top: 3px; color: var(--ink-muted); font: .67rem var(--font-mono); }
+.permissionOverrides select { width: 130px; flex: 0 0 130px; }
+.reasonBlock { padding: 0 20px 20px; }
+.revokeNotice { align-items: flex-start; gap: 12px; margin: 18px 20px; padding: 15px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); border-radius: 9px; color: var(--danger); background: var(--danger-soft); }
+.revokeNotice p { margin: 5px 0 0; color: var(--ink-soft); font-size: .875rem; line-height: 1.45; }
+.spin { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.selectionGrid { display: grid; gap: 10px; width: min(900px, 100%); }
+.selectionGrid a { align-items: center; gap: 13px; padding: 17px; border: 1px solid var(--line); border-radius: 11px; color: var(--brand); background: var(--surface-strong); text-decoration: none; }
+.selectionGrid a > span { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.selectionGrid strong { color: var(--ink); }
+.selectionGrid small { margin-top: 4px; color: var(--ink-soft); }
+.selectionGrid b { font-size: .8rem; }
+.state { min-height: 560px; padding: 40px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-strong); }
+.state h1 { margin-top: 9px; font-size: 2rem; }
+.state p { max-width: 630px; margin: 12px 0 18px; color: var(--ink-soft); font-size: 1rem; line-height: 1.55; }
+.state a { color: var(--brand); font-weight: 720; }
+
+@media (max-width: 1180px) {
+  .workspace { flex-direction: column; }
+  .departmentPanel { width: 100%; flex-basis: auto; }
+  .departmentList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .assignmentList article { grid-template-columns: 1fr; }
+  .assignmentActions { justify-content: flex-start; }
+}
+@media (max-width: 760px) {
+  .main { padding: 23px 15px 40px; }
+  .pageHeader { flex-direction: column; }
+  .pageHeader > button { width: 100%; }
+  .metrics { grid-template-columns: 1fr; }
+  .metrics article + article { border-top: 1px solid var(--line); border-left: 0; }
+  .boundary { align-items: flex-start; flex-wrap: wrap; }
+  .boundary a { margin-left: 33px; }
+  .departmentList { grid-template-columns: 1fr; }
+  .assignmentHeader { flex-direction: column; }
+  .headerActions { width: 100%; }
+  .headerActions button { flex: 1; }
+  .versionLine { flex-direction: column; gap: 5px; }
+  .assignmentTerms { display: grid; grid-template-columns: 1fr 1fr; }
+  .formGrid { grid-template-columns: 1fr; }
+  .fullField { grid-column: auto; }
+  .overlay { align-items: end; padding: 0; }
+  .dialog { max-height: 94dvh; border-radius: 14px 14px 0 0; }
+}
+@media (max-width: 480px) {
+  .assignmentPanel { padding: 15px; }
+  .headerActions, .assignmentActions, .dialog > footer { flex-direction: column; }
+  .headerActions button, .assignmentActions button, .dialog > footer button { width: 100%; }
+  .roleGrid { grid-template-columns: 1fr; }
+  .permissionOverrides > div > label { align-items: flex-start; flex-direction: column; }
+  .permissionOverrides select { width: 100%; flex-basis: auto; }
+}

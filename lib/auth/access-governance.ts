@@ -89,7 +89,17 @@ export class InteractiveServiceAccessForbiddenError extends Error {
   }
 }
 
-function isCurrentlyActive(assignment: AccessAssignmentSummary, now: number) {
+export class AccessPermissionRequiredError extends Error {
+  constructor(public readonly permission: ClinicPermission) {
+    super(`The ${permission} permission is required`);
+    this.name = 'AccessPermissionRequiredError';
+  }
+}
+
+export function isAccessAssignmentCurrentlyActive(
+  assignment: AccessAssignmentSummary,
+  now = Date.now(),
+) {
   return (
     assignment.status === 'active' &&
     assignment.organization.status === 'active' &&
@@ -100,6 +110,15 @@ function isCurrentlyActive(assignment: AccessAssignmentSummary, now: number) {
     assignment.effectiveFrom <= now &&
     (assignment.effectiveUntil === null || assignment.effectiveUntil > now)
   );
+}
+
+export function requireAccessPermission(
+  assignment: AccessAssignmentSummary,
+  permission: ClinicPermission,
+) {
+  if (!assignment.effectivePermissions.includes(permission)) {
+    throw new AccessPermissionRequiredError(permission);
+  }
 }
 
 /**
@@ -113,7 +132,7 @@ export async function resolveAccessOverview(
   now = Date.now(),
 ): Promise<AccessOverview> {
   const currentAssignments = (await repository.listPrincipalAssignments(principal))
-    .filter((assignment) => isCurrentlyActive(assignment, now))
+    .filter((assignment) => isAccessAssignmentCurrentlyActive(assignment, now))
     .sort((left, right) =>
       `${left.organization.name}:${left.facility.name}:${left.department.name}:${left.assignmentId}`
         .localeCompare(

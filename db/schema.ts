@@ -235,6 +235,164 @@ export const memberships = sqliteTable(
   ],
 );
 
+export const departmentVersions = sqliteTable(
+  'department_versions',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    departmentId: text('department_id')
+      .notNull()
+      .references(() => departments.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => departmentVersions.id,
+    ),
+    name: text('name').notNull(),
+    kind: text('kind', {
+      enum: ['clinical', 'diagnostic', 'administrative', 'support'],
+    }).notNull(),
+    status: text('status', { enum: ['active', 'disabled'] }).notNull(),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    changedAt: integer('changed_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('department_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.departmentId,
+      table.version,
+    ),
+    uniqueIndex('department_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.departmentId,
+      table.id,
+    ),
+    uniqueIndex('department_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    index('department_versions_scope_status_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.status,
+      table.changedAt,
+    ),
+    foreignKey({
+      name: 'department_versions_scope_department_fk',
+      columns: [table.organizationId, table.facilityId, table.departmentId],
+      foreignColumns: [
+        departments.organizationId,
+        departments.facilityId,
+        departments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'department_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('department_versions_kind_enum', table.kind, [
+      'clinical',
+      'diagnostic',
+      'administrative',
+      'support',
+    ]),
+    enumCheck('department_versions_status_enum', table.status, [
+      'active',
+      'disabled',
+    ]),
+    check('department_versions_version_positive', sql`${table.version} > 0`),
+    check(
+      'department_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'department_versions_name_length',
+      sql`length(trim(${table.name})) between 2 and 160`,
+    ),
+    check(
+      'department_versions_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const departmentHeads = sqliteTable(
+  'department_heads',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    departmentId: text('department_id')
+      .notNull()
+      .references(() => departments.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => departmentVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('department_heads_scope_department_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.departmentId,
+    ),
+    index('department_heads_scope_updated_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.updatedAt,
+    ),
+    foreignKey({
+      name: 'department_heads_scope_department_fk',
+      columns: [table.organizationId, table.facilityId, table.departmentId],
+      foreignColumns: [
+        departments.organizationId,
+        departments.facilityId,
+        departments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'department_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.departmentId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        departmentVersions.organizationId,
+        departmentVersions.facilityId,
+        departmentVersions.departmentId,
+        departmentVersions.id,
+      ],
+    }),
+    check('department_heads_lock_positive', sql`${table.lockVersion} > 0`),
+  ],
+);
+
 export const departmentAccessAssignments = sqliteTable(
   'department_access_assignments',
   {

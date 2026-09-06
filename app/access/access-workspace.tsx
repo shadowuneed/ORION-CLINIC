@@ -7,6 +7,7 @@ import {
   GitBranch,
   LockKeyhole,
   ShieldCheck,
+  UserRoundCog,
   UsersRound,
 } from 'lucide-react';
 import type { AccessAssignmentSummary } from '@/lib/auth/access-governance';
@@ -103,10 +104,21 @@ export function AccessWorkspace({
           <h1>Мой доступ</h1>
           <p>Полномочия рассчитаны сервером из текущей версии назначения в D1. Права разных контуров не складываются.</p>
         </div>
-        <span className={styles.d1Badge}>
-          <Database aria-hidden="true" size={18} />
-          <span><strong>D1 · текущая версия</strong><small>Не данные браузера</small></span>
-        </span>
+        <div className={styles.headerActions}>
+          {granted.has('access.manage') ? (
+            <Link
+              className={styles.manageLink}
+              href={`/access/manage?assignmentId=${encodeURIComponent(selected.assignmentId)}`}
+            >
+              <UserRoundCog aria-hidden="true" size={18} />
+              Управление доступом
+            </Link>
+          ) : null}
+          <span className={styles.d1Badge}>
+            <Database aria-hidden="true" size={18} />
+            <span><strong>D1 · текущая версия</strong><small>Не данные браузера</small></span>
+          </span>
+        </div>
       </header>
 
       {assignments.length > 1 ? (

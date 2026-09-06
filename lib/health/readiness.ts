@@ -1,5 +1,5 @@
 export const READINESS_SCHEMA_MARKER =
-  'department_access_assignment_heads_advance_guard';
+  'department_heads_advance_guard';
 
 export interface ReadinessPreparedStatement {
   bind(value: string): ReadinessPreparedStatement;
