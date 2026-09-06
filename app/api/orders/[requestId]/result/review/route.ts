@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
-import { resolveFacilityAccess } from '@/lib/auth/facility-access';
+import { resolveOrderWorkflowAccess } from '@/lib/auth/order-workflow-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { diagnosticResultReviewSchema } from '@/lib/domain/orders';
 import {
@@ -10,8 +10,8 @@ import {
   hasSameOrigin,
 } from '@/lib/http/api-response';
 import { orderApiFailure } from '@/lib/http/order-api-errors';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { D1OrderWorkflowRepository } from '@/lib/repositories/order-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +35,10 @@ export async function POST(
     }
     const identity = getSiteIdentity(request);
     if (!identity) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
-    const access = await resolveFacilityAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+    const access = await resolveOrderWorkflowAccess(
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const { requestId } = await params;

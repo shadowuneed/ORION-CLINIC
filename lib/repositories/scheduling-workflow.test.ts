@@ -214,14 +214,34 @@ function seedReferral(
   const requestId = `referral-${suffix}`;
   const draftId = `referral-${suffix}-v1`;
   const activeId = `referral-${suffix}-v2`;
+  const encounter = database
+    .prepare(`
+      select clinician_membership_id as clinicianMembershipId
+      from encounters where id = ?
+    `)
+    .get(encounterId) as { clinicianMembershipId: string };
+  const authorMembershipId = encounter.clinicianMembershipId;
+  const accessAssignmentId =
+    authorMembershipId === 'membership-a'
+      ? 'orders-assignment-a'
+      : 'orders-assignment-b';
   database
     .prepare(`
       insert into service_requests (
         id, organization_id, facility_id, patient_id, encounter_id,
-        request_kind, created_by_membership_id, created_at
-      ) values (?, 'org-a', 'fac-a', ?, ?, 'referral', 'membership-b', ?)
+        request_kind, created_by_membership_id, access_assignment_id, created_at
+      ) values (
+        ?, 'org-a', 'fac-a', ?, ?, 'referral', ?, ?, ?
+      )
     `)
-    .run(requestId, patientId, encounterId, createdAt);
+    .run(
+      requestId,
+      patientId,
+      encounterId,
+      authorMembershipId,
+      accessAssignmentId,
+      createdAt,
+    );
   database
     .prepare(`
       insert into service_request_versions (
@@ -229,15 +249,21 @@ function seedReferral(
         supersedes_version_id, status, priority, requested_service,
         target_specialty, medical_justification, clinician_note,
         status_reason, authored_by_membership_id,
-        approved_by_membership_id, approved_at, created_at
+        access_assignment_id, approved_by_membership_id, approved_at, created_at
       ) values (
         ?, 'org-a', 'fac-a', ?, 1, null, 'draft', 'routine',
         'Консультация эндокринолога', 'Эндокринология',
         'Синтетическое направление для проверки расписания', null, null,
-        'membership-b', null, null, ?
+        ?, ?, null, null, ?
       )
     `)
-    .run(draftId, requestId, createdAt);
+    .run(
+      draftId,
+      requestId,
+      authorMembershipId,
+      accessAssignmentId,
+      createdAt,
+    );
   database
     .prepare(`
       insert into service_request_heads (
@@ -253,15 +279,24 @@ function seedReferral(
         supersedes_version_id, status, priority, requested_service,
         target_specialty, medical_justification, clinician_note,
         status_reason, authored_by_membership_id,
-        approved_by_membership_id, approved_at, created_at
+        access_assignment_id, approved_by_membership_id, approved_at, created_at
       ) values (
         ?, 'org-a', 'fac-a', ?, 2, ?, 'active', 'routine',
         'Консультация эндокринолога', 'Эндокринология',
         'Синтетическое направление для проверки расписания', null,
-        'Проверено врачом', 'membership-b', 'membership-b', ?, ?
+        'Проверено врачом', ?, ?, ?, ?, ?
       )
     `)
-    .run(activeId, requestId, draftId, createdAt + 1, createdAt + 1);
+    .run(
+      activeId,
+      requestId,
+      draftId,
+      authorMembershipId,
+      accessAssignmentId,
+      authorMembershipId,
+      createdAt + 1,
+      createdAt + 1,
+    );
   database
     .prepare(`
       update service_request_heads
@@ -270,6 +305,81 @@ function seedReferral(
     `)
     .run(activeId, createdAt + 1, requestId);
   return { requestId, versionId: activeId };
+}
+
+function seedOrderAccess(database: DatabaseSync, effectiveFrom: number) {
+  database.exec(`
+    insert into departments (
+      id, organization_id, facility_id, code, name, kind, status,
+      created_at, updated_at, version
+    ) values (
+      'orders-department', 'org-a', 'fac-a', 'orders', 'Orders',
+      'clinical', 'active', ${effectiveFrom}, ${effectiveFrom}, 1
+    );
+    insert into department_versions (
+      id, organization_id, facility_id, department_id, version,
+      supersedes_version_id, name, kind, status, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values (
+      'orders-department-v1', 'org-a', 'fac-a', 'orders-department', 1,
+      null, 'Orders', 'clinical', 'active', 'Synthetic scheduling fixture',
+      'membership-b', ${effectiveFrom}, ${effectiveFrom}
+    );
+    insert into department_heads (
+      id, organization_id, facility_id, department_id, current_version_id,
+      lock_version, created_at, updated_at
+    ) values (
+      'orders-department-head', 'org-a', 'fac-a', 'orders-department',
+      'orders-department-v1', 1, ${effectiveFrom}, ${effectiveFrom}
+    );
+    insert into department_access_assignments (
+      id, organization_id, facility_id, department_id, membership_id,
+      created_by_membership_id, created_at
+    ) values
+      (
+        'orders-assignment-a', 'org-a', 'fac-a', 'orders-department',
+        'membership-a', 'membership-b', ${effectiveFrom}
+      ),
+      (
+        'orders-assignment-b', 'org-a', 'fac-a', 'orders-department',
+        'membership-b', 'membership-b', ${effectiveFrom}
+      );
+    insert into department_access_assignment_versions (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, version, supersedes_version_id, status, source_type,
+      roles_json, allow_permissions_json, deny_permissions_json,
+      effective_from, effective_until, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values
+      (
+        'orders-assignment-a-v1', 'org-a', 'fac-a', 'orders-assignment-a',
+        'orders-department', 'membership-a', 1, null, 'active', 'bootstrap',
+        '["doctor"]', '[]', '[]', ${effectiveFrom}, null,
+        'Synthetic scheduling fixture', 'membership-b',
+        ${effectiveFrom}, ${effectiveFrom}
+      ),
+      (
+        'orders-assignment-b-v1', 'org-a', 'fac-a', 'orders-assignment-b',
+        'orders-department', 'membership-b', 1, null, 'active', 'bootstrap',
+        '["doctor"]', '[]', '[]', ${effectiveFrom}, null,
+        'Synthetic scheduling fixture', 'membership-b',
+        ${effectiveFrom}, ${effectiveFrom}
+      );
+    insert into department_access_assignment_heads (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, current_version_id, lock_version, created_at, updated_at
+    ) values
+      (
+        'orders-assignment-a-head', 'org-a', 'fac-a', 'orders-assignment-a',
+        'orders-department', 'membership-a', 'orders-assignment-a-v1',
+        1, ${effectiveFrom}, ${effectiveFrom}
+      ),
+      (
+        'orders-assignment-b-head', 'org-a', 'fac-a', 'orders-assignment-b',
+        'orders-department', 'membership-b', 'orders-assignment-b-v1',
+        1, ${effectiveFrom}, ${effectiveFrom}
+      );
+  `);
 }
 
 function seedSchedule(database: DatabaseSync, now: number) {
@@ -417,6 +527,7 @@ function fixture(
       id, organization_id, facility_id, last_sequence, last_event_hash, lock_version
     ) values ('audit-head-a', 'org-a', 'fac-a', 0, null, 1);
   `);
+  seedOrderAccess(database, now - 1);
   seedCareConsent(database, 'a', 'patient-a', 'encounter-a', now);
   const primaryReferral = seedReferral(
     database,

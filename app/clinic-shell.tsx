@@ -29,7 +29,7 @@ const navigation = [
   { href: '/', label: 'Рабочий день', icon: LayoutDashboard, capability: 'clinician' },
   { href: '/patients', label: 'Пациенты', icon: Users, capability: 'patientDirectory' },
   { href: '/live', label: 'Очный приём', icon: Stethoscope, badge: 'LIVE', capability: 'clinician' },
-  { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'clinician' },
+  { href: '/orders', label: 'Направления', icon: ClipboardList, capability: 'orders' },
   { href: '/scheduling', label: 'Запись и очередь', icon: CalendarClock, badge: 'D1', capability: 'scheduling' },
   { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
   { href: '/observations', label: 'Показатели', icon: Activity, badge: 'D1', capability: 'observations' },
@@ -74,6 +74,7 @@ export function ClinicShell({
   capabilities: {
     clinician: boolean;
     patientDirectory: boolean;
+    orders: boolean;
     scheduling: boolean;
     chronicCare: boolean;
     observations: boolean;

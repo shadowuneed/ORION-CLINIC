@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
-import { resolveFacilityAccess } from '@/lib/auth/facility-access';
+import { resolveOrderWorkflowAccess } from '@/lib/auth/order-workflow-access';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import {
@@ -10,23 +10,29 @@ import {
   hasSameOrigin,
 } from '@/lib/http/api-response';
 import { orderApiFailure } from '@/lib/http/order-api-errors';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { D1OrderWorkflowRepository } from '@/lib/repositories/order-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
 const reconciliationSchema = z.object({
   facilityId: z.string().min(1).optional(),
+  accessAssignmentId: z.string().trim().min(1).max(160).optional(),
   olderThanMinutes: z.number().int().min(15).max(10_080).default(60),
   limit: z.number().int().min(1).max(100).default(25),
 });
 
-async function accessFor(request: Request, facilityId?: string) {
+async function accessFor(
+  request: Request,
+  accessAssignmentId?: string,
+  facilityId?: string,
+) {
   const identity = getSiteIdentity(request);
   if (!identity) return null;
-  return resolveFacilityAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+  return resolveOrderWorkflowAccess(
+    new D1AccessGovernanceRepository(env.DB),
     toSiteIdentityPrincipal(identity),
+    accessAssignmentId,
     facilityId,
   );
 }
@@ -61,7 +67,11 @@ export async function POST(request: Request) {
         'Очистка незавершённых тестовых загрузок отключена.',
       );
     }
-    const access = await accessFor(request, payload.facilityId);
+    const access = await accessFor(
+      request,
+      payload.accessAssignmentId,
+      payload.facilityId,
+    );
     if (!access) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }

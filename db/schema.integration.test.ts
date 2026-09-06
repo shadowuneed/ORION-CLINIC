@@ -63,8 +63,64 @@ function seedEncounter(target: DatabaseSync) {
   `);
 }
 
+function seedOrderAccess(target: DatabaseSync) {
+  target.exec(`
+    insert into departments (
+      id, organization_id, facility_id, code, name, kind, status,
+      created_at, updated_at, version
+    ) values (
+      'order-department-a', 'org-a', 'fac-a', 'orders', 'Orders',
+      'clinical', 'active', 500, 500, 1
+    );
+    insert into department_versions (
+      id, organization_id, facility_id, department_id, version,
+      supersedes_version_id, name, kind, status, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values (
+      'order-department-a-v1', 'org-a', 'fac-a', 'order-department-a', 1,
+      null, 'Orders', 'clinical', 'active', 'Synthetic test access',
+      'membership-a', 500, 500
+    );
+    insert into department_heads (
+      id, organization_id, facility_id, department_id, current_version_id,
+      lock_version, created_at, updated_at
+    ) values (
+      'order-department-a-head', 'org-a', 'fac-a', 'order-department-a',
+      'order-department-a-v1', 1, 500, 500
+    );
+    insert into department_access_assignments (
+      id, organization_id, facility_id, department_id, membership_id,
+      created_by_membership_id, created_at
+    ) values (
+      'order-assignment-a', 'org-a', 'fac-a', 'order-department-a',
+      'membership-a', 'membership-a', 500
+    );
+    insert into department_access_assignment_versions (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, version, supersedes_version_id, status, source_type,
+      roles_json, allow_permissions_json, deny_permissions_json,
+      effective_from, effective_until, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values (
+      'order-assignment-a-v1', 'org-a', 'fac-a', 'order-assignment-a',
+      'order-department-a', 'membership-a', 1, null, 'active', 'bootstrap',
+      '["doctor"]', '[]', '[]', 500, null, 'Synthetic test access',
+      'membership-a', 500, 500
+    );
+    insert into department_access_assignment_heads (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, current_version_id, lock_version, created_at, updated_at
+    ) values (
+      'order-assignment-a-head', 'org-a', 'fac-a', 'order-assignment-a',
+      'order-department-a', 'membership-a', 'order-assignment-a-v1',
+      1, 500, 500
+    );
+  `);
+}
+
 function seedOrderContext(target: DatabaseSync) {
   seedEncounter(target);
+  seedOrderAccess(target);
   target.exec(`
     insert into consent_events (
       id, organization_id, facility_id, patient_id, encounter_id, version,
@@ -84,20 +140,20 @@ function seedOrderContext(target: DatabaseSync) {
     );
     insert into service_requests (
       id, organization_id, facility_id, patient_id, encounter_id,
-      request_kind, created_by_membership_id, created_at
+      request_kind, created_by_membership_id, access_assignment_id, created_at
     ) values (
       'order-a', 'org-a', 'fac-a', 'patient-a', 'encounter-a',
-      'laboratory', 'membership-a', 2000
+      'laboratory', 'membership-a', 'order-assignment-a', 2000
     );
     insert into service_request_versions (
       id, organization_id, facility_id, service_request_id, version,
       status, priority, requested_service, medical_justification,
-      status_reason, authored_by_membership_id, created_at
+      status_reason, authored_by_membership_id, access_assignment_id, created_at
     ) values (
       'order-a-v1', 'org-a', 'fac-a', 'order-a', 1,
       'draft', 'routine', 'Synthetic test',
       'Synthetic medical justification', 'Draft created',
-      'membership-a', 2000
+      'membership-a', 'order-assignment-a', 2000
     );
     insert into service_request_heads (
       id, organization_id, facility_id, service_request_id,
@@ -1099,6 +1155,7 @@ describe('D1 schema security invariants', () => {
 
   it('binds every service request to the exact patient of its scoped encounter', () => {
     seedEncounter(database);
+    seedOrderAccess(database);
     database.exec(`
       insert into patients (
         id, organization_id, facility_id, medical_record_number, display_name
@@ -1109,10 +1166,11 @@ describe('D1 schema security invariants', () => {
       database.exec(`
         insert into service_requests (
           id, organization_id, facility_id, patient_id, encounter_id,
-          request_kind, created_by_membership_id, created_at
+          request_kind, created_by_membership_id, access_assignment_id,
+          created_at
         ) values (
           'order-mismatch', 'org-a', 'fac-a', 'patient-a2', 'encounter-a',
-          'laboratory', 'membership-a', 2000
+          'laboratory', 'membership-a', 'order-assignment-a', 2000
         );
       `),
     ).toThrow(/patient must match the exact scoped encounter/i);
@@ -1143,12 +1201,12 @@ describe('D1 schema security invariants', () => {
           id, organization_id, facility_id, service_request_id, version,
           supersedes_version_id, status, priority, requested_service,
           medical_justification, status_reason, authored_by_membership_id,
-          created_at
+          access_assignment_id, created_at
         ) values (
           'order-a-v2', 'org-a', 'fac-a', 'order-a', 2, 'order-a-v1',
           'revoked', 'routine', 'Synthetic test',
           'Synthetic medical justification', 'Consent withdrawn',
-          'membership-a', 3000
+          'membership-a', 'order-assignment-a', 3000
         );
       `),
     ).toThrow(/effective care consent/i);
@@ -1161,12 +1219,12 @@ describe('D1 schema security invariants', () => {
         id, organization_id, facility_id, service_request_id, version,
         supersedes_version_id, status, priority, requested_service,
         medical_justification, status_reason, authored_by_membership_id,
-        approved_by_membership_id, approved_at, created_at
+        access_assignment_id, approved_by_membership_id, approved_at, created_at
       ) values (
         'order-a-v2', 'org-a', 'fac-a', 'order-a', 2, 'order-a-v1',
         'active', 'routine', 'Synthetic test',
         'Synthetic medical justification', 'Approved by doctor',
-        'membership-a', 'membership-a', 2500, 2500
+        'membership-a', 'order-assignment-a', 'membership-a', 2500, 2500
       );
       update service_request_heads
       set current_version_id = 'order-a-v2', lock_version = 2, updated_at = 2500
@@ -1179,12 +1237,13 @@ describe('D1 schema security invariants', () => {
           id, organization_id, facility_id, service_request_id, version,
           supersedes_version_id, status, priority, requested_service,
           medical_justification, status_reason, authored_by_membership_id,
-          approved_by_membership_id, approved_at, created_at
+          access_assignment_id, approved_by_membership_id, approved_at,
+          created_at
         ) values (
           'order-a-v3', 'org-a', 'fac-a', 'order-a', 3, 'order-a-v2',
           'completed', 'routine', 'Synthetic test',
           'Synthetic medical justification', 'Completed without result',
-          'membership-a', 'membership-a', 2500, 3000
+          'membership-a', 'order-assignment-a', 'membership-a', 2500, 3000
         );
       `),
     ).toThrow(/current reviewed final result/i);
@@ -1195,37 +1254,39 @@ describe('D1 schema security invariants', () => {
     database.exec(`
       insert into diagnostic_reports (
         id, organization_id, facility_id, service_request_id,
-        created_by_membership_id, created_at
+        created_by_membership_id, access_assignment_id, created_at
       ) values (
-        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a', 2100
+        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a',
+        'order-assignment-a', 2100
       );
       insert into diagnostic_report_artifacts (
         id, organization_id, facility_id, service_request_id,
         diagnostic_report_id, object_key, file_name, mime_type, sha256,
-        byte_size, created_by_membership_id, created_at
+        byte_size, created_by_membership_id, access_assignment_id, created_at
       ) values
         (
           'artifact-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a',
           'diagnostic-results/org-a/fac-a/artifact-a-v1.pdf',
           'result-v1.pdf', 'application/pdf',
           'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          128, 'membership-a', 2150
+          128, 'membership-a', 'order-assignment-a', 2150
         ),
         (
           'artifact-a-bypass', 'org-a', 'fac-a', 'order-a', 'report-a',
           'diagnostic-results/org-a/fac-a/artifact-a-bypass.pdf',
           'result-bypass.pdf', 'application/pdf',
           'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-          128, 'membership-a', 2150
+          128, 'membership-a', 'order-assignment-a', 2150
         );
       insert into diagnostic_report_versions (
         id, organization_id, facility_id, service_request_id,
         diagnostic_report_id, version, report_status, conclusion, artifact_id,
-        review_state, change_reason, created_by_membership_id, created_at
+        review_state, change_reason, created_by_membership_id,
+        access_assignment_id, created_at
       ) values (
         'report-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a', 1,
         'preliminary', 'Original pending conclusion', 'artifact-a-v1',
-        'pending', 'Result attached', 'membership-a', 2200
+        'pending', 'Result attached', 'membership-a', 'order-assignment-a', 2200
       );
       insert into diagnostic_report_heads (
         id, organization_id, facility_id, service_request_id,
@@ -1243,13 +1304,13 @@ describe('D1 schema security invariants', () => {
           id, organization_id, facility_id, service_request_id,
           diagnostic_report_id, version, supersedes_version_id,
           report_status, conclusion, artifact_id, review_state, change_reason,
-          created_by_membership_id, reviewed_by_membership_id, reviewed_at,
-          created_at
+          created_by_membership_id, access_assignment_id,
+          reviewed_by_membership_id, reviewed_at, created_at
         ) values (
           'report-a-v2-payload-bypass', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
           'report-a-v1', 'final', 'Changed during review', 'artifact-a-bypass',
           'reviewed', 'Payload-changing review attempted',
-          'membership-a', 'membership-a', 2250, 2250
+          'membership-a', 'order-assignment-a', 'membership-a', 2250, 2250
         );
       `),
     ).toThrow(/preserve the exact pending payload/i);
@@ -1260,12 +1321,12 @@ describe('D1 schema security invariants', () => {
         diagnostic_report_id, version, supersedes_version_id,
         report_status, conclusion, artifact_id, review_state,
         change_reason, created_by_membership_id, reviewed_by_membership_id,
-        reviewed_at, created_at
+        access_assignment_id, reviewed_at, created_at
       ) values (
         'report-a-v2', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
         'report-a-v1', 'preliminary', 'Original pending conclusion',
         'artifact-a-v1', 'reviewed', 'Reviewed without changing payload',
-        'membership-a', 'membership-a', 2300, 2300
+        'membership-a', 'membership-a', 'order-assignment-a', 2300, 2300
       );
       update diagnostic_report_heads
       set current_version_id = 'report-a-v2', lock_version = 2, updated_at = 2300
@@ -1291,17 +1352,20 @@ describe('D1 schema security invariants', () => {
     database.exec(`
       insert into diagnostic_reports (
         id, organization_id, facility_id, service_request_id,
-        created_by_membership_id, created_at
+        created_by_membership_id, access_assignment_id, created_at
       ) values (
-        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a', 2100
+        'report-a', 'org-a', 'fac-a', 'order-a', 'membership-a',
+        'order-assignment-a', 2100
       );
       insert into diagnostic_report_versions (
         id, organization_id, facility_id, service_request_id,
         diagnostic_report_id, version, report_status, review_state,
-        change_reason, created_by_membership_id, created_at
+        change_reason, created_by_membership_id, access_assignment_id,
+        created_at
       ) values (
         'report-a-v1', 'org-a', 'fac-a', 'order-a', 'report-a', 1,
-        'preliminary', 'pending', 'Result attached', 'membership-a', 2200
+        'preliminary', 'pending', 'Result attached', 'membership-a',
+        'order-assignment-a', 2200
       );
       insert into diagnostic_report_heads (
         id, organization_id, facility_id, service_request_id,
@@ -1315,13 +1379,13 @@ describe('D1 schema security invariants', () => {
         id, organization_id, facility_id, service_request_id,
         diagnostic_report_id, version, supersedes_version_id,
         report_status, review_state, reconciliation_note, change_reason,
-        created_by_membership_id, reviewed_by_membership_id, reviewed_at,
-        created_at
+        created_by_membership_id, access_assignment_id,
+        reviewed_by_membership_id, reviewed_at, created_at
       ) values (
         'report-a-v2', 'org-a', 'fac-a', 'order-a', 'report-a', 2,
         'report-a-v1', 'preliminary', 'needs_reconciliation',
         'Patient identity must be reconciled', 'Reconciliation requested',
-        'membership-a', 'membership-a', 2300, 2300
+        'membership-a', 'order-assignment-a', 'membership-a', 2300, 2300
       );
       update diagnostic_report_heads
       set current_version_id = 'report-a-v2', lock_version = 2, updated_at = 2300
@@ -1334,12 +1398,12 @@ describe('D1 schema security invariants', () => {
           id, organization_id, facility_id, service_request_id,
           diagnostic_report_id, version, supersedes_version_id,
           report_status, review_state, change_reason,
-          created_by_membership_id, reviewed_by_membership_id, reviewed_at,
-          created_at
+          created_by_membership_id, access_assignment_id,
+          reviewed_by_membership_id, reviewed_at, created_at
         ) values (
           'report-a-v3-bypass', 'org-a', 'fac-a', 'order-a', 'report-a', 3,
           'report-a-v2', 'preliminary', 'reviewed', 'Bypass attempted',
-          'membership-a', 'membership-a', 2400, 2400
+          'membership-a', 'order-assignment-a', 'membership-a', 2400, 2400
         );
       `),
     ).toThrow(/preserve the exact pending payload/i);
@@ -1349,22 +1413,25 @@ describe('D1 schema security invariants', () => {
     seedOrderContext(database);
     database.exec(`
       insert into command_idempotency (
-        id, organization_id, facility_id, actor_membership_id, operation,
-        idempotency_key, request_hash, status, created_at
+        id, organization_id, facility_id, actor_membership_id,
+        access_assignment_id, operation, idempotency_key, request_hash,
+        status, created_at
       ) values (
         'upload-command-a', 'org-a', 'fac-a', 'membership-a',
-        'order.result.attach', 'upload-key-a', 'upload-hash-a', 'processing', 2100
+        'order-assignment-a', 'order.result.attach', 'upload-key-a',
+        'upload-hash-a', 'processing', 2100
       );
       insert into diagnostic_result_upload_intents (
         id, organization_id, facility_id, command_id, service_request_id,
         artifact_id, object_key, file_name, mime_type, sha256, byte_size,
-        status, created_by_membership_id, created_at, updated_at
+        status, created_by_membership_id, access_assignment_id,
+        created_at, updated_at
       ) values (
         'upload-intent-a', 'org-a', 'fac-a', 'upload-command-a', 'order-a',
         'artifact-upload-a', 'diagnostic-results/org-a/fac-a/upload-a.pdf',
         'synthetic-result.pdf', 'application/pdf',
         'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        128, 'reserved', 'membership-a', 2100, 2100
+        128, 'reserved', 'membership-a', 'order-assignment-a', 2100, 2100
       );
     `);
 

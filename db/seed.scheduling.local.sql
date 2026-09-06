@@ -4,12 +4,12 @@
 
 INSERT INTO service_requests (
   id, organization_id, facility_id, patient_id, encounter_id,
-  request_kind, created_by_membership_id, created_at
+  request_kind, created_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'service-request-scheduling-referral', 'org-a', 'fac-a',
   'patient-a-lifecycle', 'encounter-a-lifecycle', 'referral',
-  'membership-a', 1788595200000
+  'membership-a', 'access-assignment-a-general-medicine', 1788595200000
 WHERE NOT EXISTS (
   SELECT 1 FROM service_requests
   WHERE id = 'service-request-scheduling-referral'
@@ -19,7 +19,8 @@ INSERT INTO service_request_versions (
   id, organization_id, facility_id, service_request_id, version,
   supersedes_version_id, status, priority, requested_service,
   target_specialty, medical_justification, clinician_note, status_reason,
-  authored_by_membership_id, approved_by_membership_id, approved_at, created_at
+  authored_by_membership_id, access_assignment_id,
+  approved_by_membership_id, approved_at, created_at
 )
 SELECT
   'service-request-version-scheduling-referral-v1', 'org-a', 'fac-a',
@@ -28,7 +29,8 @@ SELECT
   'Синтетическое направление для проверки локального контура записи.',
   'Только тестовые данные, без передачи во внешнюю систему.',
   'Создано из локального синтетического набора',
-  'membership-a', NULL, NULL, 1788595201000
+  'membership-a', 'access-assignment-a-general-medicine',
+  NULL, NULL, 1788595201000
 WHERE NOT EXISTS (
   SELECT 1 FROM service_request_versions
   WHERE id = 'service-request-version-scheduling-referral-v1'
@@ -52,7 +54,8 @@ INSERT INTO service_request_versions (
   id, organization_id, facility_id, service_request_id, version,
   supersedes_version_id, status, priority, requested_service,
   target_specialty, medical_justification, clinician_note, status_reason,
-  authored_by_membership_id, approved_by_membership_id, approved_at, created_at
+  authored_by_membership_id, access_assignment_id,
+  approved_by_membership_id, approved_at, created_at
 )
 SELECT
   'service-request-version-scheduling-referral-v2', 'org-a', 'fac-a',
@@ -62,7 +65,8 @@ SELECT
   'Синтетическое направление для проверки локального контура записи.',
   'Только тестовые данные, без передачи во внешнюю систему.',
   'Подтверждено врачом в синтетическом контуре',
-  'membership-a', 'membership-a', 1788595260000, 1788595260000
+  'membership-a', 'access-assignment-a-general-medicine',
+  'membership-a', 1788595260000, 1788595260000
 WHERE NOT EXISTS (
   SELECT 1 FROM service_request_versions
   WHERE id = 'service-request-version-scheduling-referral-v2'

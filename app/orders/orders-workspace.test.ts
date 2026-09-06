@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOrderAccessQuery,
+  buildScopedOperationKey,
   canShowDiagnosticReviewControls,
   unknownOutcomeMessage,
 } from './orders-workspace';
@@ -35,5 +37,24 @@ describe('orders workspace diagnostic review controls', () => {
     expect(
       canShowDiagnosticReviewControls('active', 'needs_reconciliation'),
     ).toBe(false);
+  });
+});
+
+describe('orders workspace assignment propagation', () => {
+  it('keeps the exact facility and assignment on artifact requests', () => {
+    expect(buildOrderAccessQuery('fac-a', 'assignment-a')).toBe(
+      '?facilityId=fac-a&accessAssignmentId=assignment-a',
+    );
+  });
+
+  it('does not invent an access context when none was selected', () => {
+    expect(buildOrderAccessQuery('', '')).toBe('');
+  });
+
+  it('isolates retry keys by the exact selected assignment', () => {
+    expect(buildScopedOperationKey('assignment-a', 'review', 'order-a', 2))
+      .not.toBe(
+        buildScopedOperationKey('assignment-b', 'review', 'order-a', 2),
+      );
   });
 });

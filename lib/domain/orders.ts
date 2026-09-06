@@ -63,6 +63,7 @@ export type DiagnosticReviewState =
 
 export const orderListQuerySchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: z.string().trim().min(1).max(160).optional(),
   status: z.enum([...serviceRequestStatuses, 'all']).default('all'),
   kind: z.enum([...serviceRequestKinds, 'all']).default('all'),
   query: z.string().trim().max(120).optional(),
@@ -72,6 +73,7 @@ export const orderListQuerySchema = z.object({
 export const createServiceRequestSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: z.string().trim().min(1).max(160).optional(),
     encounterId: z.string().trim().min(1).max(160),
     kind: z.enum(serviceRequestKinds),
     priority: z.enum(serviceRequestPriorities),
@@ -101,6 +103,7 @@ export const createServiceRequestSchema = z
 
 export const serviceRequestCommandSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: z.string().trim().min(1).max(160).optional(),
   action: z.enum([
     'approve',
     'hold',
@@ -116,6 +119,7 @@ export const serviceRequestCommandSchema = z.object({
 
 export const diagnosticResultMetadataSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: z.string().trim().min(1).max(160).optional(),
   reportStatus: z.enum(attachableDiagnosticReportStatuses),
   conclusion: nullableText(2, 4_000),
   changeReason: cleanText(3, 500),
@@ -126,6 +130,7 @@ export const diagnosticResultMetadataSchema = z.object({
 
 export const diagnosticResultReviewSchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: z.string().trim().min(1).max(160).optional(),
   decision: z.enum(['reviewed', 'needs_reconciliation']),
   note: nullableText(3, 1_000),
   expectedReportVersion: z.number().int().positive(),

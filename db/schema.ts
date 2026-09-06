@@ -1192,6 +1192,9 @@ export const serviceRequests = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -1204,6 +1207,12 @@ export const serviceRequests = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.patientId,
+    ),
+    index('service_requests_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     uniqueIndex('service_requests_scope_id_uidx').on(
       table.organizationId,
@@ -1288,6 +1297,9 @@ export const serviceRequestVersions = sqliteTable(
     authoredByMembershipId: text('authored_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     approvedByMembershipId: text('approved_by_membership_id').references(
       () => memberships.id,
     ),
@@ -1309,6 +1321,12 @@ export const serviceRequestVersions = sqliteTable(
     ),
     uniqueIndex('service_request_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('service_request_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'service_request_versions_scope_request_fk',
@@ -1456,6 +1474,9 @@ export const diagnosticReports = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -1474,6 +1495,12 @@ export const diagnosticReports = sqliteTable(
       table.facilityId,
       table.serviceRequestId,
       table.id,
+    ),
+    index('diagnostic_reports_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'diagnostic_reports_scope_request_fk',
@@ -1528,6 +1555,9 @@ export const diagnosticReportArtifacts = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -1546,6 +1576,12 @@ export const diagnosticReportArtifacts = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.serviceRequestId,
+    ),
+    index('diagnostic_report_artifacts_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'diagnostic_report_artifacts_scope_request_fk',
@@ -1643,6 +1679,9 @@ export const diagnosticReportVersions = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     reviewedByMembershipId: text('reviewed_by_membership_id').references(
       () => memberships.id,
     ),
@@ -1664,6 +1703,12 @@ export const diagnosticReportVersions = sqliteTable(
     ),
     uniqueIndex('diagnostic_report_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('diagnostic_report_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'diagnostic_report_versions_scope_report_fk',
@@ -5077,6 +5122,9 @@ export const commandIdempotency = sqliteTable(
     actorMembershipId: text('actor_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     operation: text('operation').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
     requestHash: text('request_hash').notNull(),
@@ -5103,6 +5151,12 @@ export const commandIdempotency = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.id,
+    ),
+    index('command_idempotency_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'command_idempotency_scope_facility_fk',
@@ -5169,6 +5223,9 @@ export const diagnosticResultUploadIntents = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -5188,6 +5245,12 @@ export const diagnosticResultUploadIntents = sqliteTable(
       table.facilityId,
       table.status,
       table.updatedAt,
+    ),
+    index('diagnostic_result_upload_intents_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'diagnostic_result_upload_intents_scope_command_fk',

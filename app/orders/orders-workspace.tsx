@@ -38,19 +38,19 @@ import {
 } from '@/lib/domain/orders';
 import styles from './orders.module.css';
 
-type FacilityOption = {
-  organizationId: string;
+type AccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
-  role: 'clinician' | 'registrar';
+  departmentName: string;
 };
 
 type OrdersResponse = {
-  viewer?: { id: string; displayName: string; role: string };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignment?: { assignmentId: string };
+  assignments?: AccessAssignmentOption[];
   orders?: ServiceRequestRecord[];
   encounters?: OrderEncounterOption[];
   error?: ApiError;
@@ -60,13 +60,13 @@ type ApiError = {
   code: string;
   message: string;
   requestId?: string;
-  details?: { facilities?: FacilityOption[] };
+  details?: { assignments?: AccessAssignmentOption[] };
 };
 
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -150,6 +150,26 @@ export function canShowDiagnosticReviewControls(
   );
 }
 
+export function buildOrderAccessQuery(
+  facilityId: string,
+  accessAssignmentId: string,
+) {
+  const params = new URLSearchParams();
+  if (facilityId) params.set('facilityId', facilityId);
+  if (accessAssignmentId) {
+    params.set('accessAssignmentId', accessAssignmentId);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export function buildScopedOperationKey(
+  accessAssignmentId: string,
+  ...parts: Array<string | number | null | undefined>
+) {
+  return [accessAssignmentId || 'unselected', ...parts.map(String)].join('|');
+}
+
 function formatTimestamp(value: number | null) {
   if (value === null) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -169,8 +189,8 @@ export function OrdersWorkspace() {
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<OrdersResponse>({});
   const [selectedId, setSelectedId] = useState('');
-  const [selectedFacilityId, setSelectedFacilityId] = useState('');
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  const [selectedAccessAssignmentId, setSelectedAccessAssignmentId] = useState('');
+  const [assignmentOptions, setAssignmentOptions] = useState<AccessAssignmentOption[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ServiceRequestStatus | 'all'>('all');
   const [kind, setKind] = useState<ServiceRequestKind | 'all'>('all');
@@ -184,21 +204,23 @@ export function OrdersWorkspace() {
   const [selectedFileName, setSelectedFileName] = useState('');
 
   const facilityRef = useRef('');
+  const accessAssignmentRef = useRef('');
   const statusRef = useRef<ServiceRequestStatus | 'all'>('all');
   const kindRef = useRef<ServiceRequestKind | 'all'>('all');
   const queryRef = useRef('');
   const selectedIdRef = useRef('');
-  const createKey = useRef<string | null>(null);
+  const createKeys = useRef(new Map<string, string>());
   const actionKeys = useRef(new Map<string, string>());
-  const uploadKey = useRef<string | null>(null);
+  const uploadKeys = useRef(new Map<string, string>());
   const reviewKeys = useRef(new Map<string, string>());
+  const loadAbort = useRef<AbortController | null>(null);
+  const loadGeneration = useRef(0);
 
   const selectOrder = useCallback((orderId: string) => {
     if (selectedIdRef.current !== orderId) {
       setActionReason('');
       setReviewNote('');
       setSelectedFileName('');
-      uploadKey.current = null;
       setMessage(null);
       setOperationError(null);
     }
@@ -207,6 +229,11 @@ export function OrdersWorkspace() {
   }, []);
 
   const load = useCallback(async (preferredId?: string) => {
+    const generation = loadGeneration.current + 1;
+    loadGeneration.current = generation;
+    loadAbort.current?.abort();
+    const controller = new AbortController();
+    loadAbort.current = controller;
     setState('loading');
     setSelectedFileName('');
     try {
@@ -216,30 +243,40 @@ export function OrdersWorkspace() {
         limit: '100',
       });
       if (facilityRef.current) params.set('facilityId', facilityRef.current);
+      if (accessAssignmentRef.current) {
+        params.set('accessAssignmentId', accessAssignmentRef.current);
+      }
       if (queryRef.current) params.set('query', queryRef.current);
       const response = await fetch(`/api/orders?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
+        signal: controller.signal,
       });
       const payload = (await response.json()) as OrdersResponse;
+      if (controller.signal.aborted || generation !== loadGeneration.current) {
+        return;
+      }
       setData(payload);
       if (response.status === 401) {
         setState('unauthenticated');
       } else if (
         response.status === 409 &&
-        payload.error?.code === 'FACILITY_SELECTION_REQUIRED'
+        payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
       ) {
-        setFacilityOptions(payload.error.details?.facilities ?? []);
-        setState('facility');
+        setAssignmentOptions(payload.error.details?.assignments ?? []);
+        setState('assignment');
       } else if (response.status === 403) {
         setState('forbidden');
       } else if (!response.ok || !payload.orders || !payload.encounters) {
         setState('error');
       } else {
         const resolvedFacility = payload.facility?.id ?? facilityRef.current;
+        const resolvedAssignment =
+          payload.accessAssignment?.assignmentId ?? accessAssignmentRef.current;
         facilityRef.current = resolvedFacility;
-        setSelectedFacilityId(resolvedFacility);
-        setFacilityOptions(payload.facilities ?? []);
+        accessAssignmentRef.current = resolvedAssignment;
+        setSelectedAccessAssignmentId(resolvedAssignment);
+        setAssignmentOptions(payload.assignments ?? []);
         const candidate = preferredId ?? selectedIdRef.current;
         selectOrder(
           payload.orders.some((order) => order.id === candidate)
@@ -248,8 +285,14 @@ export function OrdersWorkspace() {
         );
         setState('ready');
       }
-    } catch {
-      setState('error');
+    } catch (error) {
+      if (
+        !controller.signal.aborted &&
+        generation === loadGeneration.current &&
+        !(error instanceof DOMException && error.name === 'AbortError')
+      ) {
+        setState('error');
+      }
     }
   }, [selectOrder]);
 
@@ -257,27 +300,39 @@ export function OrdersWorkspace() {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       facilityRef.current = params.get('facilityId') ?? '';
-      setSelectedFacilityId(facilityRef.current);
+      accessAssignmentRef.current = params.get('accessAssignmentId') ?? '';
+      setSelectedAccessAssignmentId(accessAssignmentRef.current);
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      loadAbort.current?.abort();
+    };
   }, [load]);
 
   const orders = data.orders ?? [];
   const encounters = data.encounters ?? [];
   const selected = orders.find((order) => order.id === selectedId) ?? null;
 
-  function facilityQuery() {
-    return facilityRef.current
-      ? `?facilityId=${encodeURIComponent(facilityRef.current)}`
-      : '';
+  function assignmentQuery() {
+    return buildOrderAccessQuery(
+      facilityRef.current,
+      accessAssignmentRef.current,
+    );
   }
 
-  function selectFacility(facilityId: string) {
-    facilityRef.current = facilityId;
-    setSelectedFacilityId(facilityId);
+  function selectAssignment(assignmentId: string) {
+    if (busy) return;
+    const assignment = assignmentOptions.find(
+      (candidate) => candidate.assignmentId === assignmentId,
+    );
+    if (!assignment) return;
+    accessAssignmentRef.current = assignment.assignmentId;
+    facilityRef.current = assignment.facilityId;
+    setSelectedAccessAssignmentId(assignment.assignmentId);
     const url = new URL(window.location.href);
-    url.searchParams.set('facilityId', facilityId);
+    url.searchParams.set('accessAssignmentId', assignment.assignmentId);
+    url.searchParams.set('facilityId', assignment.facilityId);
     window.history.replaceState(null, '', url);
     void load();
   }
@@ -312,8 +367,29 @@ export function OrdersWorkspace() {
     event.preventDefault();
     if (busy) return;
     const form = new FormData(event.currentTarget);
-    const idempotencyKey = createKey.current ?? crypto.randomUUID();
-    createKey.current = idempotencyKey;
+    const commandPayload = {
+      facilityId: facilityRef.current || undefined,
+      accessAssignmentId: accessAssignmentRef.current || undefined,
+      encounterId: String(form.get('encounterId') ?? ''),
+      kind: String(form.get('kind') ?? ''),
+      priority: String(form.get('priority') ?? ''),
+      requestedService: String(form.get('requestedService') ?? ''),
+      targetSpecialty:
+        createKind === 'referral'
+          ? String(form.get('targetSpecialty') ?? '') || null
+          : null,
+      medicalJustification: String(form.get('medicalJustification') ?? ''),
+      clinicianNote: String(form.get('clinicianNote') ?? '') || null,
+      testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+    };
+    const keyName = buildScopedOperationKey(
+      accessAssignmentRef.current,
+      'create',
+      JSON.stringify(commandPayload),
+    );
+    const idempotencyKey =
+      createKeys.current.get(keyName) ?? crypto.randomUUID();
+    createKeys.current.set(keyName, idempotencyKey);
     clearFeedback();
     setBusy('create');
     try {
@@ -322,18 +398,7 @@ export function OrdersWorkspace() {
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          facilityId: facilityRef.current || undefined,
-          encounterId: String(form.get('encounterId') ?? ''),
-          kind: String(form.get('kind') ?? ''),
-          priority: String(form.get('priority') ?? ''),
-          requestedService: String(form.get('requestedService') ?? ''),
-          targetSpecialty:
-            createKind === 'referral'
-              ? String(form.get('targetSpecialty') ?? '') || null
-              : null,
-          medicalJustification: String(form.get('medicalJustification') ?? ''),
-          clinicianNote: String(form.get('clinicianNote') ?? '') || null,
-          testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+          ...commandPayload,
           idempotencyKey,
         }),
       });
@@ -342,11 +407,11 @@ export function OrdersWorkspace() {
         error?: ApiError;
       };
       if (!response.ok || !payload.order) {
-        if (response.status < 500) createKey.current = null;
+        if (response.status < 500) createKeys.current.delete(keyName);
         setOperationError(payload.error ?? { code: 'UNKNOWN', message: 'Не удалось создать направление.' });
         return;
       }
-      createKey.current = null;
+      createKeys.current.delete(keyName);
       setCreateOpen(false);
       updateOrder(payload.order, 'Черновик сохранён. Теперь врач должен отдельно его подтвердить.');
       await load(payload.order.id);
@@ -362,7 +427,13 @@ export function OrdersWorkspace() {
 
   async function runAction(action: OrderAction) {
     if (!selected || busy || actionReason.trim().length < 3) return;
-    const keyName = `${selected.id}:${selected.current.version}:${action}`;
+    const keyName = buildScopedOperationKey(
+      accessAssignmentRef.current,
+      'action',
+      selected.id,
+      selected.current.version,
+      action,
+    );
     const idempotencyKey = actionKeys.current.get(keyName) ?? crypto.randomUUID();
     actionKeys.current.set(keyName, idempotencyKey);
     clearFeedback();
@@ -376,6 +447,7 @@ export function OrdersWorkspace() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId: facilityRef.current || undefined,
+            accessAssignmentId: accessAssignmentRef.current || undefined,
             action,
             reason: actionReason,
             expectedVersion: selected.current.version,
@@ -420,8 +492,18 @@ export function OrdersWorkspace() {
       setOperationError({ code: 'FILE_REQUIRED', message: 'Выберите PDF, JPEG или PNG.' });
       return;
     }
-    const idempotencyKey = uploadKey.current ?? crypto.randomUUID();
-    uploadKey.current = idempotencyKey;
+    const keyName = buildScopedOperationKey(
+      accessAssignmentRef.current,
+      'upload',
+      selected.id,
+      selected.report?.current.version ?? 0,
+      file.name,
+      file.size,
+      file.lastModified,
+    );
+    const idempotencyKey =
+      uploadKeys.current.get(keyName) ?? crypto.randomUUID();
+    uploadKeys.current.set(keyName, idempotencyKey);
     form.set('idempotencyKey', idempotencyKey);
     form.set('expectedReportVersion', String(selected.report?.current.version ?? 0));
     form.set('testDataAcknowledged', 'true');
@@ -429,7 +511,7 @@ export function OrdersWorkspace() {
     setBusy('upload');
     try {
       const response = await fetch(
-        `/api/orders/${encodeURIComponent(selected.id)}/result${facilityQuery()}`,
+        `/api/orders/${encodeURIComponent(selected.id)}/result${assignmentQuery()}`,
         {
           method: 'PUT',
           credentials: 'same-origin',
@@ -441,7 +523,7 @@ export function OrdersWorkspace() {
         error?: ApiError;
       };
       if (!response.ok || !payload.order) {
-        if (response.status < 500) uploadKey.current = null;
+        if (response.status < 500) uploadKeys.current.delete(keyName);
         setOperationError(
           response.status >= 500
             ? { code: 'UNKNOWN_OUTCOME', message: unknownOutcomeMessage('upload') }
@@ -449,7 +531,7 @@ export function OrdersWorkspace() {
         );
         return;
       }
-      uploadKey.current = null;
+      uploadKeys.current.delete(keyName);
       formElement.reset();
       setSelectedFileName('');
       updateOrder(payload.order, 'Результат сохранён. До решения врача он остаётся непроверенным.');
@@ -473,7 +555,13 @@ export function OrdersWorkspace() {
       });
       return;
     }
-    const keyName = `${selected.id}:${selected.report.current.version}:${decision}`;
+    const keyName = buildScopedOperationKey(
+      accessAssignmentRef.current,
+      'review',
+      selected.id,
+      selected.report.current.version,
+      decision,
+    );
     const idempotencyKey = reviewKeys.current.get(keyName) ?? crypto.randomUUID();
     reviewKeys.current.set(keyName, idempotencyKey);
     clearFeedback();
@@ -487,6 +575,7 @@ export function OrdersWorkspace() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId: facilityRef.current || undefined,
+            accessAssignmentId: accessAssignmentRef.current || undefined,
             decision,
             note: reviewNote.trim() || null,
             expectedReportVersion: selected.report.current.version,
@@ -535,6 +624,13 @@ export function OrdersWorkspace() {
   const reconciliationCount = orders.filter(
     (order) => order.report?.current.reviewState === 'needs_reconciliation',
   ).length;
+  const signInReturnTo = `/orders${buildOrderAccessQuery(
+    data.facility?.id ?? '',
+    selectedAccessAssignmentId,
+  )}`;
+  const signInHref = `/signin-with-chatgpt?return_to=${encodeURIComponent(
+    signInReturnTo,
+  )}`;
 
   return (
     <main className={styles.main}>
@@ -610,15 +706,16 @@ export function OrdersWorkspace() {
           <RefreshCw aria-hidden="true" size={17} />
           Обновить
         </button>
-        {facilityOptions.length > 1 && (
+        {assignmentOptions.length > 1 && (
           <select
-            aria-label="Филиал"
-            onChange={(event) => selectFacility(event.target.value)}
-            value={selectedFacilityId}
+            aria-label="Рабочий контур"
+            disabled={Boolean(busy) || state === 'loading'}
+            onChange={(event) => selectAssignment(event.target.value)}
+            value={selectedAccessAssignmentId}
           >
-            {facilityOptions.map((facility) => (
-              <option key={`${facility.organizationId}:${facility.facilityId}`} value={facility.facilityId}>
-                {facility.organizationName} · {facility.facilityName}
+            {assignmentOptions.map((assignment) => (
+              <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                {assignment.organizationName} · {assignment.facilityName} · {assignment.departmentName}
               </option>
             ))}
           </select>
@@ -643,10 +740,10 @@ export function OrdersWorkspace() {
       )}
 
       {state === 'loading' && <StatePanel icon={<LoaderCircle className={styles.spin} />} title="Загружаем направления" text="Читаем текущие версии и результаты из D1." />}
-      {state === 'unauthenticated' && <StatePanel icon={<AlertCircle />} title="Нужен вход" text="Откройте платформу через авторизованный контур ORION Clinic." action={<a className={styles.primaryButton} href="/signin-with-chatgpt?return_to=%2Forders" target="_top">Войти</a>} />}
+      {state === 'unauthenticated' && <StatePanel icon={<AlertCircle />} title="Нужен вход" text="Откройте платформу через авторизованный контур ORION Clinic." action={<a className={styles.primaryButton} href={signInHref} target="_top">Войти</a>} />}
       {state === 'forbidden' && <StatePanel icon={<ShieldCheck />} title="Нет доступа" text="Раздел доступен только врачу с активным назначением в клинике." />}
       {state === 'error' && <StatePanel icon={<AlertCircle />} title="Не удалось загрузить данные" text={data.error?.message ?? 'Проверьте локальную базу и повторите.'} action={<button className={styles.secondaryButton} onClick={() => void load()} type="button">Повторить</button>} />}
-      {state === 'facility' && <StatePanel icon={<ShieldCheck />} title="Выберите филиал" text="Направления всегда открываются внутри одного разрешённого филиала." action={<div className={styles.facilityChoices}>{facilityOptions.map((facility) => <button className={styles.secondaryButton} key={facility.facilityId} onClick={() => selectFacility(facility.facilityId)} type="button">{facility.organizationName} · {facility.facilityName}</button>)}</div>} />}
+      {state === 'assignment' && <StatePanel icon={<ShieldCheck />} title="Выберите рабочий контур" text="Права разных отделений и филиалов не объединяются." action={<div className={styles.facilityChoices}>{assignmentOptions.map((assignment) => <button className={styles.secondaryButton} key={assignment.assignmentId} onClick={() => selectAssignment(assignment.assignmentId)} type="button">{assignment.organizationName} · {assignment.facilityName} · {assignment.departmentName}</button>)}</div>} />}
 
       {state === 'ready' && (
         <section className={styles.workspace}>
@@ -700,11 +797,10 @@ export function OrdersWorkspace() {
                 order={selected}
                 reviewNote={reviewNote}
                 selectedFileName={selectedFileName}
-                resultUrl={`/api/orders/${encodeURIComponent(selected.id)}/result${
-                  selectedFacilityId
-                    ? `?facilityId=${encodeURIComponent(selectedFacilityId)}`
-                    : ''
-                }`}
+                resultUrl={`/api/orders/${encodeURIComponent(selected.id)}/result${buildOrderAccessQuery(
+                  data.facility?.id ?? '',
+                  selectedAccessAssignmentId,
+                )}`}
               />
             ) : (
               <div className={styles.detailEmpty}>

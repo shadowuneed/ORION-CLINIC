@@ -1,8 +1,9 @@
 import {
-  FacilityAccessNotFoundError,
-  MultipleFacilitySelectionRequiredError,
-  PatientDirectoryMembershipRequiredError,
-} from '@/lib/auth/facility-access';
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
+import { MultipleOrderAccessSelectionRequiredError } from '@/lib/auth/order-workflow-access';
 import {
   OrderWorkflowClinicianRequiredError,
   OrderWorkflowAuditUnavailableError,
@@ -20,21 +21,22 @@ export function orderApiFailure(
   fallbackCode: string,
   fallbackMessage: string,
 ) {
-  if (error instanceof MultipleFacilitySelectionRequiredError) {
-    return apiFailure(context, 409, 'FACILITY_SELECTION_REQUIRED', 'Выберите филиал.', {
-      facilities: error.facilities,
+  if (error instanceof MultipleOrderAccessSelectionRequiredError) {
+    return apiFailure(context, 409, 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED', 'Выберите рабочий контур.', {
+      assignments: error.assignments,
     });
   }
   if (
-    error instanceof PatientDirectoryMembershipRequiredError ||
-    error instanceof FacilityAccessNotFoundError ||
+    error instanceof AccessMembershipRequiredError ||
+    error instanceof AccessAssignmentNotFoundError ||
+    error instanceof AccessPermissionRequiredError ||
     error instanceof OrderWorkflowClinicianRequiredError
   ) {
     return apiFailure(
       context,
       403,
       'ORDER_WORKFLOW_FORBIDDEN',
-      'Направления доступны только лечащему врачу.',
+      'Нет доступа к направлениям в выбранном рабочем контуре.',
     );
   }
   if (error instanceof OrderWorkflowNotFoundError) {

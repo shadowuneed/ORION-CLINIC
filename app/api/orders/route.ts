@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
-import { resolveFacilityAccess } from '@/lib/auth/facility-access';
+import { resolveOrderWorkflowAccess } from '@/lib/auth/order-workflow-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import {
   createServiceRequestSchema,
@@ -13,17 +13,22 @@ import {
   hasSameOrigin,
 } from '@/lib/http/api-response';
 import { orderApiFailure } from '@/lib/http/order-api-errors';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { D1OrderWorkflowRepository } from '@/lib/repositories/order-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
-async function accessFor(request: Request, facilityId?: string) {
+async function accessFor(
+  request: Request,
+  accessAssignmentId?: string,
+  facilityId?: string,
+) {
   const identity = getSiteIdentity(request);
   if (!identity) return null;
-  return resolveFacilityAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+  return resolveOrderWorkflowAccess(
+    new D1AccessGovernanceRepository(env.DB),
     toSiteIdentityPrincipal(identity),
+    accessAssignmentId,
     facilityId,
   );
 }
@@ -33,6 +38,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = orderListQuerySchema.safeParse({
     facilityId: url.searchParams.get('facilityId') ?? undefined,
+    accessAssignmentId:
+      url.searchParams.get('accessAssignmentId') ?? undefined,
     status: url.searchParams.get('status') ?? undefined,
     kind: url.searchParams.get('kind') ?? undefined,
     query: url.searchParams.get('query') ?? undefined,
@@ -42,7 +49,11 @@ export async function GET(request: Request) {
     return apiFailure(context, 400, 'INVALID_ORDER_QUERY', 'Проверьте параметры списка.');
   }
   try {
-    const access = await accessFor(request, parsed.data.facilityId);
+    const access = await accessFor(
+      request,
+      parsed.data.accessAssignmentId,
+      parsed.data.facilityId,
+    );
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const repository = new D1OrderWorkflowRepository(env.DB, access.scope);
     const [orders, encounters] = await Promise.all([
@@ -59,14 +70,10 @@ export async function GET(request: Request) {
       requestId: context.requestId,
     });
     return apiSuccess(context, {
-      viewer: {
-        id: access.user.id,
-        displayName: access.user.displayName,
-        role: access.membership.role,
-      },
       organization: access.organization,
       facility: access.facility,
-      facilities: access.facilities,
+      accessAssignment: { assignmentId: access.assignment.assignmentId },
+      assignments: access.assignments,
       orders,
       encounters,
       persistence: 'd1+r2',
@@ -107,7 +114,11 @@ export async function POST(request: Request) {
         'Создание направлений отключено конфигурацией.',
       );
     }
-    const access = await accessFor(request, payload.facilityId);
+    const access = await accessFor(
+      request,
+      payload.accessAssignmentId,
+      payload.facilityId,
+    );
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const order = await new D1OrderWorkflowRepository(env.DB, access.scope).createDraft({
       encounterId: payload.encounterId,

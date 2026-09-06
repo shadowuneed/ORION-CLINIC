@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import type { OrderWorkflowAccessScope } from '@/lib/auth/order-workflow-access';
 import {
   D1OrderWorkflowRepository,
   OrderWorkflowAuditUnavailableError,
@@ -126,6 +126,61 @@ function fixture(options: {
       values
         ('membership-a', 'org-a', 'fac-a', 'user-a', '${role}', 'active'),
         ('membership-b', 'org-a', 'fac-a', 'user-b', 'clinician', 'active');
+    insert into departments (
+      id, organization_id, facility_id, code, name, kind, status,
+      created_at, updated_at, version
+    ) values (
+      'department-a', 'org-a', 'fac-a', 'therapy', 'Therapy', 'clinical',
+      'active', 1000, 1000, 1
+    );
+    insert into department_versions (
+      id, organization_id, facility_id, department_id, version,
+      supersedes_version_id, name, kind, status, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values (
+      'department-a-v1', 'org-a', 'fac-a', 'department-a', 1, null,
+      'Therapy', 'clinical', 'active', 'synthetic department',
+      'membership-b', 1000, 1000
+    );
+    insert into department_heads (
+      id, organization_id, facility_id, department_id, current_version_id,
+      lock_version, created_at, updated_at
+    ) values (
+      'department-a-head', 'org-a', 'fac-a', 'department-a',
+      'department-a-v1', 1, 1000, 1000
+    );
+    insert into department_access_assignments (
+      id, organization_id, facility_id, department_id, membership_id,
+      created_by_membership_id, created_at
+    ) values
+      ('assignment-a', 'org-a', 'fac-a', 'department-a', 'membership-a',
+       'membership-b', 1000),
+      ('assignment-b', 'org-a', 'fac-a', 'department-a', 'membership-b',
+       'membership-b', 1000);
+    insert into department_access_assignment_versions (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, version, supersedes_version_id, status, source_type,
+      roles_json, allow_permissions_json, deny_permissions_json,
+      effective_from, effective_until, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values
+      ('assignment-a-v1', 'org-a', 'fac-a', 'assignment-a', 'department-a',
+       'membership-a', 1, null, 'active', 'bootstrap',
+       '${role === 'clinician' ? '["doctor"]' : '["registrar"]'}',
+       '[]', '[]', 1000, null, 'synthetic assignment',
+       'membership-b', 1000, 1000),
+      ('assignment-b-v1', 'org-a', 'fac-a', 'assignment-b', 'department-a',
+       'membership-b', 1, null, 'active', 'bootstrap',
+       '["doctor"]', '[]', '[]', 1000, null, 'synthetic assignment',
+       'membership-b', 1000, 1000);
+    insert into department_access_assignment_heads (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, current_version_id, lock_version, created_at, updated_at
+    ) values
+      ('assignment-a-head', 'org-a', 'fac-a', 'assignment-a', 'department-a',
+       'membership-a', 'assignment-a-v1', 1, 1000, 1000),
+      ('assignment-b-head', 'org-a', 'fac-a', 'assignment-b', 'department-a',
+       'membership-b', 'assignment-b-v1', 1, 1000, 1000);
     insert into patients (
       id, organization_id, facility_id, medical_record_number, display_name,
       birth_date, sex_at_birth, status
@@ -168,11 +223,12 @@ function fixture(options: {
       );
     `);
   }
-  const scope: FacilityAccessScope = {
+  const scope: OrderWorkflowAccessScope = {
     organizationId: 'org-a',
     facilityId: 'fac-a',
     userId: 'user-a',
     membershipId: 'membership-a',
+    accessAssignmentId: 'assignment-a',
     role,
   };
   const d1 = createD1Adapter(database);
@@ -290,6 +346,15 @@ describe('D1 order workflow', () => {
     ]);
     expect(
       database.prepare('select count(*) as count from audit_events').get(),
+    ).toEqual({ count: 5 });
+    expect(
+      database
+        .prepare(`
+          select count(*) as count
+          from command_idempotency
+          where access_assignment_id = 'assignment-a'
+        `)
+        .get(),
     ).toEqual({ count: 5 });
   });
 
@@ -722,5 +787,218 @@ describe('D1 order workflow', () => {
     expect(() =>
       database.prepare(`update service_request_heads set lock_version = 9 where service_request_id = ?`).run(draft.id),
     ).toThrow('service request head must advance by one immutable version');
+  });
+
+  it('does not let a legacy clinician role bypass orders.manage assignment guards', () => {
+    const { database } = fixture();
+    database.exec(`
+      insert into users (id, external_issuer, external_subject, display_name, status)
+      values ('user-legacy', 'openai:sites', 'legacy-doctor', 'Legacy Doctor', 'active');
+      insert into memberships (
+        id, organization_id, facility_id, user_id, role, status
+      ) values (
+        'membership-legacy', 'org-a', 'fac-a', 'user-legacy', 'clinician', 'active'
+      );
+      insert into encounters (
+        id, organization_id, facility_id, patient_id, clinician_membership_id,
+        status, reason_for_visit, started_at
+      ) values (
+        'encounter-legacy', 'org-a', 'fac-a', 'patient-a',
+        'membership-legacy', 'in_progress', 'Legacy guard check', 1787902200000
+      );
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          access_assignment_id, operation, idempotency_key, request_hash,
+          status, created_at
+        ) values (
+          'command-legacy', 'org-a', 'fac-a', 'membership-legacy',
+          null, 'order.create', 'legacy-key', '${'a'.repeat(64)}',
+          'processing', 1788685000000
+        );
+      `),
+    ).toThrow(/selected current doctor orders\.manage assignment/i);
+
+    expect(() =>
+      database.exec(`
+        insert into service_requests (
+          id, organization_id, facility_id, patient_id, encounter_id,
+          request_kind, created_by_membership_id, created_at
+        ) values (
+          'service-request-legacy', 'org-a', 'fac-a', 'patient-a',
+          'encounter-legacy', 'laboratory', 'membership-legacy', 1788685000000
+        );
+      `),
+    ).toThrow(/exact current doctor assignment/i);
+
+    expect(() =>
+      database.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          access_assignment_id, operation, idempotency_key, request_hash,
+          status, created_at
+        ) values (
+          'command-cross-assignment', 'org-a', 'fac-a', 'membership-legacy',
+          'assignment-a', 'order.create', 'cross-assignment-key',
+          '${'b'.repeat(64)}', 'processing', 1788685000000
+        );
+      `),
+    ).toThrow(/selected current doctor orders\.manage assignment/i);
+  });
+
+  it('keeps doctor-only SQL mutations closed to a non-doctor explicit grant', () => {
+    const { database } = fixture();
+    database.exec(`
+      insert into users (id, external_issuer, external_subject, display_name, status)
+      values ('user-nurse', 'openai:sites', 'nurse-a', 'Nurse A', 'active');
+      insert into memberships (
+        id, organization_id, facility_id, user_id, role, status
+      ) values (
+        'membership-nurse', 'org-a', 'fac-a', 'user-nurse', 'clinician', 'active'
+      );
+      insert into department_access_assignments (
+        id, organization_id, facility_id, department_id, membership_id,
+        created_by_membership_id, created_at
+      ) values (
+        'assignment-nurse', 'org-a', 'fac-a', 'department-a',
+        'membership-nurse', 'membership-b', 1000
+      );
+      insert into department_access_assignment_versions (
+        id, organization_id, facility_id, assignment_id, department_id,
+        membership_id, version, supersedes_version_id, status, source_type,
+        roles_json, allow_permissions_json, deny_permissions_json,
+        effective_from, effective_until, change_reason,
+        changed_by_membership_id, changed_at, created_at
+      ) values (
+        'assignment-nurse-v1', 'org-a', 'fac-a', 'assignment-nurse',
+        'department-a', 'membership-nurse', 1, null, 'active',
+        'bootstrap', '["nurse"]', '["orders.manage"]', '[]',
+        1000, null, 'Synthetic explicit grant check',
+        'membership-b', 1000, 1000
+      );
+      insert into department_access_assignment_heads (
+        id, organization_id, facility_id, assignment_id, department_id,
+        membership_id, current_version_id, lock_version, created_at, updated_at
+      ) values (
+        'assignment-nurse-head', 'org-a', 'fac-a', 'assignment-nurse',
+        'department-a', 'membership-nurse', 'assignment-nurse-v1',
+        1, 1000, 1000
+      );
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          access_assignment_id, operation, idempotency_key, request_hash,
+          status, created_at
+        ) values (
+          'command-nurse', 'org-a', 'fac-a', 'membership-nurse',
+          'assignment-nurse', 'order.create', 'nurse-explicit-key',
+          '${'c'.repeat(64)}', 'processing', 1788685000000
+        );
+      `),
+    ).toThrow(/selected current doctor orders\.manage assignment/i);
+  });
+
+  it('does not let another authorized doctor write into a treating clinician encounter', () => {
+    const { database } = fixture();
+
+    expect(() =>
+      database.exec(`
+        insert into service_requests (
+          id, organization_id, facility_id, patient_id, encounter_id,
+          request_kind, created_by_membership_id, access_assignment_id,
+          created_at
+        ) values (
+          'service-request-cross-clinician', 'org-a', 'fac-a', 'patient-a',
+          'encounter-a', 'laboratory', 'membership-b', 'assignment-b',
+          1788685000000
+        );
+      `),
+    ).toThrow(/exact current doctor assignment and treating encounter/i);
+  });
+
+  it('keeps the selected assignment immutable after a command starts', async () => {
+    const { database, repository } = fixture();
+    await repository.createDraft({
+      ...createInput,
+      idempotencyKey: '00000000-0000-4000-8000-000000000151',
+    });
+
+    expect(() =>
+      database.exec(`
+        update command_idempotency
+        set access_assignment_id = 'assignment-b'
+        where operation = 'order.create'
+          and idempotency_key = '00000000-0000-4000-8000-000000000151';
+      `),
+    ).toThrow(/command access assignment is immutable/i);
+  });
+
+  it('does not allow a doctor to attribute approval to another membership', async () => {
+    const { database, repository } = fixture();
+    const draft = await repository.createDraft({
+      ...createInput,
+      idempotencyKey: '00000000-0000-4000-8000-000000000152',
+    });
+    const now = Date.now();
+
+    expect(() =>
+      database.prepare(`
+        insert into service_request_versions (
+          id, organization_id, facility_id, service_request_id, version,
+          supersedes_version_id, status, priority, requested_service,
+          target_specialty, medical_justification, clinician_note,
+          status_reason, authored_by_membership_id, access_assignment_id,
+          approved_by_membership_id, approved_at, created_at
+        ) values (
+          'spoofed-order-approval', 'org-a', 'fac-a', ?, 2, ?, 'active',
+          'urgent', 'Synthetic approval impersonation check', null,
+          'Synthetic medical justification for access guard', null,
+          'Spoofed approval', 'membership-a', 'assignment-a',
+          'membership-b', ?, ?
+        )
+      `).run(draft.id, draft.current.id, now, now),
+    ).toThrow(/service request version requires exact current doctor assignment/i);
+  });
+
+  it('uses current time so an expired assignment cannot be revived by backdating', () => {
+    const { database } = fixture();
+    database.exec(`
+      insert into department_access_assignment_versions (
+        id, organization_id, facility_id, assignment_id, department_id,
+        membership_id, version, supersedes_version_id, status, source_type,
+        roles_json, allow_permissions_json, deny_permissions_json,
+        effective_from, effective_until, change_reason,
+        changed_by_membership_id, changed_at, created_at
+      ) values (
+        'assignment-b-v2-expired', 'org-a', 'fac-a', 'assignment-b',
+        'department-a', 'membership-b', 2, 'assignment-b-v1', 'active',
+        'bootstrap', '["doctor"]', '[]', '[]', 1000, 2000,
+        'Synthetic expired assignment', 'membership-b', 1500, 1500
+      );
+      update department_access_assignment_heads
+      set current_version_id = 'assignment-b-v2-expired', lock_version = 2,
+        updated_at = 1500
+      where id = 'assignment-b-head' and lock_version = 1;
+    `);
+
+    expect(() =>
+      database.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          access_assignment_id, operation, idempotency_key, request_hash,
+          status, created_at
+        ) values (
+          'command-expired-backdated', 'org-a', 'fac-a', 'membership-b',
+          'assignment-b', 'order.create', 'expired-backdated-key',
+          '${'d'.repeat(64)}', 'processing', 1500
+        );
+      `),
+    ).toThrow(/selected current doctor orders\.manage assignment/i);
   });
 });

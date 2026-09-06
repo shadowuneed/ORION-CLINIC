@@ -1,5 +1,5 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
-import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import type { OrderWorkflowAccessScope } from '@/lib/auth/order-workflow-access';
 import {
   assertDiagnosticReportTransition,
   canCompleteServiceRequest,
@@ -278,7 +278,7 @@ export async function sha256DiagnosticBytes(value: ArrayBuffer) {
 export class D1OrderWorkflowRepository {
   constructor(
     private readonly database: D1Database,
-    private readonly scope: FacilityAccessScope,
+    private readonly scope: OrderWorkflowAccessScope,
   ) {}
 
   async listEncounterOptions(): Promise<OrderEncounterOption[]> {
@@ -551,6 +551,7 @@ export class D1OrderWorkflowRepository {
     };
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: normalized.encounterId,
         kind: normalized.kind,
         priority: normalized.priority,
@@ -612,8 +613,9 @@ export class D1OrderWorkflowRepository {
         .prepare(`
           insert into service_requests (
             id, organization_id, facility_id, patient_id, encounter_id,
-            request_kind, created_by_membership_id, created_at
-          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            request_kind, created_by_membership_id, access_assignment_id,
+            created_at
+          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         `)
         .bind(
           serviceRequestId,
@@ -623,6 +625,7 @@ export class D1OrderWorkflowRepository {
           encounter.id,
           normalized.kind,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -632,9 +635,10 @@ export class D1OrderWorkflowRepository {
             supersedes_version_id, status, priority, requested_service,
             target_specialty, medical_justification, clinician_note,
             status_reason, authored_by_membership_id,
-            approved_by_membership_id, approved_at, created_at
+            access_assignment_id, approved_by_membership_id, approved_at,
+            created_at
           ) values (?1, ?2, ?3, ?4, 1, null, 'draft', ?5, ?6, ?7, ?8,
-            ?9, 'Черновик создан врачом', ?10, null, null, ?11)
+            ?9, 'Черновик создан врачом', ?10, ?11, null, null, ?12)
         `)
         .bind(
           versionId,
@@ -647,6 +651,7 @@ export class D1OrderWorkflowRepository {
           normalized.medicalJustification,
           normalized.clinicianNote,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -692,6 +697,7 @@ export class D1OrderWorkflowRepository {
     const reason = normalizeText(input.reason);
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         requestId: input.requestIdValue,
         action: input.action,
         reason,
@@ -768,9 +774,10 @@ export class D1OrderWorkflowRepository {
             supersedes_version_id, status, priority, requested_service,
             target_specialty, medical_justification, clinician_note,
             status_reason, authored_by_membership_id,
-            approved_by_membership_id, approved_at, created_at
+            access_assignment_id, approved_by_membership_id, approved_at,
+            created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-            ?13, ?14, ?15, ?16, ?17)
+            ?13, ?14, ?15, ?16, ?17, ?18)
         `)
         .bind(
           versionId,
@@ -787,6 +794,7 @@ export class D1OrderWorkflowRepository {
           current.clinicianNote,
           reason,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           approver,
           approvedAt,
           now,
@@ -868,9 +876,10 @@ export class D1OrderWorkflowRepository {
             insert into diagnostic_result_upload_intents (
               id, organization_id, facility_id, command_id, service_request_id,
               artifact_id, object_key, file_name, mime_type, sha256, byte_size,
-              status, failure_code, created_by_membership_id, created_at, updated_at
+              status, failure_code, created_by_membership_id,
+              access_assignment_id, created_at, updated_at
             ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-              'reserved', null, ?12, ?13, ?13)
+              'reserved', null, ?12, ?13, ?14, ?14)
           `)
           .bind(
             intentId,
@@ -885,6 +894,7 @@ export class D1OrderWorkflowRepository {
             input.artifact.sha256,
             input.artifact.byteSize,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
       ]);
@@ -1199,8 +1209,8 @@ export class D1OrderWorkflowRepository {
           .prepare(`
             insert into diagnostic_reports (
               id, organization_id, facility_id, service_request_id,
-              created_by_membership_id, created_at
-            ) values (?1, ?2, ?3, ?4, ?5, ?6)
+              created_by_membership_id, access_assignment_id, created_at
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
           `)
           .bind(
             reportId,
@@ -1208,6 +1218,7 @@ export class D1OrderWorkflowRepository {
             this.scope.facilityId,
             request.id,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
       );
@@ -1218,9 +1229,10 @@ export class D1OrderWorkflowRepository {
           insert into diagnostic_report_artifacts (
             id, organization_id, facility_id, service_request_id,
             diagnostic_report_id, object_key, file_name, mime_type, sha256,
-            byte_size, source, created_by_membership_id, created_at
+            byte_size, source, created_by_membership_id, access_assignment_id,
+            created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-            'manual_upload', ?11, ?12)
+            'manual_upload', ?11, ?12, ?13)
         `)
         .bind(
           input.artifact.id,
@@ -1234,6 +1246,7 @@ export class D1OrderWorkflowRepository {
           input.artifact.sha256,
           input.artifact.byteSize,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -1243,9 +1256,10 @@ export class D1OrderWorkflowRepository {
             diagnostic_report_id, version, supersedes_version_id,
             report_status, conclusion, artifact_id, review_state,
             reconciliation_note, change_reason, created_by_membership_id,
-            reviewed_by_membership_id, reviewed_at, created_at
+            access_assignment_id, reviewed_by_membership_id, reviewed_at,
+            created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-            'pending', null, ?11, ?12, null, null, ?13)
+            'pending', null, ?11, ?12, ?13, null, null, ?14)
         `)
         .bind(
           reportVersionId,
@@ -1260,6 +1274,7 @@ export class D1OrderWorkflowRepository {
           input.artifact.id,
           normalized.changeReason,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
     );
@@ -1345,6 +1360,7 @@ export class D1OrderWorkflowRepository {
   private async resultAttachmentHash(input: AttachDiagnosticResultCommand) {
     return sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         requestId: input.requestIdValue,
         reportStatus: input.reportStatus,
         conclusion: normalizeNullable(input.conclusion),
@@ -1430,6 +1446,7 @@ export class D1OrderWorkflowRepository {
     const note = normalizeNullable(input.note);
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         requestId: input.requestIdValue,
         decision: input.decision,
         note,
@@ -1501,9 +1518,10 @@ export class D1OrderWorkflowRepository {
             diagnostic_report_id, version, supersedes_version_id,
             report_status, conclusion, artifact_id, review_state,
             reconciliation_note, change_reason, created_by_membership_id,
-            reviewed_by_membership_id, reviewed_at, created_at
+            access_assignment_id, reviewed_by_membership_id, reviewed_at,
+            created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-            ?12, ?13, ?14, ?14, ?15, ?15)
+            ?12, ?13, ?14, ?15, ?14, ?16, ?16)
         `)
         .bind(
           versionId,
@@ -1522,6 +1540,7 @@ export class D1OrderWorkflowRepository {
             ? 'Результат проверен врачом'
             : 'Врач запросил устранение расхождения',
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
         ),
       this.database
@@ -2125,7 +2144,10 @@ export class D1OrderWorkflowRepository {
     occurredAt: number;
   }) {
     const sequence = input.auditHead.lastSequence + 1;
-    const metadataJson = JSON.stringify(input.metadata);
+    const metadataJson = JSON.stringify({
+      ...input.metadata,
+      accessAssignmentId: this.scope.accessAssignmentId,
+    });
     const eventHash = await hashAuditEvent({
       previousHash: input.auditHead.lastEventHash,
       organizationId: this.scope.organizationId,
@@ -2216,14 +2238,16 @@ export class D1OrderWorkflowRepository {
       .prepare(`
         insert into command_idempotency (
           id, organization_id, facility_id, actor_membership_id,
-          operation, idempotency_key, request_hash, status, created_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)
+          access_assignment_id, operation, idempotency_key, request_hash,
+          status, created_at
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'processing', ?9)
       `)
       .bind(
         input.id,
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         input.operation,
         input.key,
         input.requestHash,

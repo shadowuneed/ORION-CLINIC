@@ -17,6 +17,7 @@ import styles from './authenticated-clinic-page.module.css';
 export type ClinicCapability =
   | 'clinician'
   | 'patient-directory'
+  | 'orders'
   | 'scheduling'
   | 'chronic-care'
   | 'observations'
@@ -29,6 +30,7 @@ export type AuthenticatedClinicContext = {
   capabilities: {
     clinician: boolean;
     patientDirectory: boolean;
+    orders: boolean;
     scheduling: boolean;
     chronicCare: boolean;
     observations: boolean;
@@ -73,6 +75,13 @@ export async function getAuthenticatedClinicContext(
           !assignment.roles.includes('service') &&
           assignment.effectivePermissions.includes('patient.directory.read'),
       ),
+      orders: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          assignment.roles.includes('doctor') &&
+          !assignment.roles.includes('service') &&
+          assignment.effectivePermissions.includes('orders.manage'),
+      ),
       scheduling: memberships.some(
         (membership) =>
           membership.role === 'clinician' || membership.role === 'registrar',
@@ -116,6 +125,7 @@ export function AuthenticatedClinicPage({
   const allowed = {
     clinician: context.capabilities.clinician,
     'patient-directory': context.capabilities.patientDirectory,
+    orders: context.capabilities.orders,
     scheduling: context.capabilities.scheduling,
     'chronic-care': context.capabilities.chronicCare,
     observations: context.capabilities.observations,
@@ -159,6 +169,8 @@ function capabilityDenialMessage(capability: ClinicCapability) {
       return 'Нужно действующее полномочие управления доступом в выбранной клинике.';
     case 'patient-directory':
       return 'Нужно действующее назначение отдела с правом доступа к реестру пациентов.';
+    case 'orders':
+      return 'Нужно действующее назначение врача с правом работы с направлениями.';
     case 'scheduling':
       return 'Нужна активная роль врача или регистратора в выбранной клинике.';
   }
