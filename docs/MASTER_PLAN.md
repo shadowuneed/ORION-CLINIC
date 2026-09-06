@@ -390,10 +390,13 @@ Status: `IN_PROGRESS` for synthetic local data only.
       service-role catalogue with server-calculated baseline permissions and a
       read-only self-access screen. Service roles cannot open an interactive
       workspace.
-- [ ] Add a versioned/audited department administration lifecycle plus
-      administrator grant/change/revoke commands, then migrate every existing
-      protected endpoint and database role guard from legacy `memberships.role`
-      checks to one explicitly selected assignment and effective permission.
+- [x] Add a versioned/audited department administration lifecycle plus
+      append-only administrator grant/change/revoke commands. Migrate the patient
+      directory API family to one explicitly selected assignment and effective
+      permission without weakening facility, patient, purpose or state checks.
+- [ ] Migrate every remaining protected endpoint and database role guard from
+      legacy `memberships.role` checks to one explicitly selected assignment and
+      effective permission, one resource family at a time.
 - [ ] Confirm external OIDC provider and MFA approach.
 - [x] Provider-neutral identity principal and Sites identity adapter.
 - [x] Backend membership, clinician-role, tenant, facility, and exact encounter-
@@ -797,6 +800,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-05 | Phase 8B clinic decision gate artifact and repository regression | PASS as an unapproved review artifact | The Russian review packet and machine-readable decision template cover deterministic rule scope/version ownership, repeat measurement, doctor confirmation/override, acknowledgement/escalation SLA, minimum signed transfer packet, receiving-facility contract, fallback/reconciliation and four explicit meanings of “digital twin”. Validation confirmed `draft_unapproved`, `activationBlocked: true`, an empty rule set and no preselected `DEC-007` meaning. Full `pnpm verify:ci` then passed secret policy for 363 files, dependency audit, lint/types, 47 test files/269 tests, schema/build and an isolated restore of 80 tables/128 rows/26 migrations/three R2 objects/389,707 bytes. This does not approve clinical thresholds or runtime behavior. |
 | 2026-09-06 | Phase 2B department/access governance and complete regression | PASS for the synthetic local self-access slice | Migration `0026`, domain/repository/API/UI tests and the `/access` workspace cover immutable department assignments, linear current heads, seven stable role categories, explicit-deny precedence including denial of the self-access resource, service-role isolation, expired/disabled/revoked denial, explicit multi-scope selection and a minimized API response. `pnpm verify:ci` passed secret policy for 379 files, zero known dependency vulnerabilities, lint/types, 53 test files/325 tests, Drizzle/build and isolated recovery of 84 tables/133 rows/27 migrations/three R2 objects/412,447 bytes after source destruction (`c1ca56ad-c614-4eee-9f20-5e76d067110f`). Existing clinical APIs have not yet been migrated from their proven legacy role matrices. |
 | 2026-09-06 | Phase 2B active D1 and browser audit | PASS for inspected local behavior | Migration/bootstrap reruns were idempotent; `PRAGMA quick_check` returned `ok`, foreign-key check returned no rows, and the current synthetic doctor assignment resolved to version 2 after an append-only local clock correction. Browser navigation from `/patients` to `/access`, all 15 permission states, light/dark theme, 653 px layout and zero body horizontal overflow were checked with no warning/error log. Anonymous `/api/access` returned 401. No clinical record, microphone, external AI or real patient data was used. |
+| 2026-09-06 | Phase 2C access administration and patient-family permission migration | PASS for synthetic local data | Commit `6b2308a` adds versioned departments, append-only grant/change/reactivate/revoke commands, guarded administrator self-scope, `/access/manage`, and exact-assignment effective-permission checks for every patient-directory endpoint. `pnpm verify:ci` passed secret policy for 402 files, zero known dependency vulnerabilities, lint/strict types, 58 test files/341 tests, Drizzle drift check, every Vinext route, and isolated recovery after source destruction matching 86 tables/142 rows/29 migrations/three R2 objects/426,521 bytes (`968b47bc-b3db-41ba-837a-9da460067c49`). Authenticated browser QA opened all three administrative forms without committing an access mutation and verified patient links carrying the selected assignment. |
 
 ## 14. Risk register
 
@@ -838,6 +842,15 @@ control, detection, response, and residual acceptance.
   `/access`. Existing clinical resource, purpose, consent and lifecycle checks
   remain in force. This does not yet replace legacy role checks across the rest of
   the product and is not production identity approval.
+- Completed current bounded slice: Phase 2C adds an authenticated `/access/manage`
+  workspace and append-only, idempotent commands for versioned department create,
+  update and disable plus access grant, change, reactivate and revoke. The current
+  authorizing assignment cannot mutate itself, and its department cannot disable
+  itself. The patient directory API family now resolves exactly one active
+  assignment and checks effective `patient.directory.read`,
+  `patient.profile.write` or `encounter.manage`; multiple scopes require an
+  explicit selection and are never merged. Remaining protected API families keep
+  their prior proven role guards until migrated separately.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -993,10 +1006,11 @@ control, detection, response, and residual acceptance.
   model accuracy, or provider is approved for patient care merely because the
   local path works. Production OIDC/MFA, real patients, retention, legal signature,
   integrations, hosting, monitoring/SLO and clinical validation remain open.
-- Current runtime at checkpoint: local web is intentionally left running on 3200.
-  The loopback STT process is reachable on 3101, but its startup log reports that
-  the pinned local model could not be loaded; it is not claimed ready in this
-  checkpoint. Groq is wired but not runtime-verified because no fresh
+- Current runtime at checkpoint: local web is intentionally left running on 3200,
+  loopback STT on 3101 reports the pinned model ready on CUDA, and ngrok on 4040
+  still forwards the reserved public URL to the local web process. No microphone
+  capture or transcription quality test was performed in Phase 2C. Groq is wired
+  but not runtime-verified because no fresh
   `GROQ_API_KEY` is present;
   previously disclosed keys were not copied. `CONFIGURE_GROQ.bat` is the only
   supported local secret-entry path and requires a restart.
@@ -1294,6 +1308,52 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-06 — Phase 2C access administration checkpoint
+
+- Agent: Codex. Three delegated read-only audits were retried, but all three were
+  rejected by the workspace owner spend cap before producing findings; root
+  completed the code, browser, database, recovery and documentation audit.
+- Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC` on
+  `main`. The legacy `ariaproject` was not changed.
+- Verified implementation commit: `6b2308a` (`feat: add audited access
+  administration`).
+- Scope: local synthetic D1 only. Added immutable department roots/versions/heads,
+  administrator create/update/disable and assignment grant/change/reactivate/revoke
+  commands, idempotency and audit hash-chain persistence, the authenticated
+  `/access/manage` workspace, and Russian operator documentation.
+- Patient-family migration: all `/api/patients` list/detail/create/update/archive,
+  photo and encounter-creation paths now resolve one explicit current assignment
+  and require effective `patient.directory.read`, `patient.profile.write` or
+  `encounter.manage`. The browser propagates `facilityId` and
+  `accessAssignmentId`; multiple scopes are not merged.
+- Security boundary: explicit deny wins; stale heads and changed-key replays fail;
+  direct history mutation is rejected; the authorizing assignment cannot mutate
+  itself and its department cannot disable itself. Existing tenant, facility,
+  patient, lifecycle and audit checks remain in force.
+- Verification: `pnpm verify:ci` passed 402-file secret policy, zero known
+  dependency vulnerabilities, lint/types, 58 test files/341 tests, schema/build
+  and isolated recovery of 86 tables/142 rows/29 migrations/three R2 objects/
+  426,521 bytes after destroying only the disposable source. Active local D1
+  passed quick/foreign-key checks and idempotent migration/bootstrap runs.
+  Authenticated browser QA loaded `/access/manage`, opened create, edit and grant
+  forms without saving a permission change, and loaded five persisted synthetic
+  patients through assignment-qualified links. Runtime health and public ngrok
+  root returned HTTP 200.
+- Runtime: web 3200, CUDA loopback STT 3101 and ngrok 4040 remain running. Groq is
+  not configured in the current process, so no external AI result is claimed.
+- Owner working-tree note: the pre-existing standalone `a` under the risk-register
+  heading remains deliberately unstaged and must not be removed or committed.
+- Limitations: remaining protected API families and database guards still use
+  their previously tested legacy role matrices. Production OIDC/MFA, session
+  revocation, service credentials, break-glass, dual-control access changes and a
+  durable pre-scope security-event sink remain open.
+- Exact next bounded task (Phase 2D): migrate only the `/api/orders` resource
+  family and its D1 actor guards to one selected assignment plus effective
+  `orders.manage`, retaining exact patient/encounter assignment, consent,
+  lifecycle, idempotency, audit and neutral-denial behavior. Add allow/deny,
+  multi-scope, explicit-deny, replay, stale-write, SQL-guard and browser tests;
+  do not migrate a second resource family in the same checkpoint.
 
 ### 2026-09-06 — Phase 2B department and access-governance checkpoint
 
