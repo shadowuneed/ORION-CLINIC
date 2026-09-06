@@ -1,4 +1,5 @@
-export const READINESS_SCHEMA_MARKER = 'clinical_section_heads_advance_only';
+export const READINESS_SCHEMA_MARKER =
+  'department_access_assignment_heads_advance_guard';
 
 export interface ReadinessPreparedStatement {
   bind(value: string): ReadinessPreparedStatement;

@@ -293,24 +293,45 @@
     padding: 7px 10px;
     border-top: 1px solid var(--line);
     border-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar::-webkit-scrollbar {
+    display: none;
   }
   .sidebar nav {
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    display: flex;
     gap: 6px;
+    width: max-content;
+    min-width: 100%;
   }
   .navItem {
+    width: 94px;
+    flex: 0 0 auto;
     min-height: 48px;
     justify-content: center;
     gap: 6px;
     padding: 0 6px;
   }
-  .navItem > span { display: inline; font-size: 11px; }
+  .navItem > span,
+  .collapsed .navItem > span {
+    display: inline;
+    font-size: 11px;
+    white-space: nowrap;
+  }
   .navItem > small,
   .collapseButton { display: none; }
   .content { min-height: calc(100dvh - 126px); }
 }
 
 @media (max-width: 620px) {
-  .navItem > span { display: none; }
+  .navItem {
+    width: 54px;
+    min-width: 54px;
+  }
+  .navItem > span,
+  .collapsed .navItem > span { display: none; }
 }

@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-05
+- Last updated: 2026-09-06
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -381,8 +381,19 @@ Gate: a clean checkout starts reproducibly and all verification commands pass.
 Status: `IN_PROGRESS` for synthetic local data only.
 
 - [x] Organization, facility, user, and membership base model.
-- [ ] Department model and organization-specific permission assignments.
-- [ ] Doctor, nurse, registrar, admin, medical lead, auditor, and service roles.
+- [x] Department base model plus versioned organization/facility-specific
+      permission assignments for the synthetic local D1 slice. Assignment roots
+      and versions are immutable, current heads advance linearly, explicit denial
+      wins, and different scopes are never merged implicitly. The department
+      catalogue itself still needs a versioned administrative lifecycle.
+- [x] Stable doctor, nurse, registrar, administrator, medical-lead, auditor, and
+      service-role catalogue with server-calculated baseline permissions and a
+      read-only self-access screen. Service roles cannot open an interactive
+      workspace.
+- [ ] Add a versioned/audited department administration lifecycle plus
+      administrator grant/change/revoke commands, then migrate every existing
+      protected endpoint and database role guard from legacy `memberships.role`
+      checks to one explicitly selected assignment and effective permission.
 - [ ] Confirm external OIDC provider and MFA approach.
 - [x] Provider-neutral identity principal and Sites identity adapter.
 - [x] Backend membership, clinician-role, tenant, facility, and exact encounter-
@@ -784,6 +795,8 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-05 | Phase 8A authenticated browser and responsive audit | PASS for the inspected synthetic workflow | A Sites-authenticated clinician selected an existing artificial patient, recorded 172.4 cm/71.8 kg, algorithmic BMI 24.16, pressure 124/82 and temperature 36.7, then corrected temperature to 36.8 as version 2. Version 1 remained visible with reason/author/time/source; audit recorded read/record/correct events. A 390 px check had no horizontal overflow and browser warning/error logs were empty. Three verified screenshots are retained in the operator guide. No critical status, alert, notification or transfer was created. |
 | 2026-09-05 | Phase 8A final `pnpm verify:ci` and recovery | PASS | Secret policy covered 361 tracked/untracked repository files, dependency audit found no known vulnerabilities, lint/strict types passed, 47 test files/269 tests passed, Drizzle reported no drift, and Vinext built `/observations` plus both observation APIs. Isolated recovery destroyed its disposable source before matching 80 tables, 128 rows, 26 migrations, three R2 objects and 389,707 backup bytes. |
 | 2026-09-05 | Phase 8B clinic decision gate artifact and repository regression | PASS as an unapproved review artifact | The Russian review packet and machine-readable decision template cover deterministic rule scope/version ownership, repeat measurement, doctor confirmation/override, acknowledgement/escalation SLA, minimum signed transfer packet, receiving-facility contract, fallback/reconciliation and four explicit meanings of “digital twin”. Validation confirmed `draft_unapproved`, `activationBlocked: true`, an empty rule set and no preselected `DEC-007` meaning. Full `pnpm verify:ci` then passed secret policy for 363 files, dependency audit, lint/types, 47 test files/269 tests, schema/build and an isolated restore of 80 tables/128 rows/26 migrations/three R2 objects/389,707 bytes. This does not approve clinical thresholds or runtime behavior. |
+| 2026-09-06 | Phase 2B department/access governance and complete regression | PASS for the synthetic local self-access slice | Migration `0026`, domain/repository/API/UI tests and the `/access` workspace cover immutable department assignments, linear current heads, seven stable role categories, explicit-deny precedence including denial of the self-access resource, service-role isolation, expired/disabled/revoked denial, explicit multi-scope selection and a minimized API response. `pnpm verify:ci` passed secret policy for 379 files, zero known dependency vulnerabilities, lint/types, 53 test files/325 tests, Drizzle/build and isolated recovery of 84 tables/133 rows/27 migrations/three R2 objects/412,447 bytes after source destruction (`c1ca56ad-c614-4eee-9f20-5e76d067110f`). Existing clinical APIs have not yet been migrated from their proven legacy role matrices. |
+| 2026-09-06 | Phase 2B active D1 and browser audit | PASS for inspected local behavior | Migration/bootstrap reruns were idempotent; `PRAGMA quick_check` returned `ok`, foreign-key check returned no rows, and the current synthetic doctor assignment resolved to version 2 after an append-only local clock correction. Browser navigation from `/patients` to `/access`, all 15 permission states, light/dark theme, 653 px layout and zero body horizontal overflow were checked with no warning/error log. Anonymous `/api/access` returned 401. No clinical record, microphone, external AI or real patient data was used. |
 
 ## 14. Risk register
 
@@ -816,6 +829,15 @@ control, detection, response, and residual acceptance.
   `PHASE_4_IN_PROGRESS` through `PHASE_8_IN_PROGRESS` for provider-neutral local
   slices whose external gates remain open. Phase 1 is complete only for the
   verified synthetic local engineering foundation.
+- Completed current bounded slice: Phase 2B now stores departments and immutable,
+  versioned organization/facility/member assignments in D1; validates the seven
+  approved role categories and stable permission codes in TypeScript and SQLite;
+  applies explicit denies after defaults and additions; rejects mixed service and
+  interactive roles; requires an explicit choice instead of merging multiple
+  scopes; and exposes only the current user's sanitized, read-only result on
+  `/access`. Existing clinical resource, purpose, consent and lifecycle checks
+  remain in force. This does not yet replace legacy role checks across the rest of
+  the product and is not production identity approval.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -1272,6 +1294,43 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-06 — Phase 2B department and access-governance checkpoint
+
+- Agent: Codex, with independent schema, authorization-test and self-access UX
+  subtasks. Two delegated runs reached the workspace spend cap only after
+  returning their findings; root independently completed and verified the work.
+- Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC` on
+  `main`. The legacy `ariaproject` was not changed.
+- Scope: synthetic local D1 only. Added departments, append-only organization /
+  facility / membership access assignments, seven stable role categories,
+  effective-permission derivation, a minimized authenticated `GET /api/access`
+  contract and the read-only `/access` operational screen.
+- Security boundary: explicit denial wins; expired, revoked, suspended, disabled
+  and unknown assignments fail closed; a service role cannot be combined with an
+  interactive role or open the workspace; multiple scopes require explicit
+  selection and are never merged.
+- Verification: `pnpm verify:ci` passed 379-file secret policy, dependency audit,
+  lint/types, 53 test files/325 tests, schema/build and isolated restore of 84
+  tables/133 rows/27 migrations/three R2 objects/412,447 bytes after destroying
+  only the disposable source. D1 quick/foreign-key checks, double bootstrap,
+  `/access`, anonymous 401 and responsive/theme browser behavior also passed.
+- Runtime: web 3200, loopback STT 3101 and ngrok 4040 remain running. The reserved
+  external URL returns HTTP 200. No deployment, microphone capture, external AI
+  call, real data or production access claim was made.
+- Owner working-tree note: the pre-existing standalone `a` under the risk-register
+  heading remains deliberately unstaged and must not be removed or committed.
+- Limitation: the rest of the clinical APIs still enforce their existing proven
+  `memberships.role` matrices. There is no administrator grant/revoke UI or
+  versioned department-administration workflow, production OIDC/MFA, session
+  revocation, service credential or break-glass flow.
+- Exact next bounded task (Phase 2C): add versioned department administration and
+  append-only administrator commands for grant/change/revoke, then migrate one
+  protected resource family at a time to an
+  explicitly selected assignment and effective permission while preserving
+  organization/facility/patient/purpose/consent/state checks and neutral denial.
+
+### Previous handoff — 2026-09-05 Phase 8B
 
 - Date: 2026-09-05, Phase 8B clinic decision-gate checkpoint.
 - Agent: Codex.

@@ -21,6 +21,7 @@ Operational foundation:
 - [`docs/user-guide/chronic-care.ru.md`](docs/user-guide/chronic-care.ru.md)
 - [`docs/user-guide/patient-communications.ru.md`](docs/user-guide/patient-communications.ru.md)
 - [`docs/user-guide/patient-observations.ru.md`](docs/user-guide/patient-observations.ru.md)
+- [`docs/user-guide/access-governance.ru.md`](docs/user-guide/access-governance.ru.md)
 
 Clinic requirements and review:
 

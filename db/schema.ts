@@ -84,6 +84,69 @@ export const facilities = sqliteTable(
   ],
 );
 
+export const departments = sqliteTable(
+  'departments',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    code: text('code').notNull(),
+    name: text('name').notNull(),
+    kind: text('kind', {
+      enum: ['clinical', 'diagnostic', 'administrative', 'support'],
+    }).notNull(),
+    status: text('status', { enum: ['active', 'disabled'] })
+      .notNull()
+      .default('active'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: integer('version').notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex('departments_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('departments_scope_code_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.code,
+    ),
+    index('departments_scope_status_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.status,
+      table.name,
+    ),
+    foreignKey({
+      name: 'departments_scope_facility_fk',
+      columns: [table.organizationId, table.facilityId],
+      foreignColumns: [facilities.organizationId, facilities.id],
+    }),
+    enumCheck('departments_kind_enum', table.kind, [
+      'clinical',
+      'diagnostic',
+      'administrative',
+      'support',
+    ]),
+    enumCheck('departments_status_enum', table.status, ['active', 'disabled']),
+    check(
+      'departments_code_format',
+      sql`length(trim(${table.code})) between 2 and 40 and ${table.code} = lower(${table.code}) and ${table.code} not glob '*[^a-z0-9_-]*'`,
+    ),
+    check(
+      'departments_name_length',
+      sql`length(trim(${table.name})) between 2 and 160`,
+    ),
+    check('departments_version_positive', sql`${table.version} > 0`),
+  ],
+);
+
 export const users = sqliteTable(
   'users',
   {
@@ -169,6 +232,308 @@ export const memberships = sqliteTable(
     ]),
     enumCheck('memberships_status_enum', table.status, ['active', 'disabled']),
     check('memberships_version_positive', sql`${table.version} > 0`),
+  ],
+);
+
+export const departmentAccessAssignments = sqliteTable(
+  'department_access_assignments',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    departmentId: text('department_id')
+      .notNull()
+      .references(() => departments.id),
+    membershipId: text('membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdByMembershipId: text('created_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('department_access_assignments_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+    ),
+    uniqueIndex('department_access_assignments_scope_identity_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.id,
+      table.departmentId,
+      table.membershipId,
+    ),
+    uniqueIndex('department_access_assignments_member_department_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.departmentId,
+      table.membershipId,
+    ),
+    index('department_access_assignments_member_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.membershipId,
+      table.createdAt,
+    ),
+    foreignKey({
+      name: 'department_access_assignments_scope_department_fk',
+      columns: [table.organizationId, table.facilityId, table.departmentId],
+      foreignColumns: [
+        departments.organizationId,
+        departments.facilityId,
+        departments.id,
+      ],
+    }),
+    foreignKey({
+      name: 'department_access_assignments_scope_membership_fk',
+      columns: [table.organizationId, table.facilityId, table.membershipId],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    foreignKey({
+      name: 'department_access_assignments_scope_creator_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.createdByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+  ],
+);
+
+export const departmentAccessAssignmentVersions = sqliteTable(
+  'department_access_assignment_versions',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    assignmentId: text('assignment_id')
+      .notNull()
+      .references(() => departmentAccessAssignments.id),
+    departmentId: text('department_id')
+      .notNull()
+      .references(() => departments.id),
+    membershipId: text('membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    version: integer('version').notNull(),
+    supersedesVersionId: text('supersedes_version_id').references(
+      (): AnySQLiteColumn => departmentAccessAssignmentVersions.id,
+    ),
+    status: text('status', { enum: ['active', 'revoked'] }).notNull(),
+    sourceType: text('source_type', {
+      enum: ['bootstrap', 'administrator'],
+    }).notNull(),
+    rolesJson: text('roles_json').notNull(),
+    allowPermissionsJson: text('allow_permissions_json').notNull().default('[]'),
+    denyPermissionsJson: text('deny_permissions_json').notNull().default('[]'),
+    effectiveFrom: integer('effective_from', { mode: 'timestamp_ms' }).notNull(),
+    effectiveUntil: integer('effective_until', { mode: 'timestamp_ms' }),
+    changeReason: text('change_reason').notNull(),
+    changedByMembershipId: text('changed_by_membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    changedAt: integer('changed_at', { mode: 'timestamp_ms' }).notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('department_access_assignment_versions_scope_version_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.assignmentId,
+      table.version,
+    ),
+    uniqueIndex('department_access_assignment_versions_scope_id_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.assignmentId,
+      table.id,
+    ),
+    uniqueIndex('department_access_assignment_versions_scope_identity_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.assignmentId,
+      table.departmentId,
+      table.membershipId,
+      table.id,
+    ),
+    uniqueIndex('department_access_assignment_versions_supersedes_once_uidx').on(
+      table.supersedesVersionId,
+    ),
+    index('department_access_assignment_versions_effective_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.membershipId,
+      table.status,
+      table.effectiveFrom,
+      table.effectiveUntil,
+    ),
+    foreignKey({
+      name: 'department_access_assignment_versions_scope_assignment_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.assignmentId,
+        table.departmentId,
+        table.membershipId,
+      ],
+      foreignColumns: [
+        departmentAccessAssignments.organizationId,
+        departmentAccessAssignments.facilityId,
+        departmentAccessAssignments.id,
+        departmentAccessAssignments.departmentId,
+        departmentAccessAssignments.membershipId,
+      ],
+    }),
+    foreignKey({
+      name: 'department_access_assignment_versions_scope_actor_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.changedByMembershipId,
+      ],
+      foreignColumns: [
+        memberships.organizationId,
+        memberships.facilityId,
+        memberships.id,
+      ],
+    }),
+    enumCheck('department_access_assignment_versions_status_enum', table.status, [
+      'active',
+      'revoked',
+    ]),
+    enumCheck(
+      'department_access_assignment_versions_source_enum',
+      table.sourceType,
+      ['bootstrap', 'administrator'],
+    ),
+    check(
+      'department_access_assignment_versions_version_positive',
+      sql`${table.version} > 0`,
+    ),
+    check(
+      'department_access_assignment_versions_predecessor',
+      sql`(${table.version} = 1 and ${table.supersedesVersionId} is null) or (${table.version} > 1 and ${table.supersedesVersionId} is not null)`,
+    ),
+    check(
+      'department_access_assignment_versions_roles_json',
+      sql`json_valid(${table.rolesJson}) and json_type(${table.rolesJson}) = 'array' and json_array_length(${table.rolesJson}) > 0`,
+    ),
+    check(
+      'department_access_assignment_versions_allow_json',
+      sql`json_valid(${table.allowPermissionsJson}) and json_type(${table.allowPermissionsJson}) = 'array'`,
+    ),
+    check(
+      'department_access_assignment_versions_deny_json',
+      sql`json_valid(${table.denyPermissionsJson}) and json_type(${table.denyPermissionsJson}) = 'array'`,
+    ),
+    check(
+      'department_access_assignment_versions_effective_range',
+      sql`${table.effectiveUntil} is null or ${table.effectiveUntil} > ${table.effectiveFrom}`,
+    ),
+    check(
+      'department_access_assignment_versions_reason_length',
+      sql`length(trim(${table.changeReason})) between 3 and 500`,
+    ),
+  ],
+);
+
+export const departmentAccessAssignmentHeads = sqliteTable(
+  'department_access_assignment_heads',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    facilityId: text('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    assignmentId: text('assignment_id')
+      .notNull()
+      .references(() => departmentAccessAssignments.id),
+    departmentId: text('department_id')
+      .notNull()
+      .references(() => departments.id),
+    membershipId: text('membership_id')
+      .notNull()
+      .references(() => memberships.id),
+    currentVersionId: text('current_version_id')
+      .notNull()
+      .references(() => departmentAccessAssignmentVersions.id),
+    lockVersion: integer('lock_version').notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('department_access_assignment_heads_scope_assignment_uidx').on(
+      table.organizationId,
+      table.facilityId,
+      table.assignmentId,
+    ),
+    index('department_access_assignment_heads_member_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.membershipId,
+      table.updatedAt,
+    ),
+    foreignKey({
+      name: 'department_access_assignment_heads_scope_assignment_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.assignmentId,
+        table.departmentId,
+        table.membershipId,
+      ],
+      foreignColumns: [
+        departmentAccessAssignments.organizationId,
+        departmentAccessAssignments.facilityId,
+        departmentAccessAssignments.id,
+        departmentAccessAssignments.departmentId,
+        departmentAccessAssignments.membershipId,
+      ],
+    }),
+    foreignKey({
+      name: 'department_access_assignment_heads_scope_version_fk',
+      columns: [
+        table.organizationId,
+        table.facilityId,
+        table.assignmentId,
+        table.departmentId,
+        table.membershipId,
+        table.currentVersionId,
+      ],
+      foreignColumns: [
+        departmentAccessAssignmentVersions.organizationId,
+        departmentAccessAssignmentVersions.facilityId,
+        departmentAccessAssignmentVersions.assignmentId,
+        departmentAccessAssignmentVersions.departmentId,
+        departmentAccessAssignmentVersions.membershipId,
+        departmentAccessAssignmentVersions.id,
+      ],
+    }),
+    check(
+      'department_access_assignment_heads_lock_positive',
+      sql`${table.lockVersion} > 0`,
+    ),
   ],
 );
 

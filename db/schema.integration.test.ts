@@ -1038,6 +1038,10 @@ describe('D1 schema security invariants', () => {
         );
       }
       const legacySeed = readFileSync('db/seed.local.sql', 'utf8')
+        .replace(
+          /INSERT OR IGNORE INTO departments[\s\S]*?(?=INSERT OR IGNORE INTO patients)/,
+          '',
+        )
         .replace(/INSERT OR IGNORE INTO patient_profile_versions[\s\S]*?;\r?\n/g, '')
         .replace(/INSERT OR IGNORE INTO patient_profile_heads[\s\S]*?;\r?\n/g, '');
       legacy.exec(legacySeed);

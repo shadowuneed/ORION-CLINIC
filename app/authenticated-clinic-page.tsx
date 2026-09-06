@@ -15,7 +15,8 @@ export type ClinicCapability =
   | 'scheduling'
   | 'chronic-care'
   | 'observations'
-  | 'communications';
+  | 'communications'
+  | 'access';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
@@ -26,6 +27,7 @@ export type AuthenticatedClinicContext = {
     chronicCare: boolean;
     observations: boolean;
     communications: boolean;
+    accessOverview: boolean;
   };
   accessCheck: 'ready' | 'unavailable';
 };
@@ -74,6 +76,9 @@ export async function getAuthenticatedClinicContext(
           membership.role === 'nurse' ||
           membership.role === 'registrar',
       ),
+      // Every authenticated principal may reach the resolver, which then
+      // requires a current interactive assignment with access.self.read.
+      accessOverview: true,
     },
   };
 }
@@ -94,6 +99,7 @@ export function AuthenticatedClinicPage({
     'chronic-care': context.capabilities.chronicCare,
     observations: context.capabilities.observations,
     communications: context.capabilities.communications,
+    access: context.capabilities.accessOverview,
   }[requiredCapability];
 
   return (
@@ -108,21 +114,29 @@ export function AuthenticatedClinicPage({
       ) : (
         <AccessState
           title="Нет доступа к разделу"
-          text={
-            requiredCapability === 'clinician'
-              ? 'Этот раздел доступен только пользователю с активной ролью врача.'
-              : requiredCapability === 'chronic-care'
-                ? 'Нужна активная роль врача или медсестры в выбранной клинике.'
-                : requiredCapability === 'observations'
-                  ? 'Нужна активная роль врача или медсестры для работы с показателями.'
-                : requiredCapability === 'communications'
-                  ? 'Нужна активная роль врача, медсестры или регистратора в выбранной клинике.'
-                : 'Нужна активная роль врача или регистратора в выбранной клинике.'
-          }
+          text={capabilityDenialMessage(requiredCapability)}
         />
       )}
     </ClinicShell>
   );
+}
+
+function capabilityDenialMessage(capability: ClinicCapability) {
+  switch (capability) {
+    case 'clinician':
+      return 'Этот раздел доступен только пользователю с активной ролью врача.';
+    case 'chronic-care':
+      return 'Нужна активная роль врача или медсестры в выбранной клинике.';
+    case 'observations':
+      return 'Нужна активная роль врача или медсестры для работы с показателями.';
+    case 'communications':
+      return 'Нужна активная роль врача, медсестры или регистратора в выбранной клинике.';
+    case 'access':
+      return 'Для этого пользователя нет доступного рабочего контура.';
+    case 'patient-directory':
+    case 'scheduling':
+      return 'Нужна активная роль врача или регистратора в выбранной клинике.';
+  }
 }
 
 function AccessState({ title, text }: { title: string; text: string }) {

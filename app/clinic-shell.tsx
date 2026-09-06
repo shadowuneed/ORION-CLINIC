@@ -18,6 +18,7 @@ import {
   Users,
   HeartPulse,
   MessageSquareText,
+  ShieldCheck,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 
@@ -32,6 +33,7 @@ const navigation = [
   { href: '/care', label: 'Наблюдение', icon: HeartPulse, badge: 'D1', capability: 'chronicCare' },
   { href: '/observations', label: 'Показатели', icon: Activity, badge: 'D1', capability: 'observations' },
   { href: '/communications', label: 'Связь с пациентом', icon: MessageSquareText, badge: 'D1', capability: 'communications' },
+  { href: '/access', label: 'Мой доступ', icon: ShieldCheck, badge: 'D1', capability: 'accessOverview' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {
@@ -73,6 +75,7 @@ export function ClinicShell({
     chronicCare: boolean;
     observations: boolean;
     communications: boolean;
+    accessOverview: boolean;
   };
   user: { displayName: string; email: string | null };
 }) {
@@ -196,6 +199,7 @@ export function ClinicShell({
                 className={`${styles.navItem} ${active ? styles.navActive : ''}`}
                 href={item.href}
                 key={item.href}
+                aria-label={item.label}
                 title={collapsed ? item.label : undefined}
               >
                 <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
