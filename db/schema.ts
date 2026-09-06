@@ -7040,6 +7040,9 @@ export const patientObservationRecords = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -7052,6 +7055,12 @@ export const patientObservationRecords = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.patientId,
+      table.createdAt,
+    ),
+    index('patient_observation_records_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
       table.createdAt,
     ),
     foreignKey({
@@ -7116,6 +7125,9 @@ export const patientObservationVersions = sqliteTable(
     recordedByMembershipId: text('recorded_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     recordedAt: integer('recorded_at', { mode: 'timestamp_ms' }).notNull(),
     changeReason: text('change_reason').notNull(),
     inputHash: text('input_hash').notNull(),
@@ -7142,6 +7154,12 @@ export const patientObservationVersions = sqliteTable(
       table.facilityId,
       table.patientId,
       table.measuredAt,
+    ),
+    index('patient_observation_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'patient_observation_versions_scope_record_fk',

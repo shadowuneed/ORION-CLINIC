@@ -41,6 +41,7 @@ export type ObservationVersionRecord = {
   sourceType: 'manual_test';
   sourceLabel: string;
   recordedByMembershipId: string;
+  accessAssignmentId: string | null;
   recordedBy: string;
   recordedAt: number;
   changeReason: string;
@@ -121,6 +122,7 @@ type ObservationRow = StoredObservationValues & {
   measurementContext: ObservationContext;
   note: string | null;
   recordedByMembershipId: string;
+  accessAssignmentId: string | null;
   recordedBy: string;
   recordedAt: number;
   changeReason: string;
@@ -237,6 +239,7 @@ function versionFromRow(row: ObservationRow): ObservationVersionRecord {
     sourceType: row.sourceType,
     sourceLabel: row.sourceLabel,
     recordedByMembershipId: row.recordedByMembershipId,
+    accessAssignmentId: row.accessAssignmentId,
     recordedBy: row.recordedBy,
     recordedAt: row.recordedAt,
     changeReason: row.changeReason,
@@ -274,6 +277,7 @@ const observationSelect = `
     version.diastolic_mmhg as diastolicMmhg,
     version.temperature_milli_c as temperatureMilliC,
     version.note, version.recorded_by_membership_id as recordedByMembershipId,
+    version.access_assignment_id as accessAssignmentId,
     recorder_user.display_name as recordedBy, version.recorded_at as recordedAt,
     version.change_reason as changeReason, version.input_hash as inputHash,
     head.lock_version as headLockVersion
@@ -432,6 +436,7 @@ export class D1PatientObservationRepository {
           patientScoped: input.patientId !== null,
           resultCount: input.resultCount,
           role: this.scope.role,
+          accessAssignmentId: this.scope.accessAssignmentId,
           dataMode: 'synthetic-only',
         },
         occurredAt: Date.now(),
@@ -460,6 +465,7 @@ export class D1PatientObservationRepository {
     requireObservationPermission(this.scope.role, 'observation.record');
     const normalized = this.normalizeCommand(input);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       ...normalized,
       patientId: input.patientId,
       dataMode: 'synthetic-only',
@@ -513,6 +519,7 @@ export class D1PatientObservationRepository {
       entityType: 'patient_observation',
       requestId: input.requestId,
       metadata: {
+        accessAssignmentId: this.scope.accessAssignmentId,
         patientId: input.patientId,
         version: 1,
         sourceType: 'manual_test',
@@ -524,8 +531,9 @@ export class D1PatientObservationRepository {
         this.database
           .prepare(`insert into patient_observation_records (
             id, organization_id, facility_id, patient_id, source_type,
-            source_label, created_by_membership_id, created_at
-          ) values (?1, ?2, ?3, ?4, 'manual_test', ?5, ?6, ?7)`)
+            source_label, created_by_membership_id, access_assignment_id,
+            created_at
+          ) values (?1, ?2, ?3, ?4, 'manual_test', ?5, ?6, ?7, ?8)`)
           .bind(
             observationId,
             this.scope.organizationId,
@@ -533,6 +541,7 @@ export class D1PatientObservationRepository {
             input.patientId,
             LOCAL_OBSERVATION_SOURCE_LABEL,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.versionInsert({
@@ -570,6 +579,7 @@ export class D1PatientObservationRepository {
     requireObservationPermission(this.scope.role, 'observation.correct');
     const normalized = this.normalizeCommand(input);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       ...normalized,
       patientId: input.patientId,
       observationId: input.observationId,
@@ -647,6 +657,7 @@ export class D1PatientObservationRepository {
       entityType: 'patient_observation',
       requestId: input.requestId,
       metadata: {
+        accessAssignmentId: this.scope.accessAssignmentId,
         patientId: input.patientId,
         version: nextVersion,
         supersedesVersionId: current.versionId,
@@ -814,6 +825,7 @@ export class D1PatientObservationRepository {
       ...input.stored,
       note: input.normalized.note,
       recordedByMembershipId: this.scope.membershipId,
+      accessAssignmentId: this.scope.accessAssignmentId,
       recordedBy: input.recorder,
       recordedAt: input.recordedAt,
       changeReason: input.normalized.reason,
@@ -843,12 +855,12 @@ export class D1PatientObservationRepository {
         height_mm, height_unit, weight_grams, weight_unit,
         bmi_hundredths, bmi_unit, systolic_mmhg, diastolic_mmhg,
         pressure_unit, temperature_milli_c, temperature_unit, note,
-        recorded_by_membership_id, recorded_at, change_reason, input_hash,
-        created_at
+        recorded_by_membership_id, access_assignment_id, recorded_at,
+        change_reason, input_hash, created_at
       ) values (
         ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
         ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-        ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?23
+        ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?24
       )`)
       .bind(
         input.versionId,
@@ -873,6 +885,7 @@ export class D1PatientObservationRepository {
         hasTemperature ? 'milli_celsius' : null,
         input.normalized.note,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         input.recordedAt,
         input.normalized.reason,
         input.inputHash,
@@ -909,7 +922,10 @@ export class D1PatientObservationRepository {
     occurredAt: number;
   }) {
     const sequence = input.auditHead.lastSequence + 1;
-    const metadataJson = JSON.stringify(input.metadata);
+    const metadataJson = JSON.stringify({
+      ...input.metadata,
+      accessAssignmentId: this.scope.accessAssignmentId,
+    });
     const eventHash = await hashAuditEvent({
       previousHash: input.auditHead.lastEventHash,
       organizationId: this.scope.organizationId,
@@ -1036,13 +1052,15 @@ export class D1PatientObservationRepository {
     return this.database
       .prepare(`insert into command_idempotency (
         id, organization_id, facility_id, actor_membership_id,
-        operation, idempotency_key, request_hash, status, created_at
-      ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)`)
+        access_assignment_id, operation, idempotency_key, request_hash,
+        status, created_at
+      ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'processing', ?9)`)
       .bind(
         input.id,
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         input.operation,
         input.key,
         input.requestHash,

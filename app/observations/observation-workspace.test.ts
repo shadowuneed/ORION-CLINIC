@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PatientObservationRecord } from '@/lib/repositories/patient-observations';
 import {
+  buildObservationAccessQuery,
+  buildObservationOperationKey,
   calculateBmi,
   canCorrectObservation,
   unknownObservationOutcomeMessage,
@@ -41,6 +43,7 @@ function observation(
       sourceType: 'manual_test',
       sourceLabel: 'Локальный ручной ввод · тестовые данные',
       recordedByMembershipId,
+      accessAssignmentId: 'assignment-nurse-a',
       recordedBy: 'Медсестра Тестовая',
       recordedAt: 2,
       changeReason: 'Первичная запись',
@@ -62,12 +65,14 @@ describe('observation workspace decisions', () => {
       id: 'user-doctor',
       displayName: 'Врач',
       membershipId: 'membership-doctor',
+      accessAssignmentId: 'assignment-doctor',
       role: 'clinician' as const,
     };
     const nurse = {
       id: 'user-nurse',
       displayName: 'Медсестра',
       membershipId: 'membership-nurse-a',
+      accessAssignmentId: 'assignment-nurse-a',
       role: 'nurse' as const,
     };
 
@@ -79,5 +84,22 @@ describe('observation workspace decisions', () => {
   it('treats a disconnected response as an unknown outcome, not a failed save', () => {
     expect(unknownObservationOutcomeMessage()).toContain('Сервер мог сохранить');
     expect(unknownObservationOutcomeMessage()).toContain('сначала обновите');
+  });
+
+  it('keeps facility and exact assignment in every observation request', () => {
+    expect(
+      buildObservationAccessQuery('fac-a', 'assignment-a').toString(),
+    ).toBe('facilityId=fac-a&accessAssignmentId=assignment-a&limit=100');
+    expect(buildObservationAccessQuery(undefined, undefined).toString()).toBe(
+      'limit=100',
+    );
+  });
+
+  it('isolates retry identities by selected assignment', () => {
+    expect(
+      buildObservationOperationKey('assignment-a', 'create', 'patient-a'),
+    ).not.toBe(
+      buildObservationOperationKey('assignment-b', 'create', 'patient-a'),
+    );
   });
 });

@@ -82,6 +82,7 @@ export const observationValuesSchema = z
 export const observationListQuerySchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: id.optional(),
     patientId: id.optional(),
     limit: z.coerce.number().int().min(1).max(200).default(100),
   })
@@ -89,6 +90,7 @@ export const observationListQuerySchema = z
 
 const observationCommandBase = {
   facilityId: z.string().trim().min(1).max(100).optional(),
+  accessAssignmentId: id.optional(),
   patientId: id,
   measuredAt: z.number().int().positive(),
   context: z.enum(observationContexts),

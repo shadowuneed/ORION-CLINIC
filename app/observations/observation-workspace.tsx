@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertCircle,
@@ -30,11 +30,12 @@ import type {
 } from '@/lib/repositories/patient-observations';
 import styles from './observations.module.css';
 
-type FacilityOption = {
-  organizationId: string;
+type AccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: 'clinician' | 'nurse';
 };
 
@@ -43,7 +44,7 @@ type ApiError = {
   message: string;
   requestId?: string;
   details?: {
-    facilities?: FacilityOption[];
+    assignments?: AccessAssignmentOption[];
     currentVersion?: number;
   };
 };
@@ -53,11 +54,13 @@ type ObservationsResponse = Partial<ObservationWorkspace> & {
     id: string;
     displayName: string;
     membershipId: string;
+    accessAssignmentId: string;
     role: 'clinician' | 'nurse';
   };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignment?: { assignmentId: string };
+  assignments?: AccessAssignmentOption[];
   observation?: PatientObservationRecord;
   persistence?: 'd1';
   error?: ApiError;
@@ -67,14 +70,15 @@ type ReadyWorkspace = ObservationWorkspace & {
   viewer: NonNullable<ObservationsResponse['viewer']>;
   organization: NonNullable<ObservationsResponse['organization']>;
   facility: NonNullable<ObservationsResponse['facility']>;
-  facilities: FacilityOption[];
+  accessAssignment: NonNullable<ObservationsResponse['accessAssignment']>;
+  assignments: AccessAssignmentOption[];
   persistence: 'd1';
 };
 
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -210,9 +214,10 @@ function formatTimestamp(value: number, timeZone: string) {
 
 function isReadyPayload(payload: ObservationsResponse): payload is ReadyWorkspace {
   return Boolean(
-    payload.viewer &&
+      payload.viewer &&
       payload.organization &&
       payload.facility &&
+      payload.accessAssignment &&
       payload.dataMode &&
       payload.role &&
       payload.timeZone &&
@@ -226,18 +231,32 @@ function isReadyPayload(payload: ObservationsResponse): payload is ReadyWorkspac
   );
 }
 
-function observationSearchParams(facilityId?: string) {
+export function buildObservationAccessQuery(
+  facilityId?: string,
+  accessAssignmentId?: string,
+) {
   const params = new URLSearchParams();
   if (facilityId) params.set('facilityId', facilityId);
+  if (accessAssignmentId) {
+    params.set('accessAssignmentId', accessAssignmentId);
+  }
   params.set('limit', '100');
   return params;
+}
+
+export function buildObservationOperationKey(
+  accessAssignmentId: string,
+  ...parts: Array<string | number | null | undefined>
+) {
+  return [accessAssignmentId || 'unselected', ...parts.map(String)].join('|');
 }
 
 export function ObservationWorkspaceView() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [workspace, setWorkspace] = useState<ReadyWorkspace | null>(null);
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  const [assignmentOptions, setAssignmentOptions] = useState<AccessAssignmentOption[]>([]);
   const [facilityId, setFacilityId] = useState<string | undefined>();
+  const [accessAssignmentId, setAccessAssignmentId] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [search, setSearch] = useState('');
   const [dialog, setDialog] = useState<
@@ -250,21 +269,46 @@ export function ObservationWorkspaceView() {
   const [error, setError] = useState<ApiError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const facilityRef = useRef('');
+  const accessAssignmentRef = useRef('');
+  const loadAbort = useRef<AbortController | null>(null);
+  const loadGeneration = useRef(0);
+
   const load = useCallback(async (
     requestedFacilityId?: string,
+    requestedAssignmentId?: string,
     requestedPatientId?: string | null,
   ) => {
+    const generation = loadGeneration.current + 1;
+    loadGeneration.current = generation;
+    loadAbort.current?.abort();
+    const controller = new AbortController();
+    loadAbort.current = controller;
     setLoadState('loading');
     setError(null);
     try {
       const response = await fetch(
-        `/api/observations?${observationSearchParams(requestedFacilityId)}`,
-        { cache: 'no-store' },
+        `/api/observations?${buildObservationAccessQuery(
+          requestedFacilityId,
+          requestedAssignmentId,
+        )}`,
+        {
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: controller.signal,
+        },
       );
       const payload = (await response.json()) as ObservationsResponse;
-      if (response.status === 409 && payload.error?.code === 'FACILITY_SELECTION_REQUIRED') {
-        setFacilityOptions(payload.error.details?.facilities ?? []);
-        setLoadState('facility');
+      if (controller.signal.aborted || generation !== loadGeneration.current) {
+        return;
+      }
+      if (
+        response.status === 409 &&
+        payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
+      ) {
+        setAssignmentOptions(payload.error.details?.assignments ?? []);
+        setWorkspace(null);
+        setLoadState('assignment');
         return;
       }
       if (response.status === 401) {
@@ -278,9 +322,21 @@ export function ObservationWorkspaceView() {
       if (!response.ok || !isReadyPayload(payload)) {
         throw errorFrom(payload, 'Не удалось загрузить показатели.');
       }
-      const options = payload.facilities ?? [];
-      setFacilityOptions(options);
-      setFacilityId(payload.facility.id);
+      const resolvedFacilityId = payload.facility.id;
+      const resolvedAssignmentId = payload.accessAssignment.assignmentId;
+      facilityRef.current = resolvedFacilityId;
+      accessAssignmentRef.current = resolvedAssignmentId;
+      const resolvedUrl = new URL(window.location.href);
+      resolvedUrl.searchParams.set('facilityId', resolvedFacilityId);
+      resolvedUrl.searchParams.set('accessAssignmentId', resolvedAssignmentId);
+      window.history.replaceState(
+        null,
+        '',
+        `${resolvedUrl.pathname}${resolvedUrl.search}`,
+      );
+      setAssignmentOptions(payload.assignments ?? []);
+      setFacilityId(resolvedFacilityId);
+      setAccessAssignmentId(resolvedAssignmentId);
       setWorkspace(payload);
       setSelectedPatientId((current) => {
         const preferredPatientId = requestedPatientId ?? current;
@@ -292,6 +348,13 @@ export function ObservationWorkspaceView() {
       });
       setLoadState('ready');
     } catch (cause) {
+      if (
+        controller.signal.aborted ||
+        generation !== loadGeneration.current ||
+        (cause instanceof DOMException && cause.name === 'AbortError')
+      ) {
+        return;
+      }
       const nextError = cause as ApiError;
       setError({
         code: nextError.code ?? 'NETWORK_ERROR',
@@ -305,11 +368,18 @@ export function ObservationWorkspaceView() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requestedFacility = params.get('facilityId') ?? undefined;
+    const requestedAssignment =
+      params.get('accessAssignmentId') ?? undefined;
     const requestedPatient = params.get('patientId');
+    facilityRef.current = requestedFacility ?? '';
+    accessAssignmentRef.current = requestedAssignment ?? '';
     const loadTimer = window.setTimeout(() => {
-      void load(requestedFacility, requestedPatient);
+      void load(requestedFacility, requestedAssignment, requestedPatient);
     }, 0);
-    return () => window.clearTimeout(loadTimer);
+    return () => {
+      window.clearTimeout(loadTimer);
+      loadAbort.current?.abort();
+    };
   }, [load]);
 
   const filteredPatients = useMemo(() => {
@@ -342,13 +412,23 @@ export function ObservationWorkspaceView() {
     ? calculateBmi(draft.heightCm, draft.weightKg)
     : null;
 
-  function chooseFacility(nextFacilityId: string) {
-    if (!nextFacilityId) return;
+  function chooseAssignment(nextAssignmentId: string) {
+    if (!nextAssignmentId || pending || dialog) return;
+    const assignment = assignmentOptions.find(
+      (candidate) => candidate.assignmentId === nextAssignmentId,
+    );
+    if (!assignment) return;
+    accessAssignmentRef.current = assignment.assignmentId;
+    facilityRef.current = assignment.facilityId;
+    setAccessAssignmentId(assignment.assignmentId);
+    setFacilityId(assignment.facilityId);
     const url = new URL(window.location.href);
-    url.searchParams.set('facilityId', nextFacilityId);
+    url.searchParams.set('accessAssignmentId', assignment.assignmentId);
+    url.searchParams.set('facilityId', assignment.facilityId);
     url.searchParams.delete('patientId');
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-    void load(nextFacilityId);
+    setSelectedPatientId('');
+    void load(assignment.facilityId, assignment.assignmentId);
   }
 
   function choosePatient(patient: ObservationPatient) {
@@ -356,6 +436,9 @@ export function ObservationWorkspaceView() {
     const url = new URL(window.location.href);
     url.searchParams.set('patientId', patient.id);
     if (facilityId) url.searchParams.set('facilityId', facilityId);
+    if (accessAssignmentId) {
+      url.searchParams.set('accessAssignmentId', accessAssignmentId);
+    }
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
   }
 
@@ -381,7 +464,19 @@ export function ObservationWorkspaceView() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!dialog || !selectedPatient || !workspace || !facilityId) return;
+    if (
+      !dialog ||
+      !selectedPatient ||
+      !workspace ||
+      !facilityId ||
+      !accessAssignmentId
+    ) return;
+    const scopeSnapshot = {
+      facilityId,
+      accessAssignmentId,
+      patientId: selectedPatient.id,
+    };
+    const dialogSnapshot = dialog;
     setPending(true);
     setError(null);
     setSuccess(null);
@@ -395,8 +490,9 @@ export function ObservationWorkspaceView() {
         : null,
     };
     const payload = {
-      facilityId,
-      patientId: selectedPatient.id,
+      facilityId: scopeSnapshot.facilityId,
+      accessAssignmentId: scopeSnapshot.accessAssignmentId,
+      patientId: scopeSnapshot.patientId,
       measuredAt: timestampFromInput(draft.measuredAt),
       context: draft.context,
       values,
@@ -404,17 +500,17 @@ export function ObservationWorkspaceView() {
       reason: draft.reason.trim(),
       syntheticDataAcknowledged: draft.acknowledged,
       idempotencyKey: draft.idempotencyKey,
-      ...(dialog.mode === 'correct'
-        ? { expectedVersion: dialog.observation.current.version }
+      ...(dialogSnapshot.mode === 'correct'
+        ? { expectedVersion: dialogSnapshot.observation.current.version }
         : {}),
     };
     const endpoint =
-      dialog.mode === 'create'
+      dialogSnapshot.mode === 'create'
         ? '/api/observations'
-        : `/api/observations/${encodeURIComponent(dialog.observation.id)}`;
+        : `/api/observations/${encodeURIComponent(dialogSnapshot.observation.id)}`;
     try {
       const response = await fetch(endpoint, {
-        method: dialog.mode === 'create' ? 'POST' : 'PATCH',
+        method: dialogSnapshot.mode === 'create' ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -426,12 +522,15 @@ export function ObservationWorkspaceView() {
       }
       setDialog(null);
       setSuccess(
-        dialog.mode === 'create'
+        dialogSnapshot.mode === 'create'
           ? 'Показатели записаны в D1 без автоматической медицинской оценки.'
           : `Исправление сохранено как версия ${result.observation.current.version}; предыдущая версия осталась в истории.`,
       );
-      await load(facilityId);
-      setSelectedPatientId(selectedPatient.id);
+      await load(
+        scopeSnapshot.facilityId,
+        scopeSnapshot.accessAssignmentId,
+        scopeSnapshot.patientId,
+      );
     } catch {
       setError({ code: 'UNKNOWN_OUTCOME', message: unknownObservationOutcomeMessage() });
     } finally {
@@ -442,18 +541,18 @@ export function ObservationWorkspaceView() {
   if (loadState === 'loading') {
     return <PageState icon={<LoaderCircle className={styles.spin} />} title="Загружаем показатели" text="Читаем текущие версии и историю из D1." />;
   }
-  if (loadState === 'facility') {
+  if (loadState === 'assignment') {
     return (
       <PageState
         icon={<Activity />}
-        title="Выберите клинику"
-        text="У пользователя несколько активных клинических ролей. Данные филиалов не смешиваются."
+        title="Выберите рабочий контур"
+        text="Назначения по отделениям не объединяются. Роль и права будут взяты только из выбранного контура."
       >
-        <select aria-label="Клиника" defaultValue="" onChange={(event) => chooseFacility(event.target.value)}>
-          <option disabled value="">Выберите филиал</option>
-          {facilityOptions.map((option) => (
-            <option key={`${option.organizationId}:${option.facilityId}`} value={option.facilityId}>
-              {option.organizationName} · {option.facilityName} · {roleLabels[option.role]}
+        <select aria-label="Рабочий контур" defaultValue="" onChange={(event) => chooseAssignment(event.target.value)}>
+          <option disabled value="">Выберите назначение</option>
+          {assignmentOptions.map((option) => (
+            <option key={option.assignmentId} value={option.assignmentId}>
+              {option.organizationName} · {option.facilityName} · {option.departmentName} · {roleLabels[option.role]}
             </option>
           ))}
         </select>
@@ -464,12 +563,12 @@ export function ObservationWorkspaceView() {
     return <PageState icon={<AlertCircle />} title="Требуется вход" text="Откройте ORION Clinic через авторизованный контур." />;
   }
   if (loadState === 'forbidden') {
-    return <PageState icon={<ShieldCheck />} title="Нет доступа" text="Для показателей нужна активная роль врача или медсестры." />;
+    return <PageState icon={<ShieldCheck />} title="Нет доступа" text="В выбранном рабочем контуре показатели недоступны." />;
   }
   if (loadState === 'error' || !workspace) {
     return (
       <PageState icon={<AlertCircle />} title="Показатели недоступны" text={error?.message ?? 'Не удалось загрузить данные.'}>
-        <button className={styles.secondaryButton} onClick={() => void load(facilityId)} type="button"><RefreshCw size={17} />Повторить</button>
+        <button className={styles.secondaryButton} onClick={() => void load(facilityId, accessAssignmentId)} type="button"><RefreshCw size={17} />Повторить</button>
       </PageState>
     );
   }
@@ -482,9 +581,28 @@ export function ObservationWorkspaceView() {
           <h1>Показатели пациента</h1>
           <p>Рост, вес, рассчитанный ИМТ, артериальное давление и температура сохраняются как неизменяемые версии с источником, временем и автором.</p>
         </div>
-        <div className={styles.sourceBadge}>
-          <ShieldCheck aria-hidden="true" size={21} />
-          <span><strong>{workspace.sourceLabel}</strong><small>Решение о критичности ORION не принимает</small></span>
+        <div className={styles.headerActions}>
+          {assignmentOptions.length > 1 ? (
+            <label className={styles.scopeSelector}>
+              <span>Рабочий контур</span>
+              <select
+                aria-label="Рабочий контур показателей"
+                disabled={pending || dialog !== null}
+                onChange={(event) => chooseAssignment(event.target.value)}
+                value={accessAssignmentId}
+              >
+                {assignmentOptions.map((option) => (
+                  <option key={option.assignmentId} value={option.assignmentId}>
+                    {option.facilityName} · {option.departmentName} · {roleLabels[option.role]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <div className={styles.sourceBadge}>
+            <ShieldCheck aria-hidden="true" size={21} />
+            <span><strong>{workspace.sourceLabel}</strong><small>Решение о критичности ORION не принимает</small></span>
+          </div>
         </div>
       </header>
 

@@ -1,9 +1,12 @@
 import {
-  ObservationFacilityNotFoundError,
-  ObservationFacilitySelectionRequiredError,
-  ObservationMembershipRequiredError,
+  MultipleObservationAccessSelectionRequiredError,
   ObservationPermissionRequiredError,
 } from '@/lib/auth/observation-access';
+import {
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
 import {
   ObservationAuditUnavailableError,
   ObservationConflictError,
@@ -20,45 +23,35 @@ export function observationApiFailure(
   fallbackCode: string,
   fallbackMessage: string,
 ) {
-  if (error instanceof ObservationMembershipRequiredError) {
-    return apiFailure(
-      context,
-      403,
-      'OBSERVATION_ACCESS_REQUIRED',
-      'Нужна активная роль врача или медсестры.',
-    );
-  }
-  if (error instanceof ObservationFacilitySelectionRequiredError) {
+  if (error instanceof MultipleObservationAccessSelectionRequiredError) {
     return apiFailure(
       context,
       409,
-      'FACILITY_SELECTION_REQUIRED',
-      'Выберите клинику для работы с показателями.',
-      { facilities: error.facilities },
+      'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+      'Выберите рабочий контур.',
+      { assignments: error.assignments },
     );
   }
   if (
-    error instanceof ObservationFacilityNotFoundError ||
-    error instanceof ObservationNotFoundError
-  ) {
-    return apiFailure(
-      context,
-      404,
-      'OBSERVATION_NOT_FOUND',
-      'Запись или пациент не найдены либо недоступны.',
-    );
-  }
-  if (
+    error instanceof AccessMembershipRequiredError ||
+    error instanceof AccessAssignmentNotFoundError ||
+    error instanceof AccessPermissionRequiredError ||
     error instanceof ObservationPermissionRequiredError ||
     error instanceof ObservationCorrectionForbiddenError
   ) {
     return apiFailure(
       context,
       403,
-      'OBSERVATION_PERMISSION_REQUIRED',
-      error instanceof ObservationCorrectionForbiddenError
-        ? 'Медсестра может исправить только собственное измерение.'
-        : 'Недостаточно прав для этого действия.',
+      'OBSERVATION_FORBIDDEN',
+      'Нет доступа к показателям в выбранном рабочем контуре.',
+    );
+  }
+  if (error instanceof ObservationNotFoundError) {
+    return apiFailure(
+      context,
+      404,
+      'OBSERVATION_NOT_FOUND',
+      'Запись или пациент не найдены либо недоступны.',
     );
   }
   if (error instanceof ObservationVersionConflictError) {

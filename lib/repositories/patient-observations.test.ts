@@ -28,6 +28,7 @@ const clinicianScope: ObservationScope = {
   facilityId: 'fac-a',
   userId: 'user-doctor',
   membershipId: 'membership-doctor',
+  accessAssignmentId: 'assignment-doctor',
   role: 'clinician',
 };
 const nurseScope: ObservationScope = {
@@ -35,6 +36,7 @@ const nurseScope: ObservationScope = {
   facilityId: 'fac-a',
   userId: 'user-nurse',
   membershipId: 'membership-nurse',
+  accessAssignmentId: 'assignment-nurse',
   role: 'nurse',
 };
 const otherScope: ObservationScope = {
@@ -42,6 +44,7 @@ const otherScope: ObservationScope = {
   facilityId: 'fac-b',
   userId: 'user-other',
   membershipId: 'membership-other',
+  accessAssignmentId: 'assignment-other',
   role: 'clinician',
 };
 const uuid = (value: number) =>
@@ -156,6 +159,62 @@ function createFixture() {
       ('membership-doctor', 'org-a', 'fac-a', 'user-doctor', 'clinician', 'active'),
       ('membership-nurse', 'org-a', 'fac-a', 'user-nurse', 'nurse', 'active'),
       ('membership-other', 'org-b', 'fac-b', 'user-other', 'clinician', 'active');
+    insert into departments (
+      id, organization_id, facility_id, code, name, kind, status,
+      created_at, updated_at, version
+    ) values
+      ('department-a', 'org-a', 'fac-a', 'clinical-a', 'Clinical A', 'clinical', 'active', 1000, 1000, 1),
+      ('department-b', 'org-b', 'fac-b', 'clinical-b', 'Clinical B', 'clinical', 'active', 1000, 1000, 1);
+    insert into department_versions (
+      id, organization_id, facility_id, department_id, version,
+      supersedes_version_id, name, kind, status, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values
+      ('department-a-v1', 'org-a', 'fac-a', 'department-a', 1, null,
+       'Clinical A', 'clinical', 'active', 'synthetic department',
+       'membership-doctor', 1000, 1000),
+      ('department-b-v1', 'org-b', 'fac-b', 'department-b', 1, null,
+       'Clinical B', 'clinical', 'active', 'synthetic department',
+       'membership-other', 1000, 1000);
+    insert into department_heads (
+      id, organization_id, facility_id, department_id, current_version_id,
+      lock_version, created_at, updated_at
+    ) values
+      ('department-a-head', 'org-a', 'fac-a', 'department-a', 'department-a-v1', 1, 1000, 1000),
+      ('department-b-head', 'org-b', 'fac-b', 'department-b', 'department-b-v1', 1, 1000, 1000);
+    insert into department_access_assignments (
+      id, organization_id, facility_id, department_id, membership_id,
+      created_by_membership_id, created_at
+    ) values
+      ('assignment-doctor', 'org-a', 'fac-a', 'department-a', 'membership-doctor', 'membership-doctor', 1000),
+      ('assignment-nurse', 'org-a', 'fac-a', 'department-a', 'membership-nurse', 'membership-doctor', 1000),
+      ('assignment-other', 'org-b', 'fac-b', 'department-b', 'membership-other', 'membership-other', 1000);
+    insert into department_access_assignment_versions (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, version, supersedes_version_id, status, source_type,
+      roles_json, allow_permissions_json, deny_permissions_json,
+      effective_from, effective_until, change_reason,
+      changed_by_membership_id, changed_at, created_at
+    ) values
+      ('assignment-doctor-v1', 'org-a', 'fac-a', 'assignment-doctor', 'department-a',
+       'membership-doctor', 1, null, 'active', 'bootstrap', '["doctor"]', '[]', '[]',
+       1000, null, 'synthetic assignment', 'membership-doctor', 1000, 1000),
+      ('assignment-nurse-v1', 'org-a', 'fac-a', 'assignment-nurse', 'department-a',
+       'membership-nurse', 1, null, 'active', 'bootstrap', '["nurse"]', '[]', '[]',
+       1000, null, 'synthetic assignment', 'membership-doctor', 1000, 1000),
+      ('assignment-other-v1', 'org-b', 'fac-b', 'assignment-other', 'department-b',
+       'membership-other', 1, null, 'active', 'bootstrap', '["doctor"]', '[]', '[]',
+       1000, null, 'synthetic assignment', 'membership-other', 1000, 1000);
+    insert into department_access_assignment_heads (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, current_version_id, lock_version, created_at, updated_at
+    ) values
+      ('assignment-doctor-head', 'org-a', 'fac-a', 'assignment-doctor', 'department-a',
+       'membership-doctor', 'assignment-doctor-v1', 1, 1000, 1000),
+      ('assignment-nurse-head', 'org-a', 'fac-a', 'assignment-nurse', 'department-a',
+       'membership-nurse', 'assignment-nurse-v1', 1, 1000, 1000),
+      ('assignment-other-head', 'org-b', 'fac-b', 'assignment-other', 'department-b',
+       'membership-other', 'assignment-other-v1', 1, 1000, 1000);
     insert into patients (
       id, organization_id, facility_id, medical_record_number, display_name, status
     ) values
@@ -209,6 +268,15 @@ describe('D1 patient observations', () => {
       temperatureC: 36.6,
     });
     expect(created.current.sourceType).toBe('manual_test');
+    expect(created.current.accessAssignmentId).toBe('assignment-doctor');
+    expect(
+      target.prepare(`select access_assignment_id as assignmentId
+        from command_idempotency where operation = 'observation.create'`).get(),
+    ).toEqual({ assignmentId: 'assignment-doctor' });
+    expect(
+      target.prepare(`select access_assignment_id as assignmentId
+        from patient_observation_records where id = ?`).get(created.id),
+    ).toEqual({ assignmentId: 'assignment-doctor' });
 
     const workspace = await repository.list({ patientId: 'patient-a' });
     await repository.recordListRead({
@@ -219,6 +287,13 @@ describe('D1 patient observations', () => {
     expect(workspace.observations).toHaveLength(1);
     expect(workspace.clinicalInterpretation).toBe('not_performed');
     expect(workspace.thresholdPolicy.decision).toBe('DEC-006');
+    const auditMetadata = target
+      .prepare(`select metadata_json as metadataJson from audit_events
+        where action = 'observation.recorded'`)
+      .get() as { metadataJson: string };
+    expect(JSON.parse(auditMetadata.metadataJson)).toMatchObject({
+      accessAssignmentId: 'assignment-doctor',
+    });
     expect(
       target
         .prepare(`select action, purpose from audit_events order by sequence`)
@@ -252,6 +327,58 @@ describe('D1 patient observations', () => {
         ...command,
         values: { ...command.values, temperatureC: 37.1 },
       }),
+    ).rejects.toBeInstanceOf(ObservationConflictError);
+  });
+
+  it('does not replay one membership command through a different assignment', async () => {
+    const { target, database } = createFixture();
+    target.exec(`
+      insert into departments (
+        id, organization_id, facility_id, code, name, kind, status,
+        created_at, updated_at, version
+      ) values ('department-alt', 'org-a', 'fac-a', 'clinical-alt',
+        'Clinical Alternate', 'clinical', 'active', 1000, 1000, 1);
+      insert into department_versions (
+        id, organization_id, facility_id, department_id, version,
+        supersedes_version_id, name, kind, status, change_reason,
+        changed_by_membership_id, changed_at, created_at
+      ) values ('department-alt-v1', 'org-a', 'fac-a', 'department-alt', 1,
+        null, 'Clinical Alternate', 'clinical', 'active',
+        'synthetic alternate department', 'membership-doctor', 1000, 1000);
+      insert into department_heads (
+        id, organization_id, facility_id, department_id, current_version_id,
+        lock_version, created_at, updated_at
+      ) values ('department-alt-head', 'org-a', 'fac-a', 'department-alt',
+        'department-alt-v1', 1, 1000, 1000);
+      insert into department_access_assignments (
+        id, organization_id, facility_id, department_id, membership_id,
+        created_by_membership_id, created_at
+      ) values ('assignment-doctor-alt', 'org-a', 'fac-a', 'department-alt',
+        'membership-doctor', 'membership-doctor', 1000);
+      insert into department_access_assignment_versions (
+        id, organization_id, facility_id, assignment_id, department_id,
+        membership_id, version, supersedes_version_id, status, source_type,
+        roles_json, allow_permissions_json, deny_permissions_json,
+        effective_from, effective_until, change_reason,
+        changed_by_membership_id, changed_at, created_at
+      ) values ('assignment-doctor-alt-v1', 'org-a', 'fac-a',
+        'assignment-doctor-alt', 'department-alt', 'membership-doctor', 1, null,
+        'active', 'bootstrap', '["doctor"]', '[]', '[]', 1000, null,
+        'synthetic alternate assignment', 'membership-doctor', 1000, 1000);
+      insert into department_access_assignment_heads (
+        id, organization_id, facility_id, assignment_id, department_id,
+        membership_id, current_version_id, lock_version, created_at, updated_at
+      ) values ('assignment-doctor-alt-head', 'org-a', 'fac-a',
+        'assignment-doctor-alt', 'department-alt', 'membership-doctor',
+        'assignment-doctor-alt-v1', 1, 1000, 1000);
+    `);
+    const command = createCommand(uuid(9));
+    await new D1PatientObservationRepository(database, clinicianScope).create(command);
+    await expect(
+      new D1PatientObservationRepository(database, {
+        ...clinicianScope,
+        accessAssignmentId: 'assignment-doctor-alt',
+      }).create(command),
     ).rejects.toBeInstanceOf(ObservationConflictError);
   });
 
@@ -374,11 +501,12 @@ describe('D1 patient observations', () => {
           id, organization_id, facility_id, observation_id, patient_id,
           version, supersedes_version_id, measured_at, measurement_context,
           height_mm, height_unit, weight_grams, weight_unit, bmi_hundredths,
-          bmi_unit, recorded_by_membership_id, recorded_at, change_reason,
-          input_hash, created_at
+          bmi_unit, recorded_by_membership_id, access_assignment_id,
+          recorded_at, change_reason, input_hash, created_at
         ) values (
           'tampered', 'org-a', 'fac-a', ?, 'patient-a', 2, ?, ?, 'pre_visit',
-          1700, 'mm', 68200, 'g', 9999, 'kg_m2', 'membership-doctor', ?,
+          1700, 'mm', 68200, 'g', 9999, 'kg_m2', 'membership-doctor',
+          'assignment-doctor', ?,
           'Несогласованное значение ИМТ', ?, ?
         )`)
         .run(
@@ -390,5 +518,41 @@ describe('D1 patient observations', () => {
           Date.now(),
         ),
     ).toThrow();
+  });
+
+  it('enforces exact assignment and nurse-own correction in direct SQLite writes', async () => {
+    const { target, database } = createFixture();
+    const created = await new D1PatientObservationRepository(
+      database,
+      clinicianScope,
+    ).create(createCommand(uuid(40)));
+
+    expect(() =>
+      target.prepare(`insert into patient_observation_records (
+        id, organization_id, facility_id, patient_id, source_type, source_label,
+        created_by_membership_id, created_at
+      ) values ('missing-assignment', 'org-a', 'fac-a', 'patient-a',
+        'manual_test', 'Synthetic observation', 'membership-doctor', ?)`)
+        .run(Date.now()),
+    ).toThrow(/exact current doctor or nurse assignment/);
+
+    expect(() =>
+      target.prepare(`insert into patient_observation_versions (
+        id, organization_id, facility_id, observation_id, patient_id,
+        version, supersedes_version_id, measured_at, measurement_context,
+        temperature_milli_c, temperature_unit, recorded_by_membership_id,
+        access_assignment_id, recorded_at, change_reason, input_hash, created_at
+      ) values ('nurse-bypass', 'org-a', 'fac-a', ?, 'patient-a', 2, ?, ?,
+        'pre_visit', 36700, 'milli_celsius', 'membership-nurse',
+        'assignment-nurse', ?, 'Direct cross-actor correction', ?, ?)`)
+        .run(
+          created.id,
+          created.current.id,
+          Date.UTC(2026, 8, 5, 8, 1),
+          Date.now(),
+          'e'.repeat(64),
+          Date.now(),
+        ),
+    ).toThrow(/actor role boundary/);
   });
 });

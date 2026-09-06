@@ -10,8 +10,8 @@ import {
   hasSameOrigin,
 } from '@/lib/http/api-response';
 import { observationApiFailure } from '@/lib/http/observation-api-errors';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { D1PatientObservationRepository } from '@/lib/repositories/patient-observations';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,8 +51,9 @@ export async function PATCH(
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
     const access = await resolveObservationAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const { observationId } = await params;

@@ -1,8 +1,12 @@
-import type {
-  ActiveMembership,
-  IdentityPrincipal,
-  WorkspaceAccessRepository,
-} from '@/lib/auth/workspace-access';
+import {
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+  isAccessAssignmentCurrentlyActive,
+  type AccessAssignmentSummary,
+  type AccessGovernanceRepository,
+} from '@/lib/auth/access-governance';
+import type { IdentityPrincipal } from '@/lib/auth/workspace-access';
 
 export type ObservationRole = 'clinician' | 'nurse';
 export const observationPermissions = [
@@ -17,45 +21,33 @@ export type ObservationScope = {
   facilityId: string;
   userId: string;
   membershipId: string;
+  accessAssignmentId: string;
   role: ObservationRole;
 };
 
-export type ObservationFacilityOption = {
-  organizationId: string;
+export type ObservationAccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: ObservationRole;
 };
 
 export type ObservationAccess = {
   principal: IdentityPrincipal;
+  assignment: AccessAssignmentSummary;
+  assignments: ObservationAccessAssignmentOption[];
   user: { id: string; displayName: string };
   organization: { id: string; name: string };
   facility: { id: string; name: string };
-  facilities: ObservationFacilityOption[];
-  membership: ActiveMembership & { role: ObservationRole };
   scope: ObservationScope;
 };
 
-export class ObservationMembershipRequiredError extends Error {
-  constructor() {
-    super('An active clinician or nurse membership is required');
-    this.name = 'ObservationMembershipRequiredError';
-  }
-}
-
-export class ObservationFacilitySelectionRequiredError extends Error {
-  constructor(public readonly facilities: ObservationFacilityOption[]) {
-    super('An observation facility must be selected');
-    this.name = 'ObservationFacilitySelectionRequiredError';
-  }
-}
-
-export class ObservationFacilityNotFoundError extends Error {
-  constructor() {
-    super('The requested observation facility is not accessible');
-    this.name = 'ObservationFacilityNotFoundError';
+export class MultipleObservationAccessSelectionRequiredError extends Error {
+  constructor(public readonly assignments: ObservationAccessAssignmentOption[]) {
+    super('An observation access assignment must be selected');
+    this.name = 'MultipleObservationAccessSelectionRequiredError';
   }
 }
 
@@ -99,80 +91,109 @@ export function observationCapabilities(role: ObservationRole) {
   ) as Record<ObservationPermission, boolean>;
 }
 
-function isObservationMembership(
-  membership: ActiveMembership,
-): membership is ActiveMembership & { role: ObservationRole } {
-  return membership.role === 'clinician' || membership.role === 'nurse';
+function observationRole(assignment: AccessAssignmentSummary) {
+  if (assignment.roles.includes('doctor')) return 'clinician' as const;
+  if (assignment.roles.includes('nurse')) return 'nurse' as const;
+  return null;
 }
 
-function sortByRole(
-  left: { role: ObservationRole; membershipId: string },
-  right: { role: ObservationRole; membershipId: string },
-) {
-  if (left.role === right.role) {
-    return left.membershipId.localeCompare(right.membershipId);
-  }
-  return left.role === 'clinician' ? -1 : 1;
+function isObservationAssignment(assignment: AccessAssignmentSummary) {
+  return (
+    observationRole(assignment) !== null &&
+    assignment.effectivePermissions.includes('observations.manage')
+  );
 }
 
+function toOption(
+  assignment: AccessAssignmentSummary,
+): ObservationAccessAssignmentOption {
+  return {
+    assignmentId: assignment.assignmentId,
+    organizationName: assignment.organization.name,
+    facilityId: assignment.facility.id,
+    facilityName: assignment.facility.name,
+    departmentName: assignment.department.name,
+    role: observationRole(assignment)!,
+  };
+}
+
+/**
+ * Resolves exactly one current department assignment. Role and permission are
+ * always taken from that same assignment; permissions from two assignments are
+ * never merged, including assignments in the same facility.
+ */
 export async function resolveObservationAccess(
-  repository: Pick<WorkspaceAccessRepository, 'listActiveMemberships'>,
+  repository: AccessGovernanceRepository,
   principal: IdentityPrincipal,
+  requestedAssignmentId?: string,
   requestedFacilityId?: string,
+  now = Date.now(),
 ): Promise<ObservationAccess> {
-  const memberships = (await repository.listActiveMemberships(principal))
-    .filter(isObservationMembership)
-    .sort(sortByRole);
-  if (memberships.length === 0) throw new ObservationMembershipRequiredError();
+  const current = (await repository.listPrincipalAssignments(principal))
+    .filter((assignment) => isAccessAssignmentCurrentlyActive(assignment, now))
+    .filter((assignment) => !assignment.roles.includes('service'));
 
-  const uniqueScopes = new Map<string, (typeof memberships)[number]>();
-  for (const membership of memberships) {
-    const key = `${membership.organizationId}:${membership.facilityId}`;
-    if (!uniqueScopes.has(key)) uniqueScopes.set(key, membership);
+  if (current.length === 0) throw new AccessMembershipRequiredError();
+
+  let selected: AccessAssignmentSummary | undefined;
+  if (requestedAssignmentId) {
+    selected = current.find(
+      (assignment) => assignment.assignmentId === requestedAssignmentId,
+    );
+    if (!selected) throw new AccessAssignmentNotFoundError();
+    if (requestedFacilityId && selected.facility.id !== requestedFacilityId) {
+      throw new AccessAssignmentNotFoundError();
+    }
+    if (!isObservationAssignment(selected)) {
+      throw new AccessPermissionRequiredError('observations.manage');
+    }
+  } else {
+    const candidates = current.filter(
+      (assignment) =>
+        (!requestedFacilityId ||
+          assignment.facility.id === requestedFacilityId) &&
+        isObservationAssignment(assignment),
+    );
+    if (candidates.length === 0) {
+      throw new AccessPermissionRequiredError('observations.manage');
+    }
+    if (candidates.length > 1) {
+      throw new MultipleObservationAccessSelectionRequiredError(
+        candidates.map(toOption),
+      );
+    }
+    [selected] = candidates;
   }
-  const facilities = [...uniqueScopes.values()]
-    .map((membership) => ({
-      organizationId: membership.organizationId,
-      organizationName: membership.organizationName,
-      facilityId: membership.facilityId,
-      facilityName: membership.facilityName,
-      role: membership.role,
-    }))
+
+  const role = observationRole(selected);
+  if (!role) throw new AccessPermissionRequiredError('observations.manage');
+
+  const assignments = current
+    .filter(isObservationAssignment)
+    .map(toOption)
     .sort((left, right) =>
-      `${left.organizationName}:${left.facilityName}`.localeCompare(
-        `${right.organizationName}:${right.facilityName}`,
+      `${left.organizationName}:${left.facilityName}:${left.departmentName}:${left.assignmentId}`.localeCompare(
+        `${right.organizationName}:${right.facilityName}:${right.departmentName}:${right.assignmentId}`,
       ),
     );
 
-  let membership: (typeof memberships)[number] | undefined;
-  if (requestedFacilityId) {
-    membership = memberships.find(
-      (candidate) => candidate.facilityId === requestedFacilityId,
-    );
-    if (!membership) throw new ObservationFacilityNotFoundError();
-  } else {
-    if (uniqueScopes.size > 1) {
-      throw new ObservationFacilitySelectionRequiredError(facilities);
-    }
-    membership = memberships[0];
-  }
-
   return {
     principal,
-    user: { id: membership.userId, displayName: membership.userDisplayName },
+    assignment: selected,
+    assignments,
+    user: { id: selected.user.id, displayName: selected.user.displayName },
     organization: {
-      id: membership.organizationId,
-      name: membership.organizationName,
+      id: selected.organization.id,
+      name: selected.organization.name,
     },
-    facility: { id: membership.facilityId, name: membership.facilityName },
-    facilities,
-    membership,
+    facility: { id: selected.facility.id, name: selected.facility.name },
     scope: {
-      organizationId: membership.organizationId,
-      facilityId: membership.facilityId,
-      userId: membership.userId,
-      membershipId: membership.membershipId,
-      role: membership.role,
+      organizationId: selected.organization.id,
+      facilityId: selected.facility.id,
+      userId: selected.user.id,
+      membershipId: selected.membership.id,
+      accessAssignmentId: selected.assignmentId,
+      role,
     },
   };
 }

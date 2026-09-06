@@ -3,11 +3,12 @@
 
 INSERT INTO patient_observation_records (
   id, organization_id, facility_id, patient_id, source_type, source_label,
-  created_by_membership_id, created_at
+  created_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'observation-local-a', 'org-a', 'fac-a', 'patient-a', 'manual_test',
-  'Локальный ручной ввод · тестовые данные', 'membership-a', 1788595200000
+  'Локальный ручной ввод · тестовые данные', 'membership-a',
+  'access-assignment-a-general-medicine', 1788595200000
 WHERE NOT EXISTS (
   SELECT 1 FROM patient_observation_records WHERE id = 'observation-local-a'
 );
@@ -18,7 +19,8 @@ INSERT INTO patient_observation_versions (
   height_mm, height_unit, weight_grams, weight_unit, bmi_hundredths, bmi_unit,
   systolic_mmhg, diastolic_mmhg, pressure_unit,
   temperature_milli_c, temperature_unit, note,
-  recorded_by_membership_id, recorded_at, change_reason, input_hash, created_at
+  recorded_by_membership_id, access_assignment_id, recorded_at,
+  change_reason, input_hash, created_at
 )
 SELECT
   'observation-version-local-a-v1', 'org-a', 'fac-a',
@@ -26,7 +28,8 @@ SELECT
   1650, 'mm', 64000, 'g', 2351, 'kg_m2',
   118, 76, 'mmHg', 36500, 'milli_celsius',
   'Синтетические показатели для проверки интерфейса.',
-  'membership-a', 1788595200000, 'Первичная тестовая запись',
+  'membership-a', 'access-assignment-a-general-medicine',
+  1788595200000, 'Первичная тестовая запись',
   'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
   1788595200000
 WHERE NOT EXISTS (

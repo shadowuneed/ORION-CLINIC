@@ -13,8 +13,8 @@ import {
   hasSameOrigin,
 } from '@/lib/http/api-response';
 import { observationApiFailure } from '@/lib/http/observation-api-errors';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { D1PatientObservationRepository } from '@/lib/repositories/patient-observations';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = observationListQuerySchema.safeParse({
     facilityId: url.searchParams.get('facilityId') ?? undefined,
+    accessAssignmentId:
+      url.searchParams.get('accessAssignmentId') ?? undefined,
     patientId: url.searchParams.get('patientId') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
   });
@@ -48,8 +50,9 @@ export async function GET(request: Request) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
     const access = await resolveObservationAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      parsed.data.accessAssignmentId,
       parsed.data.facilityId,
     );
     const repository = new D1PatientObservationRepository(env.DB, access.scope);
@@ -67,11 +70,13 @@ export async function GET(request: Request) {
         id: access.user.id,
         displayName: access.user.displayName,
         membershipId: access.scope.membershipId,
+        accessAssignmentId: access.scope.accessAssignmentId,
         role: access.scope.role,
       },
       organization: access.organization,
       facility: access.facility,
-      facilities: access.facilities,
+      accessAssignment: { assignmentId: access.assignment.assignmentId },
+      assignments: access.assignments,
       ...workspace,
       persistence: 'd1',
     });
@@ -115,8 +120,9 @@ export async function POST(request: Request) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
     const access = await resolveObservationAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const observation = await new D1PatientObservationRepository(
