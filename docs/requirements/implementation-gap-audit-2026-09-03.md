@@ -6,6 +6,7 @@
 - Проверенный commit локального Phase 8A checkpoint: `89819fe`
 - Проверенный commit Phase 2C access administration: `6b2308a`
 - Проверенный commit Phase 2D orders exact-assignment migration: `a9e73e9`
+- Проверенный commit Phase 2E observations exact-assignment migration: `e29a4da`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -32,16 +33,16 @@
 | Восемь разделов клинической записи | `REQ-ENC-001/002` | `IMPLEMENTED_SYNTHETIC` | каждый раздел имеет draft/reviewed/explicitly-absent и версии; неподтверждённые разделы блокируют протокол |
 | Подсказки ИИ и решение врача | `REQ-ENC-005`, `CTX-001/002/003` | `IMPLEMENTED_SYNTHETIC` | original/doctor derivative/review state, accepted/rejected basket, evidence, audit |
 | Протокол и файлы | `CTX-005/007` | `IMPLEMENTED_SYNTHETIC` | DOCX/PDF/TXT/audit JSON/ZIP, SHA-256, R2, access audit; юридическая электронная подпись не подключена |
-| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient and orders APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
+| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient, orders and observations APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | D1 request/report version history; separate clinician approval; exact-payload review and terminal-state guards; manual PDF/JPEG/PNG result in R2 through a durable upload intent; immutable command-time replay; reviewed-final completion gate; scoped/audited download; two-pass cleanup for expired uncommitted uploads; integrated `/orders`. Локальный синтетический срез реализован; external delivery/acknowledgement and structured vendor mapping remain open |
 | Диспансерное наблюдение и планы | `REQ-CHR-001..007`, `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | doctor-confirmed enrollment от текущего signed protocol; immutable signed plan versions; dated plan-derived tasks; deterministic due reason; scoped doctor/nurse worklists; structured response, escalation and doctor resolution; D1/API/UI на `/care` |
 | Связь с пациентом | `REQ-COM-001..004`, `REQ-SCH-006` | `IMPLEMENTED_SYNTHETIC_NO_SEND` | отдельные channel/language consent versions, `approved_test` templates, exact-source outbox, quiet hours, bounded disconnected-provider retry and manual fallback на `/communications`; реальный канал и delivery receipt отсутствуют |
-| Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | facility-scoped D1/API/UI на `/observations`; scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
+| Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | exact-assignment D1/API/UI на `/observations`; effective `observations.manage`, отдельные doctor/nurse правила, scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
 
-Current Phase 2D gate: secret policy covered 410 repository files; dependency
-audit found no known vulnerabilities; lint, strict types, 61 test files/360 tests,
+Current Phase 2E gate: secret policy covered 414 repository files; dependency
+audit found no known vulnerabilities; lint, strict types, 63 test files/373 tests,
 Drizzle and the production build passed. The isolated recovery drill reproduced
-86 tables, 144 rows, 31 migrations and three R2 objects after destroying only its
+86 tables, 145 rows, 32 migrations and three R2 objects after destroying only its
 disposable source environment. This evidence applies only to synthetic local data.
 
 ## 3. Что отсутствует или остаётся частичным
@@ -53,7 +54,7 @@ disposable source environment. This evidence applies only to synthetic local dat
 | Эндокринолог, диспансерный учёт, планы на месяцы | `REQ-CHR-001..010` | `IN_PROGRESS` | Локально реализованы решение врача, signed-plan versions, medication/diet/goals, plan-derived follow-up/control tasks и due/overdue cohort. Реальный регистр, ЭРДБ/ПУЗ и источник бесплатных лекарств заблокированы внешними решениями |
 | Работа медсестры | `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | медсестра видит только назначенные задачи, фиксирует способ контакта/wellbeing/ответ, эскалирует; врач отдельно закрывает эскалацию; SLA и автоматические каналы не утверждены |
 | Автообзвон, WhatsApp/Telegram и напоминания | `REQ-COM-001..004`, `REQ-SCH-006` | `IN_PROGRESS` | Локальный no-send D1-срез реализован: consent/templates/outbox/quiet hours/retry/manual response. Открыты business accounts, approved production content, protected links, provider adapters, webhooks, receipts and worker SLA |
-| Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | Локальная версионная фиксация с единицами, источником, автором, временем, исправлениями и вычисляемым ИМТ реализована. Открыты approved thresholds, device provenance and production validation |
+| Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | Локальная версионная фиксация с exact assignment, effective permission, отдельными doctor/nurse правилами, единицами, источником, автором, временем, исправлениями и вычисляемым ИМТ реализована. Открыты approved thresholds, device provenance and production validation |
 | «Красный» пациент и передача между больницами | `REQ-TRF-001..007` | `BLOCKED_CLINIC_APPROVAL` | Phase 8B review packet and activation-blocked JSON decision template now define the required rule ownership/versioning, doctor confirmation, SLA, minimum signed packet, receiving-facility acknowledgement/manual fallback and read-only chronology choice. No thresholds, runtime classification, alert, notification or transfer are implemented before `DEC-006`/`DEC-007` signatures |
 | ERDB/ЭРДБ, PUZ/ПУЗ, бесплатные лекарства | `REQ-CHR-008..010` | `BLOCKED_EXTERNAL` | нельзя корректно моделировать адаптер, пока клиника не назовёт системы, владельцев, API, legal basis и source of truth |
 | «Айдын емхана» как референс | `REQ-DIS-001` | `BLOCKED_INPUT` | нужен точный объект/ссылка и разрешённый объём исследования |

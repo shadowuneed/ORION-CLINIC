@@ -802,6 +802,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-06 | Phase 2B active D1 and browser audit | PASS for inspected local behavior | Migration/bootstrap reruns were idempotent; `PRAGMA quick_check` returned `ok`, foreign-key check returned no rows, and the current synthetic doctor assignment resolved to version 2 after an append-only local clock correction. Browser navigation from `/patients` to `/access`, all 15 permission states, light/dark theme, 653 px layout and zero body horizontal overflow were checked with no warning/error log. Anonymous `/api/access` returned 401. No clinical record, microphone, external AI or real patient data was used. |
 | 2026-09-06 | Phase 2C access administration and patient-family permission migration | PASS for synthetic local data | Commit `6b2308a` adds versioned departments, append-only grant/change/reactivate/revoke commands, guarded administrator self-scope, `/access/manage`, and exact-assignment effective-permission checks for every patient-directory endpoint. `pnpm verify:ci` passed secret policy for 402 files, zero known dependency vulnerabilities, lint/strict types, 58 test files/341 tests, Drizzle drift check, every Vinext route, and isolated recovery after source destruction matching 86 tables/142 rows/29 migrations/three R2 objects/426,521 bytes (`968b47bc-b3db-41ba-837a-9da460067c49`). Authenticated browser QA opened all three administrative forms without committing an access mutation and verified patient links carrying the selected assignment. |
 | 2026-09-06 | Phase 2D exact-assignment migration for orders | PASS for synthetic local data | Commit `a9e73e9` migrates all `/api/orders` handlers and the `/orders` workspace to one selected non-service doctor assignment with effective `orders.manage`; exact assignment attribution is persisted and enforced for commands, requests, versions, reports, artifacts and upload intents. Neutral denial, multi-scope selection, explicit deny, legacy-role bypass, cross-clinician access, idempotent replay, stale writes and direct SQL guards are covered. `pnpm verify:ci` passed secret policy for 410 files, zero known dependency vulnerabilities, lint/strict types, 61 test files/360 tests, Drizzle drift check, every Vinext route and isolated recovery after source destruction matching 86 tables/144 rows/31 migrations/three R2 objects/440,753 bytes (`b0e5d027-fd17-4b44-adf2-6c297d4db7a0`). Active D1 integrity and all local/public health endpoints also passed. |
+| 2026-09-06 | Phase 2E exact-assignment migration for observations | PASS for synthetic local data | Commit `e29a4da` migrates `/api/observations`, `/api/observations/:observationId` and the `/observations` workspace to one selected current non-service doctor/nurse assignment with effective `observations.manage`. Doctor-wide and nurse-own correction semantics remain distinct; exact assignment attribution is durable on idempotency commands, record roots, every version and audit metadata, and migration `0031` adds database actor and linear-history guards. `pnpm verify:ci` passed secret policy for 414 files, zero known dependency vulnerabilities, lint/strict types, 63 test files/373 tests, Drizzle drift check, every Vinext route and isolated recovery after source destruction matching 86 tables/145 rows/32 migrations/three R2 objects/447,083 bytes (`b699aab3-b5e5-45aa-a2c3-3ba48fcc875c`). Active D1 integrity, authenticated read-only browser QA and all local/public health endpoints also passed. |
 
 ## 14. Risk register
 
@@ -861,6 +862,16 @@ control, detection, response, and residual acceptance.
   denial, consent, lifecycle, idempotency, audit and result-review controls remain
   in force. Other protected resource families remain on their proven legacy guards
   until migrated in separate checkpoints.
+- Completed current bounded slice: Phase 2E migrates the complete
+  `/api/observations` family and `/observations` workspace to one explicitly
+  selected, current, non-service doctor or nurse assignment with effective
+  `observations.manage`. The selected assignment is stored on idempotency commands,
+  observation roots, every immutable version and audit metadata. SQLite binds new
+  writes to the current assignment and preserves doctor access to visible facility
+  observations while a nurse may correct only the nurse's own current record.
+  Assignments are never merged, explicit denial has no fallback and neutral denial,
+  active-patient scope, provenance, derived-BMI, concurrency and audit rules remain
+  in force. Other protected resource families remain on their prior proven guards.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -1128,11 +1139,13 @@ control, detection, response, and residual acceptance.
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
-- Exact next engineering checkpoint after Phase 2D: Phase 2E migrates only the
-  `/api/observations` family and its D1 actor guards to one selected assignment plus
-  effective `observations.manage`, preserving separate doctor/nurse semantics,
-  facility/patient scope, provenance, idempotency, optimistic concurrency, audit
-  and neutral denial. Do not migrate another resource family in that checkpoint.
+- Exact next engineering checkpoint after Phase 2E: Phase 2F migrates only the
+  `/api/scheduling` family, queue commands and `/scheduling` workspace to one
+  selected assignment plus effective `scheduling.manage`. Preserve the existing
+  clinician/registrar action matrix, exact approved-referral source, manual-test
+  availability label, slot concurrency, patient confirmation, queue lifecycle,
+  idempotency, audit and neutral denial. Do not migrate care or communications in
+  that checkpoint.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1324,6 +1337,50 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-06 — Phase 2E exact-assignment observations checkpoint
+
+- Agent: Codex with three delegated read-only audits. Route/UI and SQL findings
+  were incorporated; the final checkpoint audit was interrupted by the workspace
+  owner spend cap, so root repeated the affected schema, test and runtime checks.
+- Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC` on
+  `main`. The legacy `ariaproject` was not changed.
+- Verified implementation commit: `e29a4da` (`feat: bind observations to exact
+  access assignments`).
+- Scope: local synthetic D1 only. Both observation handlers and the
+  `/observations` workspace resolve and propagate one explicit current assignment
+  with effective `observations.manage`; assignments are never merged even when
+  they belong to the same facility.
+- Security boundary: the selected assignment must be current, non-service and
+  include doctor or nurse. Explicit deny blocks the resource without fallback.
+  The exact assignment is durable on idempotency commands, observation roots,
+  every immutable version, audit metadata and request hashes. Database guards bind
+  new writes to that current actor; a doctor can correct a visible facility record,
+  while a nurse-only assignment can correct only the nurse's own current version.
+- Verification: `pnpm verify` and `pnpm verify:ci` passed the 414-file secret
+  policy, dependency audit with no known vulnerabilities, lint/types, 63 test
+  files/373 tests, Drizzle schema check and the complete Vinext build. Isolated
+  recovery destroyed its disposable source and matched 86 tables/145 rows/32
+  migrations/three R2 objects/447,083 bytes
+  (`b699aab3-b5e5-45aa-a2c3-3ba48fcc875c`). Active D1 returned
+  `quick_check=ok` and no foreign-key violations. Authenticated browser QA loaded
+  the exact synthetic assignment, opened and cancelled the measurement dialog,
+  verified URL scope plus responsive dark UI and produced no warning/error logs;
+  it submitted no clinical command. Web 3200, STT 3101, ngrok API 4040 and the
+  public URL returned HTTP 200 and remain running.
+- Owner working-tree note: the pre-existing standalone `a` under the risk-register
+  heading remains deliberately unstaged and must not be removed or committed.
+- Limitations: synthetic local data only; no approved critical thresholds, device
+  feed, production identity/data, real microphone/STT quality run, live Groq call,
+  alert, hospital notification or transfer is claimed. Historical immutable rows
+  remain readable with a null assignment; all new guarded writes require one.
+  Database actor authorization applies to direct SQL, while application command
+  idempotency and hash-chain audit are guaranteed only through the repository path.
+- Exact next bounded task (Phase 2F): migrate only `/api/scheduling`, its queue
+  commands, database actor guards and `/scheduling` workspace to one selected
+  assignment plus effective `scheduling.manage`, preserving the clinician/registrar
+  action matrix and every source, slot, confirmation, lifecycle, concurrency,
+  idempotency, audit and neutral-denial rule. Do not migrate care or communications.
 
 ### 2026-09-06 — Phase 2D exact-assignment orders checkpoint
 
@@ -1704,16 +1761,17 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2E: migrate only the observations API
-family and its database actor guards to a selected assignment with effective
-permission while preserving distinct doctor/nurse behavior. Phase 8B is already a
-complete activation-blocked review artifact; named clinic owners must fill and
-sign `DEC-006`/`DEC-007` before any signed-policy implementation. Do not classify
-critical status, notify another hospital or initiate transfer before approval. The
-external portions of Phases 4-7 remain blocked on named decisions and provider
-contracts. No external delivery, invented availability, inferred diagnosis or
-ERDB/PUZ/free-medication claim is allowed until its source of truth, sandbox, legal
-basis and human owner are named.
+The next bounded engineering slice is Phase 2F: migrate only the scheduling API
+family, queue commands and database actor guards to a selected assignment with
+effective `scheduling.manage`, while preserving distinct clinician/registrar
+behavior. Do not migrate care or communications in that checkpoint. Phase 8B is
+already a complete activation-blocked review artifact; named clinic owners must
+fill and sign `DEC-006`/`DEC-007` before any signed-policy implementation. Do not
+classify critical status, notify another hospital or initiate transfer before
+approval. The external portions of Phases 4-7 remain blocked on named decisions
+and provider contracts. No external delivery, invented availability, inferred
+diagnosis or ERDB/PUZ/free-medication claim is allowed until its source of truth,
+sandbox, legal basis and human owner are named.
 The synthetic RU/KK/MIXED speech-quality harness remains required before any speech
 model change or clinical-accuracy claim. Do not implement patient merge or physical
 deletion.
@@ -2235,3 +2293,28 @@ the named open decisions. This is the current canonical continuation point.
   real microphone/STT quality run, live Groq request or immutable-history rewrite.
 - Next: Phase 2E migrates only `/api/observations` to one selected assignment plus
   effective `observations.manage`, preserving separate doctor/nurse semantics.
+
+### 2026-09-06 — Phase 2E exact-assignment observations checkpoint
+
+- Reason: orders already carried exact assignment evidence, but observation APIs
+  still selected legacy memberships and could collapse two same-facility access
+  assignments into one implicit scope.
+- Decision: migrate one resource family only. Require one current non-service
+  doctor/nurse assignment with effective `observations.manage`, never merge
+  assignments, and retain the separate doctor-wide versus nurse-own correction
+  rules plus every existing patient/provenance/concurrency boundary.
+- Added: exact-assignment resolver and neutral API errors; selected-scope UI with
+  URL persistence, stale-load cancellation and assignment-scoped retry keys;
+  durable attribution on commands, roots, versions, hashes and audit metadata;
+  forward-only migration `0031`; SQLite actor/linear-history guards and focused
+  route, access, repository and error-contract tests.
+- Verified: 63 files/373 tests, lint, strict types, schema/build, active D1
+  integrity, authenticated read-only browser behavior, healthy local/public runtime
+  and isolated recovery of 86 tables/145 rows/32 migrations/three R2 objects after
+  destroying its disposable source. Code commit: `e29a4da`.
+- Limitation: synthetic local data only; no production identity, external device,
+  approved interpretation threshold, alert, transfer, real microphone/STT quality
+  run or live Groq request. Legacy immutable rows were not rewritten.
+- Next: Phase 2F migrates only `/api/scheduling`, queue commands and `/scheduling`
+  to one selected assignment plus effective `scheduling.manage`, preserving the
+  clinician/registrar matrix. Care and communications stay outside that checkpoint.
