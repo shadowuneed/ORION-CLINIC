@@ -7,6 +7,7 @@
 - Проверенный commit Phase 2C access administration: `6b2308a`
 - Проверенный commit Phase 2D orders exact-assignment migration: `a9e73e9`
 - Проверенный commit Phase 2E observations exact-assignment migration: `e29a4da`
+- Проверенный commit Phase 2F scheduling exact-assignment migration: `9df6510`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -33,16 +34,16 @@
 | Восемь разделов клинической записи | `REQ-ENC-001/002` | `IMPLEMENTED_SYNTHETIC` | каждый раздел имеет draft/reviewed/explicitly-absent и версии; неподтверждённые разделы блокируют протокол |
 | Подсказки ИИ и решение врача | `REQ-ENC-005`, `CTX-001/002/003` | `IMPLEMENTED_SYNTHETIC` | original/doctor derivative/review state, accepted/rejected basket, evidence, audit |
 | Протокол и файлы | `CTX-005/007` | `IMPLEMENTED_SYNTHETIC` | DOCX/PDF/TXT/audit JSON/ZIP, SHA-256, R2, access audit; юридическая электронная подпись не подключена |
-| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient, orders and observations APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
+| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient, orders, observations and scheduling APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | D1 request/report version history; separate clinician approval; exact-payload review and terminal-state guards; manual PDF/JPEG/PNG result in R2 through a durable upload intent; immutable command-time replay; reviewed-final completion gate; scoped/audited download; two-pass cleanup for expired uncommitted uploads; integrated `/orders`. Локальный синтетический срез реализован; external delivery/acknowledgement and structured vendor mapping remain open |
 | Диспансерное наблюдение и планы | `REQ-CHR-001..007`, `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | doctor-confirmed enrollment от текущего signed protocol; immutable signed plan versions; dated plan-derived tasks; deterministic due reason; scoped doctor/nurse worklists; structured response, escalation and doctor resolution; D1/API/UI на `/care` |
 | Связь с пациентом | `REQ-COM-001..004`, `REQ-SCH-006` | `IMPLEMENTED_SYNTHETIC_NO_SEND` | отдельные channel/language consent versions, `approved_test` templates, exact-source outbox, quiet hours, bounded disconnected-provider retry and manual fallback на `/communications`; реальный канал и delivery receipt отсутствуют |
 | Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | exact-assignment D1/API/UI на `/observations`; effective `observations.manage`, отдельные doctor/nurse правила, scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
 
-Current Phase 2E gate: secret policy covered 414 repository files; dependency
-audit found no known vulnerabilities; lint, strict types, 63 test files/373 tests,
+Current Phase 2F gate: secret policy covered 418 repository files; dependency
+audit found no known vulnerabilities; lint, strict types, 65 test files/385 tests,
 Drizzle and the production build passed. The isolated recovery drill reproduced
-86 tables, 145 rows, 32 migrations and three R2 objects after destroying only its
+86 tables, 146 rows, 33 migrations and three R2 objects after destroying only its
 disposable source environment. This evidence applies only to synthetic local data.
 
 ## 3. Что отсутствует или остаётся частичным
@@ -50,7 +51,7 @@ disposable source environment. This evidence applies only to synthetic local dat
 | Блок руководителя клиники | Требования | Состояние на 2026-09-06 | Что должно появиться в продукте |
 |---|---|---|---|
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | Локальный синтетический D1/R2 срез реализован; внешний gate открыт: нужны контракты и sandbox-адаптеры КМИС/LIS/ЭКГ, external acknowledgement/retry/manual ownership и утверждённые форматы |
-| Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `IN_PROGRESS` | Локальный синтетический D1-срез реализован: маркированное ручное расписание, immutable preferences, hold/confirm/cancel/no-show, защита от двойной записи и queue state machine. Открыты authoritative KMIS source, перенос/waitlist, approved priority policy, уведомления, trusted expiry worker и внешняя сверка |
+| Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `IN_PROGRESS` | Локальный синтетический D1-срез реализован: exact selected assignment + `scheduling.manage`, отдельные doctor/registrar действия, маркированное ручное расписание, immutable preferences, hold/confirm/cancel/no-show, защита от двойной записи и queue state machine. Открыты authoritative KMIS source, перенос/waitlist, approved priority policy, уведомления, trusted expiry worker и внешняя сверка |
 | Эндокринолог, диспансерный учёт, планы на месяцы | `REQ-CHR-001..010` | `IN_PROGRESS` | Локально реализованы решение врача, signed-plan versions, medication/diet/goals, plan-derived follow-up/control tasks и due/overdue cohort. Реальный регистр, ЭРДБ/ПУЗ и источник бесплатных лекарств заблокированы внешними решениями |
 | Работа медсестры | `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | медсестра видит только назначенные задачи, фиксирует способ контакта/wellbeing/ответ, эскалирует; врач отдельно закрывает эскалацию; SLA и автоматические каналы не утверждены |
 | Автообзвон, WhatsApp/Telegram и напоминания | `REQ-COM-001..004`, `REQ-SCH-006` | `IN_PROGRESS` | Локальный no-send D1-срез реализован: consent/templates/outbox/quiet hours/retry/manual response. Открыты business accounts, approved production content, protected links, provider adapters, webhooks, receipts and worker SLA |
