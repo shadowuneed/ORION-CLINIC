@@ -384,8 +384,7 @@ Status: `IN_PROGRESS` for synthetic local data only.
 - [x] Department base model plus versioned organization/facility-specific
       permission assignments for the synthetic local D1 slice. Assignment roots
       and versions are immutable, current heads advance linearly, explicit denial
-      wins, and different scopes are never merged implicitly. The department
-      catalogue itself still needs a versioned administrative lifecycle.
+      wins, and different scopes are never merged implicitly.
 - [x] Stable doctor, nurse, registrar, administrator, medical-lead, auditor, and
       service-role catalogue with server-calculated baseline permissions and a
       read-only self-access screen. Service roles cannot open an interactive
@@ -444,8 +443,9 @@ Status: `IN_PROGRESS` for the synthetic local vertical slice only.
       every encounter-scoped server command.
 - [x] Integrate the reviewed loopback-only GigaAM/CAMPPlus speech adapter and
       persist only final server-returned segments with provenance.
-- [x] Persist final/corrected transcript segments with append-only lineage;
-      provisional STT ingestion remains open until the speech adapter exists.
+- [x] Persist final/corrected transcript segments with append-only lineage. The
+      browser may display transient recognition state, but D1 accepts only final
+      server-returned segments; provisional audio/text is not durable clinical data.
 - [x] Persist doctor/patient/unknown role and manual corrections.
 - [x] Persist eight structured synthetic draft clinical sections with evidence
       links; live AI generation remains intentionally disconnected.
@@ -801,6 +801,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-06 | Phase 2B department/access governance and complete regression | PASS for the synthetic local self-access slice | Migration `0026`, domain/repository/API/UI tests and the `/access` workspace cover immutable department assignments, linear current heads, seven stable role categories, explicit-deny precedence including denial of the self-access resource, service-role isolation, expired/disabled/revoked denial, explicit multi-scope selection and a minimized API response. `pnpm verify:ci` passed secret policy for 379 files, zero known dependency vulnerabilities, lint/types, 53 test files/325 tests, Drizzle/build and isolated recovery of 84 tables/133 rows/27 migrations/three R2 objects/412,447 bytes after source destruction (`c1ca56ad-c614-4eee-9f20-5e76d067110f`). Existing clinical APIs have not yet been migrated from their proven legacy role matrices. |
 | 2026-09-06 | Phase 2B active D1 and browser audit | PASS for inspected local behavior | Migration/bootstrap reruns were idempotent; `PRAGMA quick_check` returned `ok`, foreign-key check returned no rows, and the current synthetic doctor assignment resolved to version 2 after an append-only local clock correction. Browser navigation from `/patients` to `/access`, all 15 permission states, light/dark theme, 653 px layout and zero body horizontal overflow were checked with no warning/error log. Anonymous `/api/access` returned 401. No clinical record, microphone, external AI or real patient data was used. |
 | 2026-09-06 | Phase 2C access administration and patient-family permission migration | PASS for synthetic local data | Commit `6b2308a` adds versioned departments, append-only grant/change/reactivate/revoke commands, guarded administrator self-scope, `/access/manage`, and exact-assignment effective-permission checks for every patient-directory endpoint. `pnpm verify:ci` passed secret policy for 402 files, zero known dependency vulnerabilities, lint/strict types, 58 test files/341 tests, Drizzle drift check, every Vinext route, and isolated recovery after source destruction matching 86 tables/142 rows/29 migrations/three R2 objects/426,521 bytes (`968b47bc-b3db-41ba-837a-9da460067c49`). Authenticated browser QA opened all three administrative forms without committing an access mutation and verified patient links carrying the selected assignment. |
+| 2026-09-06 | Phase 2D exact-assignment migration for orders | PASS for synthetic local data | Commit `a9e73e9` migrates all `/api/orders` handlers and the `/orders` workspace to one selected non-service doctor assignment with effective `orders.manage`; exact assignment attribution is persisted and enforced for commands, requests, versions, reports, artifacts and upload intents. Neutral denial, multi-scope selection, explicit deny, legacy-role bypass, cross-clinician access, idempotent replay, stale writes and direct SQL guards are covered. `pnpm verify:ci` passed secret policy for 410 files, zero known dependency vulnerabilities, lint/strict types, 61 test files/360 tests, Drizzle drift check, every Vinext route and isolated recovery after source destruction matching 86 tables/144 rows/31 migrations/three R2 objects/440,753 bytes (`b0e5d027-fd17-4b44-adf2-6c297d4db7a0`). Active D1 integrity and all local/public health endpoints also passed. |
 
 ## 14. Risk register
 
@@ -851,6 +852,15 @@ control, detection, response, and residual acceptance.
   `patient.profile.write` or `encounter.manage`; multiple scopes require an
   explicit selection and are never merged. Remaining protected API families keep
   their prior proven role guards until migrated separately.
+- Completed current bounded slice: Phase 2D migrates the complete `/api/orders`
+  family and `/orders` workspace to one explicitly selected, current, non-service
+  doctor assignment with effective `orders.manage`. The selected assignment is
+  persisted on commands, service-request/report versions, result artifacts and
+  upload intents; SQLite guards bind it to the acting clinician, facility and exact
+  encounter assignment. Explicit deny wins, scopes are never merged, and neutral
+  denial, consent, lifecycle, idempotency, audit and result-review controls remain
+  in force. Other protected resource families remain on their proven legacy guards
+  until migrated in separate checkpoints.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -1050,9 +1060,10 @@ control, detection, response, and residual acceptance.
 - Requirements audit: `docs/requirements/implementation-gap-audit-2026-09-03.md`
   maps every clinic-leadership request to implemented, partial, not-started or
   external-input-blocked status. The working product now includes the encounter
-  core, provider-neutral local directions/results and the local synthetic
-  scheduling/queue slice. External order delivery, authoritative scheduling,
-  chronic care, communications, observations and transfer remain open.
+  core plus local synthetic directions/results, scheduling/queue, chronic-care,
+  no-send communications and versioned observation capture. Their named external
+  registries/providers/contracts, approved criticality rules and transfer remain
+  open; local slices are not evidence of production integration.
 - Completed current bounded slice: `/scheduling` reads only approved referrals
   and explicitly labelled manual-test availability from D1; persists immutable
   preferences; performs idempotent/version-checked hold, patient confirmation,
@@ -1110,13 +1121,18 @@ control, detection, response, and residual acceptance.
   no warning/error logs or 390 px body overflow. The final aggregate gate covered
   361 files, 47 test files/269 tests and an isolated restore of 80 tables/128 rows/
   26 migrations/three R2 objects/389,707 bytes.
-- Exact next bounded task: clinic owners review, fill and sign
+- Required external owner action: clinic owners review, fill and sign
   `docs/requirements/phase-8b-clinic-decision-packet.ru.md` and a separate approved
   copy of `phase-8b-decision-record.template.json`. Engineering must not infer
   signatures from chat. After valid `DEC-006`/`DEC-007` evidence exists, the next
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
+- Exact next engineering checkpoint after Phase 2D: Phase 2E migrates only the
+  `/api/observations` family and its D1 actor guards to one selected assignment plus
+  effective `observations.manage`, preserving separate doctor/nurse semantics,
+  facility/patient scope, provenance, idempotency, optimistic concurrency, audit
+  and neutral denial. Do not migrate another resource family in that checkpoint.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1308,6 +1324,47 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-06 — Phase 2D exact-assignment orders checkpoint
+
+- Agent: Codex with three delegated read-only audits; two returned route/UI and
+  checkpoint findings, while the SQL audit hit the workspace owner spend cap.
+  Root reproduced and closed the applicable findings before final verification.
+- Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC` on
+  `main`. The legacy `ariaproject` was not changed.
+- Verified implementation commit: `a9e73e9` (`feat: bind orders to exact access
+  assignments`).
+- Scope: local synthetic D1/R2 only. All seven handlers in the five
+  `/api/orders` route files and the `/orders` workspace resolve and propagate one
+  explicit current assignment with effective `orders.manage`; no permissions are
+  merged across assignments.
+- Security boundary: the assignment must be active, non-service and include the
+  doctor role for clinical order actions. Exact assignment attribution is durable
+  on idempotency commands, service-request/report roots and versions, result
+  artifacts and upload intents. Database guards bind it to the acting member,
+  facility and treating clinician; explicit deny, neutral 403, minimal 409
+  selection, cross-origin mutation denial and immutable history remain enforced.
+- Verification: `pnpm verify` and `pnpm verify:ci` passed the 410-file secret
+  policy, dependency audit with no known vulnerabilities, lint/types, 61 test
+  files/360 tests, Drizzle schema check and the complete Vinext build. Isolated
+  recovery destroyed its disposable source and matched 86 tables/144 rows/31
+  migrations/three R2 objects/440,753 bytes (`b0e5d027-fd17-4b44-adf2-6c297d4db7a0`).
+  Active D1 returned `quick_check=ok` and no foreign-key violations. Authenticated
+  browser QA loaded persisted order/result data, opened and cancelled the create
+  form, expanded history, verified the assignment-qualified download URL, toggled
+  theme/navigation and produced no warning/error logs; it submitted no new
+  clinical command. Web 3200, STT 3101, ngrok API 4040 and the public URL returned
+  HTTP 200 and remain running.
+- Owner working-tree note: the pre-existing standalone `a` under the risk-register
+  heading remains deliberately unstaged and must not be removed or committed.
+- Limitations: no external KMIS/LIS/ECG delivery or acknowledgement, production
+  identity, real-patient data, microphone/STT quality run or live Groq request is
+  claimed. Historical rows remain readable; exact assignment is mandatory for all
+  newly guarded writes rather than rewriting immutable history.
+- Exact next bounded task (Phase 2E): migrate only `/api/observations` and its D1
+  actor guards to one selected assignment plus effective `observations.manage`,
+  preserving the distinct doctor/nurse action matrix and every existing patient,
+  provenance, lifecycle, idempotency, concurrency, audit and neutral-denial rule.
 
 ### 2026-09-06 — Phase 2C access administration checkpoint
 
@@ -1647,14 +1704,13 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded slice is the Phase 8B clinic decision packet for DEC-006/DEC-007:
-define proposed deterministic observation rules, rule-version approval and owner,
-alert acknowledgement/escalation SLA, doctor confirmation/override, receiving-
-facility contract, minimum signed transfer packet and the exact non-predictive
-meaning of the longitudinal view. This is a review artifact, not permission to
-activate clinical automation. Do not classify critical status, notify another
-hospital or initiate transfer until named clinic owners approve it. The external
-portions of Phases 4-7 remain blocked on their named decisions and provider
+The next bounded engineering slice is Phase 2E: migrate only the observations API
+family and its database actor guards to a selected assignment with effective
+permission while preserving distinct doctor/nurse behavior. Phase 8B is already a
+complete activation-blocked review artifact; named clinic owners must fill and
+sign `DEC-006`/`DEC-007` before any signed-policy implementation. Do not classify
+critical status, notify another hospital or initiate transfer before approval. The
+external portions of Phases 4-7 remain blocked on named decisions and provider
 contracts. No external delivery, invented availability, inferred diagnosis or
 ERDB/PUZ/free-medication claim is allowed until its source of truth, sandbox, legal
 basis and human owner are named.
@@ -2158,3 +2214,24 @@ the named open decisions. This is the current canonical continuation point.
   notification, transfer or predictive model is approved or implemented.
 - Next: named clinic owners fill and sign the packet. Only then may engineering
   implement the immutable signed-policy registry as a separate checkpoint.
+
+### 2026-09-06 — Phase 2D exact-assignment orders checkpoint
+
+- Reason: Phase 2C proved assignment-based access only for the patient directory;
+  the clinically actionable orders family still depended on legacy membership
+  roles and could not provide durable evidence of the exact selected scope.
+- Decision: migrate one resource family only. Require one current non-service
+  doctor assignment with effective `orders.manage`, never merge assignments, and
+  preserve all existing consent, encounter, lifecycle, review and audit rules.
+- Added: exact-assignment resolver and neutral API errors; selected-scope UI with
+  race cancellation and assignment-scoped retries; durable attribution on order
+  commands, requests, versions, reports, artifacts and upload intents; forward-only
+  migrations `0029`-`0030`; SQLite actor/immutability guards and focused tests.
+- Verified: 61 files/360 tests, lint, strict types, schema/build, active D1
+  integrity, authenticated read-only browser behavior, healthy local/public runtime
+  and isolated recovery of 86 tables/144 rows/31 migrations/three R2 objects after
+  destroying its disposable source. Code commit: `a9e73e9`.
+- Limitation: synthetic local data only; no external delivery, production identity,
+  real microphone/STT quality run, live Groq request or immutable-history rewrite.
+- Next: Phase 2E migrates only `/api/observations` to one selected assignment plus
+  effective `observations.manage`, preserving separate doctor/nurse semantics.

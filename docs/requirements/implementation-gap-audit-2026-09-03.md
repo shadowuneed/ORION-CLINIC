@@ -1,9 +1,11 @@
 # ORION Clinic — аудит реализации требований руководителя клиники
 
-- Дата последней проверки: `2026-09-05`
+- Дата последней проверки: `2026-09-06`
 - Базовый commit до Phase 4 checkpoint: `7f2272c`
 - Проверенный commit локального Phase 5 checkpoint: `3439e21`
 - Проверенный commit локального Phase 8A checkpoint: `89819fe`
+- Проверенный commit Phase 2C access administration: `6b2308a`
+- Проверенный commit Phase 2D orders exact-assignment migration: `a9e73e9`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -30,21 +32,21 @@
 | Восемь разделов клинической записи | `REQ-ENC-001/002` | `IMPLEMENTED_SYNTHETIC` | каждый раздел имеет draft/reviewed/explicitly-absent и версии; неподтверждённые разделы блокируют протокол |
 | Подсказки ИИ и решение врача | `REQ-ENC-005`, `CTX-001/002/003` | `IMPLEMENTED_SYNTHETIC` | original/doctor derivative/review state, accepted/rejected basket, evidence, audit |
 | Протокол и файлы | `CTX-005/007` | `IMPLEMENTED_SYNTHETIC` | DOCX/PDF/TXT/audit JSON/ZIP, SHA-256, R2, access audit; юридическая электронная подпись не подключена |
-| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, membership/facility/encounter scope и audit существуют; production OIDC/MFA и lifecycle пользователей отсутствуют |
+| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient and orders APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | D1 request/report version history; separate clinician approval; exact-payload review and terminal-state guards; manual PDF/JPEG/PNG result in R2 through a durable upload intent; immutable command-time replay; reviewed-final completion gate; scoped/audited download; two-pass cleanup for expired uncommitted uploads; integrated `/orders`. Локальный синтетический срез реализован; external delivery/acknowledgement and structured vendor mapping remain open |
 | Диспансерное наблюдение и планы | `REQ-CHR-001..007`, `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | doctor-confirmed enrollment от текущего signed protocol; immutable signed plan versions; dated plan-derived tasks; deterministic due reason; scoped doctor/nurse worklists; structured response, escalation and doctor resolution; D1/API/UI на `/care` |
 | Связь с пациентом | `REQ-COM-001..004`, `REQ-SCH-006` | `IMPLEMENTED_SYNTHETIC_NO_SEND` | отдельные channel/language consent versions, `approved_test` templates, exact-source outbox, quiet hours, bounded disconnected-provider retry and manual fallback на `/communications`; реальный канал и delivery receipt отсутствуют |
 | Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | facility-scoped D1/API/UI на `/observations`; scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
 
-Phase 6 gate: secret policy covered 313 repository files; dependency audit found
-no known vulnerabilities; lint, strict types, 38 test files/208 tests, Drizzle and
-the production build passed. The isolated recovery drill reproduced 67 tables,
-124 rows, 22 migrations and three R2 objects after destroying only its disposable
-source environment. This evidence applies only to synthetic local data.
+Current Phase 2D gate: secret policy covered 410 repository files; dependency
+audit found no known vulnerabilities; lint, strict types, 61 test files/360 tests,
+Drizzle and the production build passed. The isolated recovery drill reproduced
+86 tables, 144 rows, 31 migrations and three R2 objects after destroying only its
+disposable source environment. This evidence applies only to synthetic local data.
 
 ## 3. Что отсутствует или остаётся частичным
 
-| Блок руководителя клиники | Требования | Состояние на 2026-09-05 | Что должно появиться в продукте |
+| Блок руководителя клиники | Требования | Состояние на 2026-09-06 | Что должно появиться в продукте |
 |---|---|---|---|
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | Локальный синтетический D1/R2 срез реализован; внешний gate открыт: нужны контракты и sandbox-адаптеры КМИС/LIS/ЭКГ, external acknowledgement/retry/manual ownership и утверждённые форматы |
 | Свободные окна, запись и электронная очередь | `REQ-SCH-001..007` | `IN_PROGRESS` | Локальный синтетический D1-срез реализован: маркированное ручное расписание, immutable preferences, hold/confirm/cancel/no-show, защита от двойной записи и queue state machine. Открыты authoritative KMIS source, перенос/waitlist, approved priority policy, уведомления, trusted expiry worker и внешняя сверка |
