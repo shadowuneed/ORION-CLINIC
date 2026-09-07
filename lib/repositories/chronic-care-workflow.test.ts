@@ -29,6 +29,7 @@ const clinicianScope: ChronicCareScope = {
   facilityId: 'fac-a',
   userId: 'user-doctor',
   membershipId: 'membership-doctor',
+  accessAssignmentId: 'assignment-doctor',
   role: 'clinician',
 };
 const nurseScope: ChronicCareScope = {
@@ -36,6 +37,7 @@ const nurseScope: ChronicCareScope = {
   facilityId: 'fac-a',
   userId: 'user-nurse',
   membershipId: 'membership-nurse',
+  accessAssignmentId: 'assignment-nurse',
   role: 'nurse',
 };
 const uuid = (value: number) =>
@@ -150,6 +152,64 @@ function createFixture() {
       ('membership-doctor', 'org-a', 'fac-a', 'user-doctor', 'clinician', 'active'),
       ('membership-nurse', 'org-a', 'fac-a', 'user-nurse', 'nurse', 'active'),
       ('membership-other', 'org-b', 'fac-b', 'user-other', 'clinician', 'active');
+    insert into departments (
+      id, organization_id, facility_id, code, name, kind, status
+    ) values
+      ('department-a', 'org-a', 'fac-a', 'care', 'Наблюдение', 'clinical', 'active'),
+      ('department-b', 'org-b', 'fac-b', 'care', 'Наблюдение', 'clinical', 'active');
+    insert into department_versions (
+      id, organization_id, facility_id, department_id, version, name,
+      kind, status, change_reason, changed_by_membership_id, changed_at, created_at
+    ) values
+      ('department-a-v1', 'org-a', 'fac-a', 'department-a', 1,
+       'Наблюдение', 'clinical', 'active', 'Тестовый отдел',
+       'membership-doctor', 1, 1),
+      ('department-b-v1', 'org-b', 'fac-b', 'department-b', 1,
+       'Наблюдение', 'clinical', 'active', 'Тестовый отдел',
+       'membership-other', 1, 1);
+    insert into department_heads (
+      id, organization_id, facility_id, department_id, current_version_id,
+      lock_version, created_at, updated_at
+    ) values
+      ('department-a-head', 'org-a', 'fac-a', 'department-a',
+       'department-a-v1', 1, 1, 1),
+      ('department-b-head', 'org-b', 'fac-b', 'department-b',
+       'department-b-v1', 1, 1, 1);
+    insert into department_access_assignments (
+      id, organization_id, facility_id, department_id, membership_id,
+      created_by_membership_id, created_at
+    ) values
+      ('assignment-doctor', 'org-a', 'fac-a', 'department-a',
+       'membership-doctor', 'membership-doctor', 1),
+      ('assignment-nurse', 'org-a', 'fac-a', 'department-a',
+       'membership-nurse', 'membership-doctor', 1),
+      ('assignment-other', 'org-b', 'fac-b', 'department-b',
+       'membership-other', 'membership-other', 1);
+    insert into department_access_assignment_versions (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, version, status, source_type, roles_json,
+      allow_permissions_json, deny_permissions_json, effective_from,
+      change_reason, changed_by_membership_id, changed_at, created_at
+    ) values
+      ('assignment-doctor-v1', 'org-a', 'fac-a', 'assignment-doctor',
+       'department-a', 'membership-doctor', 1, 'active', 'bootstrap', '["doctor"]',
+       '[]', '[]', 1, 'Тестовое назначение врача', 'membership-doctor', 1, 1),
+      ('assignment-nurse-v1', 'org-a', 'fac-a', 'assignment-nurse',
+       'department-a', 'membership-nurse', 1, 'active', 'bootstrap', '["nurse"]',
+       '[]', '[]', 1, 'Тестовое назначение медсестры', 'membership-doctor', 1, 1),
+      ('assignment-other-v1', 'org-b', 'fac-b', 'assignment-other',
+       'department-b', 'membership-other', 1, 'active', 'bootstrap', '["doctor"]',
+       '[]', '[]', 1, 'Тестовое назначение врача', 'membership-other', 1, 1);
+    insert into department_access_assignment_heads (
+      id, organization_id, facility_id, assignment_id, department_id,
+      membership_id, current_version_id, lock_version, created_at, updated_at
+    ) values
+      ('assignment-doctor-head', 'org-a', 'fac-a', 'assignment-doctor',
+       'department-a', 'membership-doctor', 'assignment-doctor-v1', 1, 1, 1),
+      ('assignment-nurse-head', 'org-a', 'fac-a', 'assignment-nurse',
+       'department-a', 'membership-nurse', 'assignment-nurse-v1', 1, 1, 1),
+      ('assignment-other-head', 'org-b', 'fac-b', 'assignment-other',
+       'department-b', 'membership-other', 'assignment-other-v1', 1, 1, 1);
     insert into patients (
       id, organization_id, facility_id, medical_record_number, display_name, status
     ) values ('patient-a', 'org-a', 'fac-a', 'SYN-CARE-01', 'Пациент Тестовый', 'active');
@@ -298,7 +358,7 @@ describe('D1 chronic-care workflow', () => {
   });
 
   it('runs doctor enrollment, signed plan, nurse escalation, and doctor resolution', async () => {
-    const { database } = createFixture();
+    const { database, target } = createFixture();
     const doctor = new D1ChronicCareWorkflowRepository(database, clinicianScope);
     const nurse = new D1ChronicCareWorkflowRepository(database, nurseScope);
     const before = await doctor.list({ now: Date.parse('2026-09-04T10:00:00Z') });
@@ -368,6 +428,66 @@ describe('D1 chronic-care workflow', () => {
     });
     expect(resolved.current.status).toBe('completed');
     expect(resolved.current.escalationReason).toContain('ухудшение');
+    const scopedRows = target.prepare(`
+      select 'enrollments' as tableName, count(*) as total,
+        count(access_assignment_id) as scoped from chronic_registry_enrollments
+      union all select 'enrollmentVersions', count(*),
+        count(access_assignment_id) from chronic_registry_enrollment_versions
+      union all select 'plans', count(*),
+        count(access_assignment_id) from chronic_care_plans
+      union all select 'planVersions', count(*),
+        count(access_assignment_id) from chronic_care_plan_versions
+      union all select 'tasks', count(*),
+        count(access_assignment_id) from chronic_care_tasks
+      union all select 'taskVersions', count(*),
+        count(access_assignment_id) from chronic_care_task_versions
+      union all select 'commands', count(*),
+        count(access_assignment_id) from command_idempotency
+    `).all() as Array<{ tableName: string; total: number; scoped: number }>;
+    expect(scopedRows.every((row) => row.total > 0 && row.total === row.scoped)).toBe(
+      true,
+    );
+    const auditAssignments = target.prepare(`
+      select json_extract(metadata_json, '$.accessAssignmentId') as assignmentId
+      from audit_events where purpose = 'synthetic_chronic_care'
+    `).all() as Array<{ assignmentId: string | null }>;
+    expect(auditAssignments.length).toBeGreaterThan(0);
+    expect(
+      auditAssignments.every(
+        (row) =>
+          row.assignmentId === 'assignment-doctor' ||
+          row.assignmentId === 'assignment-nurse',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects chronic-care commands without an exact current allowed assignment', () => {
+    const { target } = createFixture();
+    expect(() =>
+      target.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          operation, idempotency_key, request_hash, status, created_at
+        ) values (
+          'command-unscoped', 'org-a', 'fac-a', 'membership-doctor',
+          'chronic.enrollment.create', 'unscoped-key',
+          '${'c'.repeat(64)}', 'processing', 1
+        )
+      `),
+    ).toThrow(/exact current assignment/);
+    expect(() =>
+      target.exec(`
+        insert into command_idempotency (
+          id, organization_id, facility_id, actor_membership_id,
+          access_assignment_id, operation, idempotency_key,
+          request_hash, status, created_at
+        ) values (
+          'command-nurse-plan', 'org-a', 'fac-a', 'membership-nurse',
+          'assignment-nurse', 'chronic.plan.sign', 'nurse-plan-key',
+          '${'d'.repeat(64)}', 'processing', 1
+        )
+      `),
+    ).toThrow(/allowed role/);
   });
 
   it('replays the same command and rejects a changed payload for the same key', async () => {
@@ -425,6 +545,7 @@ describe('D1 chronic-care workflow', () => {
       facilityId: 'fac-b',
       userId: 'user-other',
       membershipId: 'membership-other',
+      accessAssignmentId: 'assignment-other',
       role: 'clinician',
     });
     const workspace = await other.list({ now: Date.parse('2026-09-04T10:00:00Z') });

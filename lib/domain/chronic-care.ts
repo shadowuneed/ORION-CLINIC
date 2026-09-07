@@ -133,6 +133,7 @@ export type SignedCarePlanContent = z.infer<typeof signedCarePlanContentSchema>;
 export const chronicCareListQuerySchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: z.string().trim().min(1).max(180).optional(),
     dueState: z
       .enum(['all', 'current', 'due_soon', 'overdue', 'closed'])
       .default('all'),
@@ -143,6 +144,7 @@ export const chronicCareListQuerySchema = z
 export const createChronicEnrollmentSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: z.string().trim().min(1).max(180).optional(),
     patientId: id,
     basisEncounterId: id,
     basisProtocolVersionId: id,
@@ -160,6 +162,7 @@ export const createChronicEnrollmentSchema = z
 export const saveSignedCarePlanSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: z.string().trim().min(1).max(180).optional(),
     enrollmentId: id,
     expectedEnrollmentVersion: z.number().int().positive(),
     expectedPlanVersion: z.union([z.number().int().positive(), z.null()]),
@@ -174,6 +177,7 @@ export const saveSignedCarePlanSchema = z
 export const chronicTaskCommandSchema = z
   .object({
     facilityId: z.string().trim().min(1).max(100).optional(),
+    accessAssignmentId: z.string().trim().min(1).max(180).optional(),
     action: z.enum([
       'start',
       'record_response',

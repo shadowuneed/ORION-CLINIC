@@ -1,9 +1,12 @@
 import {
-  ChronicCareFacilityNotFoundError,
-  ChronicCareFacilitySelectionRequiredError,
-  ChronicCareMembershipRequiredError,
   ChronicCarePermissionRequiredError,
+  MultipleChronicCareAccessSelectionRequiredError,
 } from '@/lib/auth/chronic-care-access';
+import {
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+} from '@/lib/auth/access-governance';
 import {
   ChronicCareAuditUnavailableError,
   ChronicCareConflictError,
@@ -20,40 +23,34 @@ export function chronicCareApiFailure(
   fallbackCode: string,
   fallbackMessage: string,
 ) {
-  if (error instanceof ChronicCareMembershipRequiredError) {
-    return apiFailure(
-      context,
-      403,
-      'CHRONIC_CARE_ACCESS_REQUIRED',
-      'Нужна активная роль врача или медсестры.',
-    );
-  }
-  if (error instanceof ChronicCareFacilitySelectionRequiredError) {
+  if (error instanceof MultipleChronicCareAccessSelectionRequiredError) {
     return apiFailure(
       context,
       409,
-      'FACILITY_SELECTION_REQUIRED',
-      'Выберите клинику для работы с наблюдением.',
-      { facilities: error.facilities },
+      'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+      'Выберите рабочий контур.',
+      { assignments: error.assignments },
     );
   }
   if (
-    error instanceof ChronicCareFacilityNotFoundError ||
-    error instanceof ChronicCareNotFoundError
+    error instanceof AccessMembershipRequiredError ||
+    error instanceof AccessAssignmentNotFoundError ||
+    error instanceof AccessPermissionRequiredError ||
+    error instanceof ChronicCarePermissionRequiredError
   ) {
+    return apiFailure(
+      context,
+      403,
+      'CHRONIC_CARE_FORBIDDEN',
+      'Нет доступа к наблюдению в выбранном рабочем контуре.',
+    );
+  }
+  if (error instanceof ChronicCareNotFoundError) {
     return apiFailure(
       context,
       404,
       'CHRONIC_CARE_NOT_FOUND',
       'Запись наблюдения не найдена или недоступна.',
-    );
-  }
-  if (error instanceof ChronicCarePermissionRequiredError) {
-    return apiFailure(
-      context,
-      403,
-      'CHRONIC_CARE_PERMISSION_REQUIRED',
-      'Недостаточно прав для этого действия.',
     );
   }
   if (error instanceof ChronicCareVersionConflictError) {

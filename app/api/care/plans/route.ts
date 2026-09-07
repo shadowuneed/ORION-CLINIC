@@ -11,7 +11,7 @@ import {
 } from '@/lib/http/api-response';
 import { chronicCareApiFailure } from '@/lib/http/chronic-care-api-errors';
 import { D1ChronicCareWorkflowRepository } from '@/lib/repositories/chronic-care-workflow';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,8 +45,9 @@ export async function POST(request: Request) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
     const access = await resolveChronicCareAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const plan = await new D1ChronicCareWorkflowRepository(

@@ -5461,6 +5461,9 @@ export const chronicRegistryEnrollments = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -5474,6 +5477,12 @@ export const chronicRegistryEnrollments = sqliteTable(
       table.facilityId,
       table.patientId,
       table.registryCode,
+    ),
+    index('chronic_enrollments_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_enrollments_scope_facility_fk',
@@ -5549,6 +5558,9 @@ export const chronicRegistryEnrollmentVersions = sqliteTable(
     decidedByMembershipId: text('decided_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     decidedAt: integer('decided_at', { mode: 'timestamp_ms' }).notNull(),
     createdAt: createdAt(),
   },
@@ -5567,6 +5579,12 @@ export const chronicRegistryEnrollmentVersions = sqliteTable(
     ),
     uniqueIndex('chronic_enrollment_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('chronic_enrollment_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_enrollment_versions_scope_enrollment_fk',
@@ -5701,6 +5719,9 @@ export const chronicCarePlans = sqliteTable(
     createdByMembershipId: text('created_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -5713,6 +5734,12 @@ export const chronicCarePlans = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.enrollmentId,
+    ),
+    index('chronic_care_plans_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_care_plans_scope_enrollment_fk',
@@ -5777,6 +5804,9 @@ export const chronicCarePlanVersions = sqliteTable(
     signedByMembershipId: text('signed_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     signedAt: integer('signed_at', { mode: 'timestamp_ms' }).notNull(),
     changeReason: text('change_reason').notNull(),
     createdAt: createdAt(),
@@ -5796,6 +5826,12 @@ export const chronicCarePlanVersions = sqliteTable(
     ),
     uniqueIndex('chronic_care_plan_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('chronic_care_plan_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_care_plan_versions_scope_plan_fk',
@@ -5940,6 +5976,9 @@ export const chronicCareTasks = sqliteTable(
     assignedMembershipId: text('assigned_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -5958,6 +5997,12 @@ export const chronicCareTasks = sqliteTable(
       table.organizationId,
       table.facilityId,
       table.assignedMembershipId,
+    ),
+    index('chronic_care_tasks_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_care_tasks_scope_enrollment_fk',
@@ -6054,6 +6099,9 @@ export const chronicCareTaskVersions = sqliteTable(
     changedByMembershipId: text('changed_by_membership_id')
       .notNull()
       .references(() => memberships.id),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     createdAt: createdAt(),
   },
   (table) => [
@@ -6071,6 +6119,12 @@ export const chronicCareTaskVersions = sqliteTable(
     ),
     uniqueIndex('chronic_care_task_versions_supersedes_once_uidx').on(
       table.supersedesVersionId,
+    ),
+    index('chronic_care_task_versions_access_assignment_idx').on(
+      table.organizationId,
+      table.facilityId,
+      table.accessAssignmentId,
+      table.createdAt,
     ),
     foreignKey({
       name: 'chronic_care_task_versions_scope_task_fk',

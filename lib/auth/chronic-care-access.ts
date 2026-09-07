@@ -1,8 +1,12 @@
-import type {
-  ActiveMembership,
-  IdentityPrincipal,
-  WorkspaceAccessRepository,
-} from '@/lib/auth/workspace-access';
+import {
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+  isAccessAssignmentCurrentlyActive,
+  type AccessAssignmentSummary,
+  type AccessGovernanceRepository,
+} from '@/lib/auth/access-governance';
+import type { IdentityPrincipal } from '@/lib/auth/workspace-access';
 
 export type ChronicCareRole = 'clinician' | 'nurse';
 export const chronicCarePermissions = [
@@ -23,45 +27,33 @@ export type ChronicCareScope = {
   facilityId: string;
   userId: string;
   membershipId: string;
+  accessAssignmentId: string;
   role: ChronicCareRole;
 };
 
-export type ChronicCareFacilityOption = {
-  organizationId: string;
+export type ChronicCareAccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: ChronicCareRole;
 };
 
 export type ChronicCareAccess = {
   principal: IdentityPrincipal;
+  assignment: AccessAssignmentSummary;
+  assignments: ChronicCareAccessAssignmentOption[];
   user: { id: string; displayName: string };
   organization: { id: string; name: string };
   facility: { id: string; name: string };
-  facilities: ChronicCareFacilityOption[];
-  membership: ActiveMembership & { role: ChronicCareRole };
   scope: ChronicCareScope;
 };
 
-export class ChronicCareMembershipRequiredError extends Error {
-  constructor() {
-    super('An active clinician or nurse membership is required');
-    this.name = 'ChronicCareMembershipRequiredError';
-  }
-}
-
-export class ChronicCareFacilitySelectionRequiredError extends Error {
-  constructor(public readonly facilities: ChronicCareFacilityOption[]) {
-    super('A chronic-care facility must be selected');
-    this.name = 'ChronicCareFacilitySelectionRequiredError';
-  }
-}
-
-export class ChronicCareFacilityNotFoundError extends Error {
-  constructor() {
-    super('The requested chronic-care facility is not accessible');
-    this.name = 'ChronicCareFacilityNotFoundError';
+export class MultipleChronicCareAccessSelectionRequiredError extends Error {
+  constructor(public readonly assignments: ChronicCareAccessAssignmentOption[]) {
+    super('A chronic-care access assignment must be selected');
+    this.name = 'MultipleChronicCareAccessSelectionRequiredError';
   }
 }
 
@@ -119,72 +111,108 @@ export function chronicCareCapabilities(role: ChronicCareRole) {
   ) as Record<ChronicCarePermission, boolean>;
 }
 
-function isChronicCareMembership(
-  membership: ActiveMembership,
-): membership is ActiveMembership & { role: ChronicCareRole } {
-  return membership.role === 'clinician' || membership.role === 'nurse';
+function chronicCareRole(assignment: AccessAssignmentSummary) {
+  if (assignment.roles.includes('doctor')) return 'clinician' as const;
+  if (assignment.roles.includes('nurse')) return 'nurse' as const;
+  return null;
 }
 
-function sortByRole(left: { role: ChronicCareRole; membershipId: string }, right: { role: ChronicCareRole; membershipId: string }) {
-  if (left.role === right.role) return left.membershipId.localeCompare(right.membershipId);
-  return left.role === 'clinician' ? -1 : 1;
+function isChronicCareAssignment(assignment: AccessAssignmentSummary) {
+  return (
+    chronicCareRole(assignment) !== null &&
+    assignment.effectivePermissions.includes('care.manage')
+  );
 }
 
+function toOption(
+  assignment: AccessAssignmentSummary,
+): ChronicCareAccessAssignmentOption {
+  return {
+    assignmentId: assignment.assignmentId,
+    organizationName: assignment.organization.name,
+    facilityId: assignment.facility.id,
+    facilityName: assignment.facility.name,
+    departmentName: assignment.department.name,
+    role: chronicCareRole(assignment)!,
+  };
+}
+
+/**
+ * Resolves exactly one current department assignment. Role and permission are
+ * always taken from that same assignment; separate assignments are never merged.
+ */
 export async function resolveChronicCareAccess(
-  repository: Pick<WorkspaceAccessRepository, 'listActiveMemberships'>,
+  repository: AccessGovernanceRepository,
   principal: IdentityPrincipal,
+  requestedAssignmentId?: string,
   requestedFacilityId?: string,
+  now = Date.now(),
 ): Promise<ChronicCareAccess> {
-  const memberships = (await repository.listActiveMemberships(principal))
-    .filter(isChronicCareMembership)
-    .sort(sortByRole);
-  if (memberships.length === 0) throw new ChronicCareMembershipRequiredError();
+  const current = (await repository.listPrincipalAssignments(principal))
+    .filter((assignment) => isAccessAssignmentCurrentlyActive(assignment, now))
+    .filter((assignment) => !assignment.roles.includes('service'));
 
-  const uniqueScopes = new Map<string, (typeof memberships)[number]>();
-  for (const membership of memberships) {
-    const key = `${membership.organizationId}:${membership.facilityId}`;
-    if (!uniqueScopes.has(key)) uniqueScopes.set(key, membership);
+  if (current.length === 0) throw new AccessMembershipRequiredError();
+
+  let selected: AccessAssignmentSummary | undefined;
+  if (requestedAssignmentId) {
+    selected = current.find(
+      (assignment) => assignment.assignmentId === requestedAssignmentId,
+    );
+    if (!selected) throw new AccessAssignmentNotFoundError();
+    if (requestedFacilityId && selected.facility.id !== requestedFacilityId) {
+      throw new AccessAssignmentNotFoundError();
+    }
+    if (!isChronicCareAssignment(selected)) {
+      throw new AccessPermissionRequiredError('care.manage');
+    }
+  } else {
+    const candidates = current.filter(
+      (assignment) =>
+        (!requestedFacilityId ||
+          assignment.facility.id === requestedFacilityId) &&
+        isChronicCareAssignment(assignment),
+    );
+    if (candidates.length === 0) {
+      throw new AccessPermissionRequiredError('care.manage');
+    }
+    if (candidates.length > 1) {
+      throw new MultipleChronicCareAccessSelectionRequiredError(
+        candidates.map(toOption),
+      );
+    }
+    [selected] = candidates;
   }
-  const facilities = [...uniqueScopes.values()]
-    .map((membership) => ({
-      organizationId: membership.organizationId,
-      organizationName: membership.organizationName,
-      facilityId: membership.facilityId,
-      facilityName: membership.facilityName,
-      role: membership.role,
-    }))
+
+  const role = chronicCareRole(selected);
+  if (!role) throw new AccessPermissionRequiredError('care.manage');
+
+  const assignments = current
+    .filter(isChronicCareAssignment)
+    .map(toOption)
     .sort((left, right) =>
-      `${left.organizationName}:${left.facilityName}`.localeCompare(
-        `${right.organizationName}:${right.facilityName}`,
+      `${left.organizationName}:${left.facilityName}:${left.departmentName}:${left.assignmentId}`.localeCompare(
+        `${right.organizationName}:${right.facilityName}:${right.departmentName}:${right.assignmentId}`,
       ),
     );
 
-  let membership: (typeof memberships)[number] | undefined;
-  if (requestedFacilityId) {
-    membership = memberships.find(
-      (candidate) => candidate.facilityId === requestedFacilityId,
-    );
-    if (!membership) throw new ChronicCareFacilityNotFoundError();
-  } else {
-    if (uniqueScopes.size > 1) {
-      throw new ChronicCareFacilitySelectionRequiredError(facilities);
-    }
-    membership = memberships[0];
-  }
-
   return {
     principal,
-    user: { id: membership.userId, displayName: membership.userDisplayName },
-    organization: { id: membership.organizationId, name: membership.organizationName },
-    facility: { id: membership.facilityId, name: membership.facilityName },
-    facilities,
-    membership,
+    assignment: selected,
+    assignments,
+    user: { id: selected.user.id, displayName: selected.user.displayName },
+    organization: {
+      id: selected.organization.id,
+      name: selected.organization.name,
+    },
+    facility: { id: selected.facility.id, name: selected.facility.name },
     scope: {
-      organizationId: membership.organizationId,
-      facilityId: membership.facilityId,
-      userId: membership.userId,
-      membershipId: membership.membershipId,
-      role: membership.role,
+      organizationId: selected.organization.id,
+      facilityId: selected.facility.id,
+      userId: selected.user.id,
+      membershipId: selected.membership.id,
+      accessAssignmentId: selected.assignmentId,
+      role,
     },
   };
 }

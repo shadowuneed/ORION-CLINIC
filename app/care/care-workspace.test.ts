@@ -5,6 +5,8 @@ import type {
 } from '@/lib/repositories/chronic-care-workflow';
 import {
   allowedCareTaskActions,
+  buildChronicCareAccessQuery,
+  buildChronicCareOperationKey,
   unknownChronicCareOutcomeMessage,
 } from './care-workspace';
 
@@ -64,5 +66,26 @@ describe('chronic-care workspace actions', () => {
       'сервер мог сохранить',
     );
     expect(unknownChronicCareOutcomeMessage()).toContain('ключ защиты от дублей');
+  });
+});
+
+describe('chronic-care workspace access scope', () => {
+  it('keeps the facility and exact assignment in every list request', () => {
+    expect(
+      buildChronicCareAccessQuery('fac-a', 'assignment-a').toString(),
+    ).toBe(
+      'dueState=all&limit=200&facilityId=fac-a&accessAssignmentId=assignment-a',
+    );
+    expect(buildChronicCareAccessQuery().toString()).toBe(
+      'dueState=all&limit=200',
+    );
+  });
+
+  it('isolates command retry identities by the selected assignment', () => {
+    expect(
+      buildChronicCareOperationKey('assignment-a', 'task-a-complete'),
+    ).not.toBe(
+      buildChronicCareOperationKey('assignment-b', 'task-a-complete'),
+    );
   });
 });

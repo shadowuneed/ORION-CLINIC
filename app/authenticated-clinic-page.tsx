@@ -90,9 +90,13 @@ export async function getAuthenticatedClinicContext(
             assignment.roles.includes('registrar')) &&
           assignment.effectivePermissions.includes('scheduling.manage'),
       ),
-      chronicCare: memberships.some(
-        (membership) =>
-          membership.role === 'clinician' || membership.role === 'nurse',
+      chronicCare: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          !assignment.roles.includes('service') &&
+          (assignment.roles.includes('doctor') ||
+            assignment.roles.includes('nurse')) &&
+          assignment.effectivePermissions.includes('care.manage'),
       ),
       observations: accessAssignments.some(
         (assignment) =>
@@ -166,7 +170,7 @@ function capabilityDenialMessage(capability: ClinicCapability) {
     case 'clinician':
       return 'Этот раздел доступен только пользователю с активной ролью врача.';
     case 'chronic-care':
-      return 'Нужна активная роль врача или медсестры в выбранной клинике.';
+      return 'Нужно действующее назначение врача или медсестры с правом работы с наблюдением.';
     case 'observations':
       return 'Нужно действующее назначение врача или медсестры с правом работы с показателями.';
     case 'communications':

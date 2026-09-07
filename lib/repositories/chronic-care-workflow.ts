@@ -747,6 +747,7 @@ export class D1ChronicCareWorkflowRepository {
       reason: normalizeText(input.reason),
       doctorConfirmed: input.doctorConfirmed,
       localSourceAcknowledged: input.localSourceAcknowledged,
+      accessAssignmentId: this.scope.accessAssignmentId,
       dataMode: 'synthetic-only',
     } as const;
     const requestHash = await sha256Json(normalized);
@@ -815,8 +816,8 @@ export class D1ChronicCareWorkflowRepository {
         this.database.prepare(`insert into chronic_registry_enrollments (
           id, organization_id, facility_id, patient_id, registry_code,
           source_type, source_label, managing_clinician_membership_id,
-          created_by_membership_id, created_at
-        ) values (?1, ?2, ?3, ?4, ?5, 'local_test', ?6, ?7, ?7, ?8)`)
+          created_by_membership_id, access_assignment_id, created_at
+        ) values (?1, ?2, ?3, ?4, ?5, 'local_test', ?6, ?7, ?7, ?8, ?9)`)
           .bind(
             enrollmentId,
             this.scope.organizationId,
@@ -825,6 +826,7 @@ export class D1ChronicCareWorkflowRepository {
             normalized.registryCode,
             CHRONIC_REGISTRY_SOURCE_LABEL,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database.prepare(`insert into chronic_registry_enrollment_versions (
@@ -832,9 +834,9 @@ export class D1ChronicCareWorkflowRepository {
           supersedes_version_id, status, basis_encounter_id,
           basis_protocol_version_id, diagnosis_display, diagnosis_code,
           diagnosis_basis, decision_reason, decided_by_membership_id,
-          decided_at, created_at
+          access_assignment_id, decided_at, created_at
         ) values (?1, ?2, ?3, ?4, 1, null, 'active', ?5, ?6, ?7, ?8,
-          ?9, ?10, ?11, ?12, ?12)`)
+          ?9, ?10, ?11, ?12, ?13, ?13)`)
           .bind(
             versionId,
             this.scope.organizationId,
@@ -847,6 +849,7 @@ export class D1ChronicCareWorkflowRepository {
             normalized.diagnosisBasis,
             normalized.reason,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database.prepare(`insert into chronic_registry_enrollment_heads (
@@ -913,6 +916,7 @@ export class D1ChronicCareWorkflowRepository {
       doctorConfirmed: input.doctorConfirmed,
       localSourceAcknowledged: input.localSourceAcknowledged,
       reason: normalizeText(input.reason),
+      accessAssignmentId: this.scope.accessAssignmentId,
       dataMode: 'synthetic-only',
     } as const;
     const requestHash = await sha256Json(normalized);
@@ -961,8 +965,8 @@ export class D1ChronicCareWorkflowRepository {
       statements.push(
         this.database.prepare(`insert into chronic_care_plans (
           id, organization_id, facility_id, enrollment_id, patient_id,
-          created_by_membership_id, created_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
+          created_by_membership_id, access_assignment_id, created_at
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`)
           .bind(
             planId,
             this.scope.organizationId,
@@ -970,6 +974,7 @@ export class D1ChronicCareWorkflowRepository {
             enrollment.id,
             enrollment.patientId,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
       );
@@ -979,10 +984,10 @@ export class D1ChronicCareWorkflowRepository {
         id, organization_id, facility_id, care_plan_id, enrollment_id,
         enrollment_version_id, version, supersedes_version_id, effective_from,
         effective_to, goals_json, treatment_plan, diet_plan, medications_json,
-        task_blueprints_json, content_hash, signed_by_membership_id, signed_at,
-        change_reason, created_at
+        task_blueprints_json, content_hash, signed_by_membership_id,
+        access_assignment_id, signed_at, change_reason, created_at
       ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-        ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?18)`)
+        ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?19)`)
         .bind(
           planVersionId,
           this.scope.organizationId,
@@ -1001,6 +1006,7 @@ export class D1ChronicCareWorkflowRepository {
           JSON.stringify(content.tasks),
           contentHash,
           this.scope.membershipId,
+          this.scope.accessAssignmentId,
           now,
           normalized.reason,
         ),
@@ -1032,9 +1038,9 @@ export class D1ChronicCareWorkflowRepository {
             supersedes_version_id, status, due_date, instructions,
             contact_method, wellbeing, response_summary, responded_at,
             escalation_reason, escalated_at, completed_at, change_reason,
-            changed_by_membership_id, created_at
+            changed_by_membership_id, access_assignment_id, created_at
           ) values (?1, ?2, ?3, ?4, ?5, ?6, 'cancelled', ?7, ?8,
-            ?9, ?10, ?11, ?12, null, null, null, ?13, ?14, ?15)`)
+            ?9, ?10, ?11, ?12, null, null, null, ?13, ?14, ?15, ?16)`)
             .bind(
               cancellationVersionId,
               this.scope.organizationId,
@@ -1050,6 +1056,7 @@ export class D1ChronicCareWorkflowRepository {
               task.respondedAt,
               'Заменено новой подписанной версией плана',
               this.scope.membershipId,
+              this.scope.accessAssignmentId,
               now,
             ),
           this.database.prepare(`update chronic_care_task_heads
@@ -1092,8 +1099,8 @@ export class D1ChronicCareWorkflowRepository {
         this.database.prepare(`insert into chronic_care_tasks (
           id, organization_id, facility_id, enrollment_id, care_plan_id,
           source_plan_version_id, patient_id, blueprint_key, kind, title,
-          owner_role, assigned_membership_id, created_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`)
+          owner_role, assigned_membership_id, access_assignment_id, created_at
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`)
           .bind(
             taskId,
             this.scope.organizationId,
@@ -1107,6 +1114,7 @@ export class D1ChronicCareWorkflowRepository {
             blueprint.title,
             blueprint.ownerRole,
             blueprint.assignedMembershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database.prepare(`insert into chronic_care_task_versions (
@@ -1114,9 +1122,9 @@ export class D1ChronicCareWorkflowRepository {
           supersedes_version_id, status, due_date, instructions,
           contact_method, wellbeing, response_summary, responded_at,
           escalation_reason, escalated_at, completed_at, change_reason,
-          changed_by_membership_id, created_at
+          changed_by_membership_id, access_assignment_id, created_at
         ) values (?1, ?2, ?3, ?4, 1, null, 'pending', ?5, ?6,
-          null, null, null, null, null, null, null, ?7, ?8, ?9)`)
+          null, null, null, null, null, null, null, ?7, ?8, ?9, ?10)`)
           .bind(
             taskVersionId,
             this.scope.organizationId,
@@ -1126,6 +1134,7 @@ export class D1ChronicCareWorkflowRepository {
             blueprint.instructions,
             'Создано из подписанной версии плана',
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database.prepare(`insert into chronic_care_task_heads (
@@ -1184,6 +1193,7 @@ export class D1ChronicCareWorkflowRepository {
       wellbeing: input.wellbeing,
       responseSummary: normalizeNullable(input.responseSummary),
       escalationReason: normalizeNullable(input.escalationReason),
+      accessAssignmentId: this.scope.accessAssignmentId,
       dataMode: 'synthetic-only',
     } as const;
     const requestHash = await sha256Json(normalized);
@@ -1274,9 +1284,9 @@ export class D1ChronicCareWorkflowRepository {
           supersedes_version_id, status, due_date, instructions,
           contact_method, wellbeing, response_summary, responded_at,
           escalation_reason, escalated_at, completed_at, change_reason,
-          changed_by_membership_id, created_at
+          changed_by_membership_id, access_assignment_id, created_at
         ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-          ?13, ?14, ?15, ?16, ?17, ?18, ?19)`)
+          ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`)
           .bind(
             versionId,
             this.scope.organizationId,
@@ -1296,6 +1306,7 @@ export class D1ChronicCareWorkflowRepository {
             completedAt,
             normalized.reason,
             this.scope.membershipId,
+            this.scope.accessAssignmentId,
             now,
           ),
         this.database.prepare(`update chronic_care_task_heads
@@ -1599,7 +1610,10 @@ export class D1ChronicCareWorkflowRepository {
     occurredAt: number;
   }) {
     const sequence = input.auditHead.lastSequence + 1;
-    const metadataJson = JSON.stringify(input.metadata);
+    const metadataJson = JSON.stringify({
+      ...input.metadata,
+      accessAssignmentId: this.scope.accessAssignmentId,
+    });
     const eventHash = await hashAuditEvent({
       previousHash: input.auditHead.lastEventHash,
       organizationId: this.scope.organizationId,
@@ -1682,12 +1696,13 @@ export class D1ChronicCareWorkflowRepository {
         result_resource_id as resultResourceId, response_json as responseJson
         from command_idempotency
         where organization_id = ?1 and facility_id = ?2
-          and actor_membership_id = ?3 and operation = ?4
-          and idempotency_key = ?5 limit 1`)
+          and actor_membership_id = ?3 and access_assignment_id = ?4
+          and operation = ?5 and idempotency_key = ?6 limit 1`)
       .bind(
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         operation,
         key,
       )
@@ -1723,13 +1738,14 @@ export class D1ChronicCareWorkflowRepository {
   }) {
     return this.database.prepare(`insert into command_idempotency (
       id, organization_id, facility_id, actor_membership_id,
-      operation, idempotency_key, request_hash, status, created_at
-    ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)`)
+      access_assignment_id, operation, idempotency_key, request_hash, status, created_at
+    ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'processing', ?9)`)
       .bind(
         input.id,
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
+        this.scope.accessAssignmentId,
         input.operation,
         input.key,
         input.requestHash,

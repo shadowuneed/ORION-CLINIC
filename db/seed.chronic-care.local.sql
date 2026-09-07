@@ -85,13 +85,14 @@ WHERE id = 'protocol-head-care-a'
 INSERT INTO chronic_registry_enrollments (
   id, organization_id, facility_id, patient_id, registry_code,
   source_type, source_label, managing_clinician_membership_id,
-  created_by_membership_id, created_at
+  created_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-enrollment-care-a', 'org-a', 'fac-a', 'patient-care-a',
   'SYN-ENDO-01', 'local_test',
   'Локальное тестовое наблюдение · не ЭРДБ/ПУЗ',
-  'membership-a', 'membership-a', 1788390300000
+  'membership-a', 'membership-a',
+  'access-assignment-a-general-medicine', 1788390300000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_registry_enrollments
   WHERE id = 'chronic-enrollment-care-a'
@@ -102,7 +103,7 @@ INSERT INTO chronic_registry_enrollment_versions (
   supersedes_version_id, status, basis_encounter_id,
   basis_protocol_version_id, diagnosis_display, diagnosis_code,
   diagnosis_basis, decision_reason, decided_by_membership_id,
-  decided_at, created_at
+  access_assignment_id, decided_at, created_at
 )
 SELECT
   'chronic-enrollment-care-a-v1', 'org-a', 'fac-a',
@@ -111,7 +112,8 @@ SELECT
   'Нарушение углеводного обмена — тестовый сценарий', 'SYN-ENDO-01',
   'Синтетическое решение врача по текущему подписанному протоколу; не является диагнозом реального пациента.',
   'Включение в локальный тестовый контур наблюдения',
-  'membership-a', 1788390300000, 1788390300000
+  'membership-a', 'access-assignment-a-general-medicine',
+  1788390300000, 1788390300000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_registry_enrollment_versions
   WHERE id = 'chronic-enrollment-care-a-v1'
@@ -132,12 +134,12 @@ WHERE NOT EXISTS (
 
 INSERT INTO chronic_care_plans (
   id, organization_id, facility_id, enrollment_id, patient_id,
-  created_by_membership_id, created_at
+  created_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-care-plan-care-a', 'org-a', 'fac-a',
   'chronic-enrollment-care-a', 'patient-care-a',
-  'membership-a', 1788390600000
+  'membership-a', 'access-assignment-a-general-medicine', 1788390600000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_plans WHERE id = 'chronic-care-plan-care-a'
 );
@@ -147,7 +149,7 @@ INSERT INTO chronic_care_plan_versions (
   enrollment_version_id, version, supersedes_version_id,
   effective_from, effective_to, goals_json, treatment_plan, diet_plan,
   medications_json, task_blueprints_json, content_hash,
-  signed_by_membership_id, signed_at, change_reason, created_at
+  signed_by_membership_id, access_assignment_id, signed_at, change_reason, created_at
 )
 SELECT
   'chronic-care-plan-care-a-v1', 'org-a', 'fac-a',
@@ -160,7 +162,7 @@ SELECT
   '[{"name":"Тестовый препарат A","dose":"1 условная единица","route":"условно","schedule":"по тестовому расписанию","startsOn":"2026-08-20","endsOn":null,"instructions":"Синтетическая запись, не медицинское назначение."}]',
   '[{"key":"nurse-contact-overdue","kind":"nurse_contact","title":"Уточнить самочувствие пациента","dueDate":"2026-09-01","ownerRole":"nurse","assignedMembershipId":"membership-care-nurse","instructions":"Записать ответ пациента без постановки диагноза."},{"key":"nurse-contact-soon","kind":"nurse_contact","title":"Повторный контакт медсестры","dueDate":"2026-09-09","ownerRole":"nurse","assignedMembershipId":"membership-care-nurse","instructions":"Уточнить выполнение плана и передать отклонения врачу."},{"key":"doctor-follow-up","kind":"follow_up_visit","title":"Контрольный приём врача","dueDate":"2026-10-15","ownerRole":"clinician","assignedMembershipId":"membership-a","instructions":"Врач проверяет динамику и принимает клиническое решение."}]',
   '311bc8f88c536fdc5ad1086dc345737403480e5b5253614b981fa4d113903243',
-  'membership-a', 1788390600000,
+  'membership-a', 'access-assignment-a-general-medicine', 1788390600000,
   'Синтетическая подписанная версия для проверки этапа 6',
   1788390600000
 WHERE NOT EXISTS (
@@ -184,7 +186,7 @@ WHERE NOT EXISTS (
 INSERT INTO chronic_care_tasks (
   id, organization_id, facility_id, enrollment_id, care_plan_id,
   source_plan_version_id, patient_id, blueprint_key, kind, title,
-  owner_role, assigned_membership_id, created_at
+  owner_role, assigned_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-overdue', 'org-a', 'fac-a',
@@ -192,7 +194,7 @@ SELECT
   'chronic-care-plan-care-a-v1', 'patient-care-a',
   'nurse-contact-overdue', 'nurse_contact',
   'Уточнить самочувствие пациента', 'nurse',
-  'membership-care-nurse', 1788390900000
+  'membership-care-nurse', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_tasks WHERE id = 'chronic-task-care-overdue'
 );
@@ -200,7 +202,7 @@ WHERE NOT EXISTS (
 INSERT INTO chronic_care_tasks (
   id, organization_id, facility_id, enrollment_id, care_plan_id,
   source_plan_version_id, patient_id, blueprint_key, kind, title,
-  owner_role, assigned_membership_id, created_at
+  owner_role, assigned_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-soon', 'org-a', 'fac-a',
@@ -208,7 +210,7 @@ SELECT
   'chronic-care-plan-care-a-v1', 'patient-care-a',
   'nurse-contact-soon', 'nurse_contact',
   'Повторный контакт медсестры', 'nurse',
-  'membership-care-nurse', 1788390900000
+  'membership-care-nurse', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_tasks WHERE id = 'chronic-task-care-soon'
 );
@@ -216,7 +218,7 @@ WHERE NOT EXISTS (
 INSERT INTO chronic_care_tasks (
   id, organization_id, facility_id, enrollment_id, care_plan_id,
   source_plan_version_id, patient_id, blueprint_key, kind, title,
-  owner_role, assigned_membership_id, created_at
+  owner_role, assigned_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-follow-up', 'org-a', 'fac-a',
@@ -224,7 +226,7 @@ SELECT
   'chronic-care-plan-care-a-v1', 'patient-care-a',
   'doctor-follow-up', 'follow_up_visit',
   'Контрольный приём врача', 'clinician',
-  'membership-a', 1788390900000
+  'membership-a', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_tasks WHERE id = 'chronic-task-care-follow-up'
 );
@@ -234,7 +236,7 @@ INSERT INTO chronic_care_task_versions (
   supersedes_version_id, status, due_date, instructions,
   contact_method, wellbeing, response_summary, responded_at,
   escalation_reason, escalated_at, completed_at, change_reason,
-  changed_by_membership_id, created_at
+  changed_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-overdue-v1', 'org-a', 'fac-a',
@@ -242,7 +244,7 @@ SELECT
   'Записать ответ пациента без постановки диагноза.',
   NULL, NULL, NULL, NULL, NULL, NULL, NULL,
   'Создано из подписанной тестовой версии плана',
-  'membership-a', 1788390900000
+  'membership-a', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_task_versions
   WHERE id = 'chronic-task-care-overdue-v1'
@@ -253,7 +255,7 @@ INSERT INTO chronic_care_task_versions (
   supersedes_version_id, status, due_date, instructions,
   contact_method, wellbeing, response_summary, responded_at,
   escalation_reason, escalated_at, completed_at, change_reason,
-  changed_by_membership_id, created_at
+  changed_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-soon-v1', 'org-a', 'fac-a',
@@ -261,7 +263,7 @@ SELECT
   'Уточнить выполнение плана и передать отклонения врачу.',
   NULL, NULL, NULL, NULL, NULL, NULL, NULL,
   'Создано из подписанной тестовой версии плана',
-  'membership-a', 1788390900000
+  'membership-a', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_task_versions
   WHERE id = 'chronic-task-care-soon-v1'
@@ -272,7 +274,7 @@ INSERT INTO chronic_care_task_versions (
   supersedes_version_id, status, due_date, instructions,
   contact_method, wellbeing, response_summary, responded_at,
   escalation_reason, escalated_at, completed_at, change_reason,
-  changed_by_membership_id, created_at
+  changed_by_membership_id, access_assignment_id, created_at
 )
 SELECT
   'chronic-task-care-follow-up-v1', 'org-a', 'fac-a',
@@ -280,7 +282,7 @@ SELECT
   'Врач проверяет динамику и принимает клиническое решение.',
   NULL, NULL, NULL, NULL, NULL, NULL, NULL,
   'Создано из подписанной тестовой версии плана',
-  'membership-a', 1788390900000
+  'membership-a', 'access-assignment-a-general-medicine', 1788390900000
 WHERE NOT EXISTS (
   SELECT 1 FROM chronic_care_task_versions
   WHERE id = 'chronic-task-care-follow-up-v1'

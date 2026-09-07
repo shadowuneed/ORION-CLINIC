@@ -40,11 +40,12 @@ import type {
 } from '@/lib/domain/chronic-care';
 import styles from './care.module.css';
 
-type FacilityOption = {
-  organizationId: string;
+type AccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: 'clinician' | 'nurse';
 };
 
@@ -52,14 +53,21 @@ type ApiError = {
   code: string;
   message: string;
   requestId?: string;
-  details?: { facilities?: FacilityOption[] };
+  details?: { assignments?: AccessAssignmentOption[] };
 };
 
 type ChronicCareResponse = Partial<ChronicCareWorkspaceData> & {
-  viewer?: { id: string; displayName: string; role: 'clinician' | 'nurse' };
+  viewer?: {
+    id: string;
+    displayName: string;
+    membershipId: string;
+    accessAssignmentId: string;
+    role: 'clinician' | 'nurse';
+  };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignment?: AccessAssignmentOption;
+  accessAssignments?: AccessAssignmentOption[];
   persistence?: 'd1';
   error?: ApiError;
 };
@@ -67,7 +75,7 @@ type ChronicCareResponse = Partial<ChronicCareWorkspaceData> & {
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -177,6 +185,23 @@ function joinClass(...values: Array<string | false | undefined>) {
   return values.filter(Boolean).join(' ');
 }
 
+export function buildChronicCareAccessQuery(
+  facilityId?: string,
+  accessAssignmentId?: string,
+) {
+  const params = new URLSearchParams({ dueState: 'all', limit: '200' });
+  if (facilityId) params.set('facilityId', facilityId);
+  if (accessAssignmentId) params.set('accessAssignmentId', accessAssignmentId);
+  return params;
+}
+
+export function buildChronicCareOperationKey(
+  accessAssignmentId: string,
+  operation: string,
+) {
+  return `${accessAssignmentId || 'unselected'}|${operation}`;
+}
+
 export function unknownChronicCareOutcomeMessage() {
   return 'Связь прервалась. Сервер мог сохранить действие. Обновите данные; если изменение не появилось, повторите — ORION использует тот же ключ защиты от дублей.';
 }
@@ -244,8 +269,8 @@ function newTaskDraft(
 export function ChronicCareWorkspace() {
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<ChronicCareResponse>({});
-  const [selectedFacilityId, setSelectedFacilityId] = useState('');
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  const [selectedAccessAssignmentId, setSelectedAccessAssignmentId] = useState('');
+  const [assignmentOptions, setAssignmentOptions] = useState<AccessAssignmentOption[]>([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [dueFilter, setDueFilter] = useState<ChronicDueState | 'all'>('all');
@@ -256,8 +281,11 @@ export function ChronicCareWorkspace() {
   const [planOpen, setPlanOpen] = useState(false);
 
   const facilityRef = useRef('');
+  const accessAssignmentRef = useRef('');
   const selectedEnrollmentRef = useRef('');
   const commandKeys = useRef(new Map<string, string>());
+  const loadAbort = useRef<AbortController | null>(null);
+  const loadGeneration = useRef(0);
 
   const [basisId, setBasisId] = useState('');
   const [registryCode, setRegistryCode] = useState('SYN-ENDO-01');
@@ -288,24 +316,33 @@ export function ChronicCareWorkspace() {
   const [escalationReason, setEscalationReason] = useState('');
 
   const load = useCallback(async (preferredEnrollmentId?: string, quiet = false) => {
+    const generation = loadGeneration.current + 1;
+    loadGeneration.current = generation;
+    loadAbort.current?.abort();
+    const controller = new AbortController();
+    loadAbort.current = controller;
     if (!quiet) setState('loading');
     try {
-      const params = new URLSearchParams({ dueState: 'all', limit: '200' });
-      if (facilityRef.current) params.set('facilityId', facilityRef.current);
+      const params = buildChronicCareAccessQuery(
+        facilityRef.current || undefined,
+        accessAssignmentRef.current || undefined,
+      );
       const response = await fetch(`/api/care?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
+        signal: controller.signal,
       });
       const payload = (await response.json()) as ChronicCareResponse;
+      if (controller.signal.aborted || generation !== loadGeneration.current) return;
       setData(payload);
       if (response.status === 401) {
         setState('unauthenticated');
       } else if (
         response.status === 409 &&
-        payload.error?.code === 'FACILITY_SELECTION_REQUIRED'
+        payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
       ) {
-        setFacilityOptions(payload.error.details?.facilities ?? []);
-        setState('facility');
+        setAssignmentOptions(payload.error.details?.assignments ?? []);
+        setState('assignment');
       } else if (response.status === 403) {
         setState('forbidden');
       } else if (
@@ -316,14 +353,24 @@ export function ChronicCareWorkspace() {
         !payload.assignees ||
         !payload.cohortCounts ||
         !payload.capabilities ||
-        !payload.role
+        !payload.role ||
+        !payload.viewer ||
+        !payload.organization ||
+        !payload.facility ||
+        !payload.accessAssignment
       ) {
         setState('error');
       } else {
         const resolvedFacility = payload.facility?.id ?? facilityRef.current;
+        const resolvedAssignment = payload.accessAssignment.assignmentId;
         facilityRef.current = resolvedFacility;
-        setSelectedFacilityId(resolvedFacility);
-        setFacilityOptions(payload.facilities ?? []);
+        accessAssignmentRef.current = resolvedAssignment;
+        setSelectedAccessAssignmentId(resolvedAssignment);
+        setAssignmentOptions(payload.accessAssignments ?? []);
+        const url = new URL(window.location.href);
+        url.searchParams.set('facilityId', resolvedFacility);
+        url.searchParams.set('accessAssignmentId', resolvedAssignment);
+        window.history.replaceState(null, '', `${url.pathname}${url.search}`);
         const candidate = preferredEnrollmentId ?? selectedEnrollmentRef.current;
         const nextEnrollment = payload.enrollments.some((item) => item.id === candidate)
           ? candidate
@@ -332,7 +379,12 @@ export function ChronicCareWorkspace() {
         setSelectedEnrollmentId(nextEnrollment);
         setState('ready');
       }
-    } catch {
+    } catch (cause) {
+      if (
+        controller.signal.aborted ||
+        generation !== loadGeneration.current ||
+        (cause instanceof DOMException && cause.name === 'AbortError')
+      ) return;
       setState('error');
     }
   }, []);
@@ -341,10 +393,14 @@ export function ChronicCareWorkspace() {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       facilityRef.current = params.get('facilityId') ?? '';
-      setSelectedFacilityId(facilityRef.current);
+      accessAssignmentRef.current = params.get('accessAssignmentId') ?? '';
+      setSelectedAccessAssignmentId(accessAssignmentRef.current);
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      loadAbort.current?.abort();
+    };
   }, [load]);
 
   const enrollments = data.enrollments ?? [];
@@ -374,12 +430,23 @@ export function ChronicCareWorkspace() {
     [data.cohortCounts],
   );
 
-  function selectFacility(facilityId: string) {
-    facilityRef.current = facilityId;
-    setSelectedFacilityId(facilityId);
+  function selectAssignment(assignmentId: string) {
+    if (busy || enrollmentOpen || planOpen || selectedTaskId) return;
+    const assignment = assignmentOptions.find(
+      (candidate) => candidate.assignmentId === assignmentId,
+    );
+    if (!assignment) return;
+    accessAssignmentRef.current = assignment.assignmentId;
+    facilityRef.current = assignment.facilityId;
+    setSelectedAccessAssignmentId(assignment.assignmentId);
+    selectedEnrollmentRef.current = '';
+    setSelectedEnrollmentId('');
+    setMessage(null);
+    setOperationError(null);
     const url = new URL(window.location.href);
-    url.searchParams.set('facilityId', facilityId);
-    window.history.replaceState(null, '', url);
+    url.searchParams.set('facilityId', assignment.facilityId);
+    url.searchParams.set('accessAssignmentId', assignment.assignmentId);
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
     void load();
   }
 
@@ -398,9 +465,13 @@ export function ChronicCareWorkspace() {
     payload: Record<string, unknown>,
     pick: (body: Record<string, unknown>) => T | undefined,
   ) {
-    if (busy) return null;
-    const idempotencyKey = commandKeys.current.get(operation) ?? crypto.randomUUID();
-    commandKeys.current.set(operation, idempotencyKey);
+    if (busy || !facilityRef.current || !accessAssignmentRef.current) return null;
+    const operationKey = buildChronicCareOperationKey(
+      accessAssignmentRef.current,
+      operation,
+    );
+    const idempotencyKey = commandKeys.current.get(operationKey) ?? crypto.randomUUID();
+    commandKeys.current.set(operationKey, idempotencyKey);
     setBusy(operation);
     setMessage(null);
     setOperationError(null);
@@ -412,6 +483,9 @@ export function ChronicCareWorkspace() {
         body: JSON.stringify({
           ...payload,
           ...(facilityRef.current ? { facilityId: facilityRef.current } : {}),
+          ...(accessAssignmentRef.current
+            ? { accessAssignmentId: accessAssignmentRef.current }
+            : {}),
           idempotencyKey,
         }),
       });
@@ -423,7 +497,7 @@ export function ChronicCareWorkspace() {
         return null;
       }
       const value = pick(body);
-      commandKeys.current.delete(operation);
+      commandKeys.current.delete(operationKey);
       return value ?? null;
     } catch {
       setOperationError({
@@ -577,9 +651,9 @@ export function ChronicCareWorkspace() {
       <CareState
         state={state}
         error={data.error}
-        facilities={facilityOptions}
-        selectedFacilityId={selectedFacilityId}
-        onFacility={selectFacility}
+        assignments={assignmentOptions}
+        selectedAssignmentId={selectedAccessAssignmentId}
+        onAssignment={selectAssignment}
         onRetry={() => void load()}
       />
     );
@@ -590,9 +664,9 @@ export function ChronicCareWorkspace() {
       <CareState
         state="error"
         error={{ code: 'INVALID_CHRONIC_CARE_RESPONSE', message: 'Сервер не вернул роль рабочего места.' }}
-        facilities={facilityOptions}
-        selectedFacilityId={selectedFacilityId}
-        onFacility={selectFacility}
+        assignments={assignmentOptions}
+        selectedAssignmentId={selectedAccessAssignmentId}
+        onAssignment={selectAssignment}
         onRetry={() => void load()}
       />
     );
@@ -646,15 +720,16 @@ export function ChronicCareWorkspace() {
           </span>
         </div>
         <div className={styles.toolbarActions}>
-          {facilityOptions.length > 1 ? (
+          {assignmentOptions.length > 1 ? (
             <select
-              aria-label="Клиника"
-              onChange={(event) => selectFacility(event.target.value)}
-              value={selectedFacilityId}
+              aria-label="Рабочий контур"
+              disabled={Boolean(busy || enrollmentOpen || planOpen || selectedTaskId)}
+              onChange={(event) => selectAssignment(event.target.value)}
+              value={selectedAccessAssignmentId}
             >
-              {facilityOptions.map((facility) => (
-                <option key={facility.facilityId} value={facility.facilityId}>
-                  {facility.facilityName}
+              {assignmentOptions.map((assignment) => (
+                <option key={assignment.assignmentId} value={assignment.assignmentId}>
+                  {assignment.facilityName} · {assignment.departmentName} · {assignment.role === 'nurse' ? 'медсестра' : 'врач'}
                 </option>
               ))}
             </select>
@@ -986,23 +1061,23 @@ function EditorSection({
 function CareState({
   state,
   error,
-  facilities,
-  selectedFacilityId,
-  onFacility,
+  assignments,
+  selectedAssignmentId,
+  onAssignment,
   onRetry,
 }: {
   state: LoadState;
   error?: ApiError;
-  facilities: FacilityOption[];
-  selectedFacilityId: string;
-  onFacility: (facilityId: string) => void;
+  assignments: AccessAssignmentOption[];
+  selectedAssignmentId: string;
+  onAssignment: (assignmentId: string) => void;
   onRetry: () => void;
 }) {
   const content = {
     loading: ['Загружаем наблюдение', 'Читаем подписанные планы и рабочие задачи из D1.'],
-    facility: ['Выберите клинику', 'Роль и данные всегда ограничены выбранной клиникой.'],
+    assignment: ['Выберите рабочий контур', 'Назначения по отделениям не объединяются. Роль и права берутся только из выбранного контура.'],
     unauthenticated: ['Требуется вход', 'Откройте ORION Clinic через авторизованный контур.'],
-    forbidden: ['Нет доступа', 'Нужна активная роль врача или медсестры.'],
+    forbidden: ['Нет доступа', 'Выбранное назначение недоступно. Откройте «Наблюдение» в меню, чтобы выбрать действующий рабочий контур.'],
     error: ['Наблюдение временно недоступно', error?.message ?? 'Проверьте локальную базу и повторите.'],
     ready: ['', ''],
   }[state];
@@ -1012,7 +1087,7 @@ function CareState({
       <span className={styles.eyebrow}>Безопасная остановка</span>
       <h1>{content[0]}</h1>
       <p>{content[1]}</p>
-      {state === 'facility' ? <select aria-label="Клиника" value={selectedFacilityId} onChange={(event) => onFacility(event.target.value)}><option value="">Выберите клинику</option>{facilities.map((facility) => <option key={facility.facilityId} value={facility.facilityId}>{facility.facilityName} · {facility.role === 'nurse' ? 'медсестра' : 'врач'}</option>)}</select> : null}
+      {state === 'assignment' ? <select aria-label="Рабочий контур" value={selectedAssignmentId} onChange={(event) => onAssignment(event.target.value)}><option value="">Выберите назначение</option>{assignments.map((assignment) => <option key={assignment.assignmentId} value={assignment.assignmentId}>{assignment.organizationName} · {assignment.facilityName} · {assignment.departmentName} · {assignment.role === 'nurse' ? 'медсестра' : 'врач'}</option>)}</select> : null}
       {state === 'error' ? <button className={styles.primaryButton} onClick={onRetry} type="button"><RefreshCw size={16} /> Повторить</button> : null}
     </main>
   );
