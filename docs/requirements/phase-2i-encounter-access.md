@@ -34,9 +34,36 @@ These compatibility routes are not authoritative encounter repositories.
 Assignment authorization does not prove patient consent, treatment relationship,
 session ownership or durable clinical provenance. Their existing compatibility
 limitations remain; use `/api/workspace` for the authoritative encounter flow.
-The current compatibility clients do not yet render the multiple-assignment
-choice. A single eligible assignment works; multiple assignments fail closed.
+The dashboard/live clients now receive the exact selection from their page
+boundary. Direct API callers still receive 409 if they omit an ambiguous scope.
 Do not introduce a first-assignment client fallback to hide that state.
+
+## 2I.2: request and UI checkpoint (2026-09-07)
+
+Implemented: all 17 `/api/workspace` route files use the shared request selector
+and current doctor-assignment resolver. GET requires encounter.read; mutations
+require encounter.manage. The existing exact treating-membership, organization,
+facility and consent/lifecycle checks remain in place. WorkspaceScope carries
+the selected accessAssignmentId and permission in memory.
+
+Dashboard and live pages render an explicit multiple-assignment picker, deny
+unknown selections without fallback and explain read-only access. Their clients
+propagate the same selection through requests, speech calls, export links,
+sign-in return paths and dashboard/live navigation, including the shell menu.
+Context changes remount the workspace; scoped fetch closures retain their own
+selection instead of reading a changed global URL. Explicit malformed encounter
+or assignment selectors are rejected, not silently removed.
+
+This is a partial implementation of the originally combined 2I.2 gate:
+**durable command/event/session/audit attribution and database actor guards are
+not implemented by this checkpoint.** Legacy clinician-role SQL is still an
+additional restrictive gate. A doctor assignment on a non-clinician legacy
+membership can therefore remain denied. Do not remove that SQL before replacing
+it with verified exact-assignment guards. Existing encounter-create compatibility
+still requires a source encounter; independent creation remains below.
+
+No applied migrations or immutable history were changed. No active clinical
+records, consents, audio, provider settings or speech model were changed.
 
 ## Remaining consumers: 2I is not complete
 
@@ -55,17 +82,19 @@ Do not introduce a first-assignment client fallback to hide that state.
 | `app/authenticated-clinic-page.tsx` | remove legacy clinician capability lookup; shell visibility never substitutes for API authorization |
 | dashboard, `/live`, patient-to-encounter links, compatibility clients | selection/URL propagation, no stale-response context replacement, no stream reuse across assignments |
 
-## Next bounded checkpoint: 2I.2
+## Next bounded checkpoint: 2I.3 — durable authorization
 
 1. Read the current master-plan handoff and preserve the owner's unstaged `a`.
 2. Reuse the 2I.1 assignment resolver, but also enforce the exact encounter's
    `clinicianMembershipId`, organization and facility. Do not grant nurses or
    medical leads clinician-only actions through encounter.read.
-3. Inventory every writer using `WorkspaceScope` before extending it. Scope
-   must retain assignment identity and appropriate permission. Read-only access
-   must not accidentally authorize a mutation.
-4. Propagate exact selection through API schemas, dashboard/live request URLs,
-   command keys and sign-in return URLs. Keep recovery/unknown-outcome locks.
+3. Inventory every writer using `WorkspaceScope`. Its optional assignment fields
+   currently preserve compatibility with legacy tests; make authoritative writers
+   require them when their database guards are migrated. Read-only scope must
+   never authorize a mutation. The request/UI work above is not a DB guarantee.
+4. Keep the implemented URL/context propagation and recovery/unknown-outcome
+   locks. Add assignment to command keys, request hashes and session ownership;
+   test that an old outcome cannot be replayed under a different assignment.
 5. Add durable assignment attribution to clinical commands/events and access
    audit. Generate additive schema migrations and inspect SQLite actor guards;
    never edit an applied migration or rewrite immutable history.

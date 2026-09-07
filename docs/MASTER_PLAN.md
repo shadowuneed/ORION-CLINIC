@@ -811,6 +811,7 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-07 | Phase 2H exact-assignment communications | PASS for synthetic local data | All five communications handlers, UI and new D1 writes use one current doctor/nurse/registrar assignment with effective communications.manage. Full verify:ci passed secret policy for 426 files, no known dependency vulnerabilities, clean lint/types, 69 test files/415 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 66e8f363-cf74-4625-a1bd-cc6177f7da2e). Browser executed consent -> intention -> manual task -> response -> completion, then verified reload and invalid-assignment denial. A reproduced same-page denial recovery bug was fixed and regression-tested. |
 
 | 2026-09-07 | Phase 2I.1 compatibility-tool assignment boundary | PASS for this bounded local slice | Full pnpm verify:ci passed: 428-file secret policy, zero known dependency vulnerabilities, lint/types, 70 files/467 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 180ad8d5-d55f-4bd8-9dd5-b4aecbc4ff57). Route tests cover six operations and prove denied calls do not reach mocked providers. No live AI, microphone, UI-selection or full Phase 2I migration is claimed. |
+| 2026-09-07 | Phase 2I.2 encounter request/UI scope | PASS for request/UI slice, DB migration gate open | Code a208a60. pnpm verify:ci passed 436-file secret policy, zero known vulnerabilities, lint/types, 73 files/501 tests, Drizzle, build and isolated recovery after source destruction: 86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 8b685653-c2e0-4630-9d19-7813db3afb2e, 85,806 ms. Authenticated browser verified dashboard/live scope transport and invalid-selection denial/recovery; dark live view inspected. Web/STT health 200; ngrok unchanged. Durable assignment attribution, SQL guards, replay/slow-provider revocation remain 2I.3. No live microphone, AI or end-to-end signed-export claim. |
 
 ## 14. Risk register
 
@@ -1172,23 +1173,26 @@ control, detection, response, and residual acceptance.
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
-- Phase 2I is split into explicit checkpoints: 2I.1 migrates only the six
-  compatibility tool operations; the authoritative encounter family is still open.
-  See `docs/requirements/phase-2i-encounter-access.md` for the complete consumer
-  inventory and remaining acceptance gates. No full Phase 2I completion is claimed.
-- Exact next engineering checkpoint after Phase 2I.1: Phase 2I.2 migrates the
-  assigned-encounter workspace access boundary. Start with
-  `lib/auth/workspace-access.ts`, its repository and all consumers under
-  `/api/workspace`, `/api/local-speech` and `/api/clinical`, plus the dashboard
-  and `/live` callers. Use one current non-service doctor assignment and the
-  appropriate existing `encounter.read` / `encounter.manage` effective permission;
-  never merge assignments or fall back after an explicit denial. Preserve exact
-  clinician-to-encounter ownership, separate consents, final-only transcript,
-  clinical review, immutable protocol/export history and server-only AI keys.
-  Add request/command attribution, DB guards and regression coverage before
-  declaring the migration complete. Do not grant nurse/medical-lead access to
-  clinician-only operations just because their baseline includes encounter.read.
-  Do not replace the speech model, connect a provider or change production identity.
+- Phase 2I remains IN_PROGRESS. 2I.1 covers six compatibility tool operations;
+  2I.2 now covers the authoritative request boundary and dashboard/live UI.
+  All 17 `/api/workspace` route files check one current doctor assignment with
+  encounter.read for GET and encounter.manage for mutations; the existing exact
+  treating-clinician, consent, lifecycle, review and export constraints remain.
+  Selection survives scoped requests, downloads and dashboard/live navigation.
+  The original combined 2I.2 gate is NOT fully closed: durable attribution and
+  database guards were deliberately split into the next checkpoint below.
+- Exact next checkpoint: 2I.3, durable encounter authorization. Inventory every
+  WorkspaceScope writer and add exact assignment attribution to command keys,
+  hashes, commands/events, access audits and speech sessions using forward-only
+  migrations. Replace remaining legacy clinician-role SQL only together with
+  verified current-assignment actor guards. Require current authorization before
+  idempotent replay and before committing a slow provider response. Preserve
+  clinician-to-encounter ownership, consent, final transcript, review/sign/export
+  and recovery locks. Test direct SQL bypass, stale versions, revoked sessions
+  and cross-assignment replay; do not infer DB protection from route tests.
+  Also resolve independent encounter creation and patient-to-encounter selection
+  listed in `docs/requirements/phase-2i-encounter-access.md` before full 2I closure.
+  No nurse/medical-lead expansion, speech model change or provider connection.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1380,6 +1384,50 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.2 request/UI checkpoint
+
+- Implementation commit: `a208a60`. Full `pnpm verify:ci` PASS: secret policy
+  (436 files), no known dependency vulnerabilities, lint/types, 73 files/501
+  tests, Drizzle and build. Isolated recovery PASS after disposable-source
+  destruction: 86 tables, 148 rows, 35 migrations, three R2 objects, 490,091 bytes;
+  run `8b685653-c2e0-4630-9d19-7813db3afb2e`, 85,806 ms. A subsequent
+  whitespace-only JSX/dependency-list tidy does not change tested behavior.
+- Bounded result: all 17 authoritative `/api/workspace` route files use
+  workspaceRequestSelection and the current doctor-assignment resolver. GET is
+  encounter.read, mutation is encounter.manage. WorkspaceScope carries exact
+  assignment ID/permission in memory; existing exact treating membership,
+  patient/facility/organization, consent and lifecycle restrictions remain.
+- UI: dashboard/live server boundary offers an explicit required picker for
+  multiple assignments, blocks unknown selections and shows read-only access.
+  Provider context scopes fetches, STT/AI clients, exports and navigation. Tree
+  keys change with context; old fetch closures retain old context. Shell links
+  also preserve encounter/assignment/facility rather than silently dropping them.
+  Malformed duplicate/blank selectors are rejected before encounter fallback.
+- Tests: real in-memory SQLite repository cases verify exact assignment plus
+  treating scope, cross-tenant denial and next-call revocation. URL tests cover
+  scope transport, sign-in returns, duplicate selectors and no external leakage.
+  Component tests cover required picker/no first selection, read-only/explicit
+  deny, tree identity, invalid encounter and neutral denial/retry links.
+- Browser QA: authenticated local synthetic dashboard loaded D1 encounter
+  encounter-a-lifecycle; shell navigation opened live with the same assignment;
+  clinical-record/consent links retained context. Invalid assignment displayed
+  no clinical data; explicit retry retained requested encounter and recovered.
+  A dark-theme screenshot of live was visually inspected. Multiple-assignment
+  picker and read-only behavior were component-tested, not live-DB mutated.
+- Runtime: web /api/health/ready on 3200 and STT /health on 3101 return 200.
+  Existing ngrok targets localhost:3200. Nothing was stopped/restarted and no
+  migration was applied to active D1. Existing user files/secrets/audio preserved.
+- Remaining: 2I.3 durable assignment provenance on commands/events/audits/sessions,
+  SQL actor guards, assignment-scoped replay and authorization recheck before
+  slow-provider result commit. Legacy role SQL remains restrictive; a doctor
+  assignment on a non-clinician legacy membership can still be denied. Independent
+  creation and patient-to-encounter selection need their final migration checks.
+  Do not mark full 2I complete. See requirements/phase-2i-encounter-access.md.
+- No real microphone, speech quality, live Groq or complete signed-export journey
+  was tested this turn. No production readiness claim. Groq remains unconfigured.
+  Owner's standalone unstaged `a` must remain outside commits. Next agent should
+  read this section and the 2I inventory before extending any writer.
 
 ### 2026-09-07 — Phase 2I.1 compatibility-tool assignment boundary
 
@@ -2011,11 +2059,10 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.2: migrate the assigned-encounter
-workspace and linked local-speech/clinical API callers from legacy membership
-resolution to one exact current doctor assignment with the appropriate encounter
-permission, preserving ownership, consent and doctor review. Phase 2I.1 migrates
-only compatibility tool authorization; full 2I remains IN_PROGRESS. Phase 2H
+The next bounded engineering slice is Phase 2I.3: durable assignment attribution
+and database actor guards for the encounter family, with revocation-before-replay
+and before slow provider result commits. Phase 2I.2 implements request/UI scope
+but does not close that database gate; full 2I remains IN_PROGRESS. Phase 2H
 communications is verified and complete for local synthetic data only. Keep every
 messaging provider disconnected. Phase 8B is
 already a complete activation-blocked review artifact; named clinic owners must
