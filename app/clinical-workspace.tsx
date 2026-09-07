@@ -1,5 +1,7 @@
 'use client';
 
+import { useWorkspaceFetch, useWorkspaceUrl, useWorkspaceCanManage } from '@/lib/workspace-access-context';
+
 import {
   Activity,
   CalendarDays,
@@ -411,6 +413,9 @@ function patientAge(birthDate: string | null) {
 }
 
 export function ClinicalWorkspace() {
+  const fetch = useWorkspaceFetch();
+  const scopeUrl = useWorkspaceUrl();
+  const canManageWorkspace = useWorkspaceCanManage();
   const router = useRouter();
   const [activeSection, setActiveSection] = useState('complaints');
   const [recommendations, setRecommendations] =
@@ -622,14 +627,14 @@ export function ClinicalWorkspace() {
         setRecoverySnapshot(payload.recovery ?? null);
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('encounterId', payload.encounter.id);
-        window.history.replaceState(null, '', currentUrl);
+        window.history.replaceState(null, '', scopeUrl(`${currentUrl.pathname}${currentUrl.search}`));
         setPersistenceState('saved');
         return true;
       } catch {
         setPersistenceState('error');
         return false;
       }
-  }, []);
+  }, [fetch, scopeUrl]);
 
   useEffect(() => {
     const requestedEncounterId = new URLSearchParams(window.location.search)
@@ -695,7 +700,7 @@ export function ClinicalWorkspace() {
   const recoveryConfirmed =
     !activeRecovery || recoveryActionState === 'confirmed';
   const workspaceActionsLocked =
-    !serverStateConfirmed || !recoveryConfirmed;
+    !canManageWorkspace || !serverStateConfirmed || !recoveryConfirmed;
   const selectedPatientAge = patientAge(
     workspaceContext?.encounter.patient.birthDate ?? null,
   );
@@ -919,7 +924,7 @@ export function ClinicalWorkspace() {
       return;
     }
     router.push(
-      `/live?encounterId=${encodeURIComponent(selectedEncounterId)}`,
+      scopeUrl(`/live?encounterId=${encodeURIComponent(selectedEncounterId)}`),
     );
   }
 
@@ -2633,9 +2638,9 @@ export function ClinicalWorkspace() {
                   {bundleArtifact && (
                     <a
                       className={styles.exportBundleLink}
-                      href={`/api/workspace/exports/download?encounterId=${encodeURIComponent(
+                      href={scopeUrl(`/api/workspace/exports/download?encounterId=${encodeURIComponent(
                         workspaceContext!.encounter.id,
-                      )}&kind=bundle_zip`}
+                      )}&kind=bundle_zip`)}
                     >
                       <Download size={17} /> Скачать всё одним ZIP
                     </a>
@@ -2649,9 +2654,9 @@ export function ClinicalWorkspace() {
                       .map((artifact) => (
                         <a
                           className={styles.exportFile}
-                          href={`/api/workspace/exports/download?encounterId=${encodeURIComponent(
+                          href={scopeUrl(`/api/workspace/exports/download?encounterId=${encodeURIComponent(
                             workspaceContext!.encounter.id,
-                          )}&kind=${artifact.kind}`}
+                          )}&kind=${artifact.kind}`)}
                           key={artifact.id}
                         >
                           <span>

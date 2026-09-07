@@ -54,12 +54,13 @@ function isClinicalAnalysisResponse(
 export async function requestClinicalAnalysis(
   request: ClinicalAnalysisRequest,
   signal: AbortSignal,
+  scopedFetch: (input: string, init?: RequestInit) => Promise<Response> = fetch,
 ): Promise<ClinicalAnalysisResponse> {
   const timeoutSignal = AbortSignal.timeout(ANALYSIS_CLIENT_TIMEOUT_MS);
   let response: Response;
   let body: unknown;
   try {
-    response = await fetch('/api/clinical/analyze', {
+    response = await scopedFetch('/api/clinical/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

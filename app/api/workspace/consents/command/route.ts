@@ -1,3 +1,4 @@
+import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   try {
     parseRuntimeConfig(env);
     const access = await resolveClinicianWorkspaceAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
       toSiteIdentityPrincipal(identity),
       payload.encounterId,
     );
@@ -98,6 +99,8 @@ export async function POST(request: Request) {
       persistence: 'local-d1',
     });
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     if (error instanceof MembershipRequiredError) {
       return apiFailure(
         context,

@@ -1,4 +1,6 @@
 import { ClinicalWorkspace } from './clinical-workspace';
+import { WorkspaceAssignmentBoundary } from './workspace-assignment-boundary';
+import { workspacePageUrl, type WorkspacePageQuery } from '@/lib/workspace-access-url';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -7,19 +9,17 @@ import {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ encounterId?: string | string[] }>;
+  searchParams: Promise<WorkspacePageQuery>;
 }) {
   const query = await searchParams;
-  const encounterId =
-    typeof query.encounterId === 'string' ? query.encounterId : undefined;
-  const returnTo = encounterId
-    ? `/?encounterId=${encodeURIComponent(encounterId)}`
-    : '/';
+  const returnTo = workspacePageUrl('/', query);
   const context = await getAuthenticatedClinicContext(returnTo);
 
   return (
     <AuthenticatedClinicPage context={context} requiredCapability="clinician">
-      <ClinicalWorkspace />
+      <WorkspaceAssignmentBoundary user={context.user} returnTo={returnTo}>
+        <ClinicalWorkspace />
+      </WorkspaceAssignmentBoundary>
     </AuthenticatedClinicPage>
   );
 }

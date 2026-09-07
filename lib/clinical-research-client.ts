@@ -30,8 +30,9 @@ function isResearchResponse(value: unknown): value is ClinicalResearchResponse {
 export async function requestClinicalResearch(
   request: ClinicalResearchRequest,
   signal: AbortSignal,
+  scopedFetch: (input: string, init?: RequestInit) => Promise<Response> = fetch,
 ) {
-  const response = await fetch('/api/clinical/research', {
+  const response = await scopedFetch('/api/clinical/research', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),

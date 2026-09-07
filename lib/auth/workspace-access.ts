@@ -22,6 +22,8 @@ export type ActiveMembership = {
   facilityId: string;
   facilityName: string;
   role: MembershipRole;
+  accessAssignmentId?: string;
+  accessPermission?: 'encounter.read' | 'encounter.manage';
 };
 
 export type AccessibleEncounter = {
@@ -57,6 +59,8 @@ export type WorkspaceScope = {
   facilityId: string;
   encounterId: string;
   reviewerMembershipId: string;
+  accessAssignmentId?: string;
+  accessPermission?: 'encounter.read' | 'encounter.manage';
 };
 
 export type ClinicianWorkspaceAccess = {
@@ -164,6 +168,10 @@ export async function resolveClinicianWorkspaceAccess(
       facilityId: membership.facilityId,
       encounterId: encounter.id,
       reviewerMembershipId: membership.membershipId,
+      ...(membership.accessAssignmentId ? {
+        accessAssignmentId: membership.accessAssignmentId,
+        accessPermission: membership.accessPermission,
+      } : {}),
     },
     encounter,
     encounters,

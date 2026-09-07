@@ -1,5 +1,7 @@
 'use client';
 
+import { useWorkspaceFetch } from '@/lib/workspace-access-context';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type LocalSpeechStatus =
@@ -135,6 +137,7 @@ async function readApiError(response: Response, fallback: string) {
 }
 
 export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
+  const fetch = useWorkspaceFetch();
   const [status, setStatus] = useState<LocalSpeechStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -205,7 +208,7 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
         setStatus('idle');
       }
     },
-    [releaseAudio],
+    [fetch, releaseAudio],
   );
   useEffect(() => {
     stopRef.current = stop;
@@ -457,7 +460,7 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
       setStatus('error');
       onStatusMessageRef.current?.(message);
     }
-  }, [options.enabled, options.encounterId]);
+  }, [fetch, options.enabled, options.encounterId]);
 
   useEffect(() => {
     if (!options.enabled && runtimeRef.current) void stop('cancelled');

@@ -7,8 +7,6 @@ import {
 import {
   toSiteIdentityPrincipal,
 } from '@/lib/auth/site-identity';
-import type { ActiveMembership } from '@/lib/auth/workspace-access';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
@@ -45,16 +43,10 @@ export async function getAuthenticatedClinicContext(
   returnTo: string,
 ): Promise<AuthenticatedClinicContext> {
   const user = await requireChatGPTUser(returnTo);
-  let memberships: ActiveMembership[] = [];
   let accessAssignments: AccessAssignmentSummary[] = [];
   let accessCheck: AuthenticatedClinicContext['accessCheck'] = 'ready';
 
   try {
-    memberships = await new D1WorkspaceAccessRepository(
-      env.DB,
-    ).listActiveMemberships(
-      toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
-    );
     accessAssignments = await new D1AccessGovernanceRepository(
       env.DB,
     ).listPrincipalAssignments(
@@ -68,7 +60,10 @@ export async function getAuthenticatedClinicContext(
     user,
     accessCheck,
     capabilities: {
-      clinician: memberships.some((membership) => membership.role === 'clinician'),
+      clinician: accessAssignments.some((assignment) =>
+        isAccessAssignmentCurrentlyActive(assignment) &&
+        assignment.roles.includes('doctor') && !assignment.roles.includes('service') &&
+        assignment.effectivePermissions.includes('encounter.read')),
       patientDirectory: accessAssignments.some(
         (assignment) =>
           isAccessAssignmentCurrentlyActive(assignment) &&

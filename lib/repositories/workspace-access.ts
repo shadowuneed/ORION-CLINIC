@@ -1,21 +1,12 @@
+import { resolveEncounterAssignmentAccess } from '@/lib/auth/encounter-assignment-access';
+import type { WorkspaceAccessSelection } from '@/lib/auth/workspace-request-access';
+import { D1AccessGovernanceRepository } from './access-governance';
 import type {
   AccessibleEncounter,
   ActiveMembership,
   IdentityPrincipal,
-  MembershipRole,
   WorkspaceAccessRepository,
 } from '@/lib/auth/workspace-access';
-
-type MembershipRow = {
-  userId: string;
-  userDisplayName: string;
-  membershipId: string;
-  organizationId: string;
-  organizationName: string;
-  facilityId: string;
-  facilityName: string;
-  role: MembershipRole;
-};
 
 type EncounterRow = {
   id: string;
@@ -39,39 +30,28 @@ type EncounterRow = {
 export class D1WorkspaceAccessRepository
   implements WorkspaceAccessRepository
 {
-  constructor(private readonly database: D1Database) {}
+  constructor(
+    private readonly database: D1Database,
+    private readonly selection: WorkspaceAccessSelection = { permission: 'encounter.manage' },
+  ) {}
 
-  async listActiveMemberships(principal: IdentityPrincipal) {
-    const result = await this.database
-      .prepare(`
-        select
-          user.id as userId,
-          user.display_name as userDisplayName,
-          membership.id as membershipId,
-          organization.id as organizationId,
-          organization.name as organizationName,
-          facility.id as facilityId,
-          facility.name as facilityName,
-          membership.role
-        from users user
-        join memberships membership on membership.user_id = user.id
-        join organizations organization
-          on organization.id = membership.organization_id
-        join facilities facility
-          on facility.organization_id = membership.organization_id
-          and facility.id = membership.facility_id
-        where user.external_issuer = ?1
-          and user.external_subject = ?2
-          and user.status = 'active'
-          and membership.status = 'active'
-          and organization.status = 'active'
-          and facility.status = 'active'
-        order by organization.name, facility.name, membership.id
-      `)
-      .bind(principal.issuer, principal.subject)
-      .all<MembershipRow>();
-
-    return result.results;
+  async listActiveMemberships(principal: IdentityPrincipal): Promise<ActiveMembership[]> {
+    const selected = await resolveEncounterAssignmentAccess(
+      new D1AccessGovernanceRepository(this.database), principal,
+      this.selection.permission, this.selection,
+    );
+    return [{
+      userId: selected.user.id,
+      userDisplayName: selected.user.displayName,
+      membershipId: selected.membership.id,
+      organizationId: selected.organization.id,
+      organizationName: selected.organization.name,
+      facilityId: selected.facility.id,
+      facilityName: selected.facility.name,
+      role: 'clinician',
+      accessAssignmentId: selected.assignmentId,
+      accessPermission: this.selection.permission,
+    }];
   }
 
   async listAssignedEncounters(memberships: readonly ActiveMembership[]) {

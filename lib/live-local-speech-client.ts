@@ -1,5 +1,7 @@
 'use client';
 
+import { useWorkspaceFetch } from '@/lib/workspace-access-context';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type LocalSpeechToken = {
@@ -444,6 +446,7 @@ function normalizePersistedSegment(
 export function useLocalSpeechTranscription(
   options: LocalSpeechTranscriptionOptions = {},
 ) {
+  const fetch = useWorkspaceFetch();
   const [status, setStatus] = useState<TranscriptionStatus>('idle');
   const [activity, setActivity] = useState<SpeechActivity>('idle');
   const [finalTokens, setFinalTokens] = useState<LocalSpeechToken[]>([]);
@@ -744,7 +747,7 @@ export function useLocalSpeechTranscription(
     } catch {
       // The local service also expires abandoned in-memory sessions.
     }
-  }, []);
+  }, [fetch]);
 
   const takeUtterance = useCallback((): PendingUtterance | null => {
     const capture = captureRef.current;
@@ -884,6 +887,7 @@ export function useLocalSpeechTranscription(
       });
     },
     [
+      fetch,
       stopRecording,
       syncActivity,
       tearDownAudio,
@@ -1168,6 +1172,7 @@ export function useLocalSpeechTranscription(
       updateStatus('error');
     }
   }, [
+    fetch,
     discardRecording,
     processPcm,
     releaseSession,

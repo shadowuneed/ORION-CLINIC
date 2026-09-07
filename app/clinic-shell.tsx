@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { workspaceNavigationUrl } from '@/lib/workspace-access-url';
 import { useEffect, useMemo, useState } from 'react';
 import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import {
@@ -85,6 +86,8 @@ export function ClinicShell({
   user: { displayName: string; email: string | null };
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const workspaceLink = (target: string) => workspaceNavigationUrl(target, pathname, searchParams.toString());
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
 
@@ -147,7 +150,7 @@ export function ClinicShell({
   return (
     <div className={`${styles.shell} ${collapsed ? styles.collapsed : ''}`}>
       <header className={styles.topbar}>
-        <Link className={styles.brand} href="/" aria-label="ORION Clinic — рабочий день">
+        <Link className={styles.brand} href={workspaceLink('/')} aria-label="ORION Clinic — рабочий день">
           <span className={styles.brandMark} aria-hidden="true">O</span>
           <span className={styles.brandCopy}>
             <strong>ORION</strong>
@@ -202,7 +205,7 @@ export function ClinicShell({
               <Link
                 aria-current={active ? 'page' : undefined}
                 className={`${styles.navItem} ${active ? styles.navActive : ''}`}
-                href={item.href}
+                href={workspaceLink(item.href)}
                 key={item.href}
                 aria-label={item.label}
                 title={collapsed ? item.label : undefined}

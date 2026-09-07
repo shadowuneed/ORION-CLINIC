@@ -1,3 +1,4 @@
+import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
       );
     }
     const access = await resolveClinicianWorkspaceAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
       toSiteIdentityPrincipal(identity),
       payload.data.encounterId,
     );
@@ -129,6 +130,8 @@ export async function POST(request: Request) {
       policyVersion: providerResult.policyVersion,
     });
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     if (prepared && repository && !prepared.replayRunId) {
       const errorCode =
         error instanceof ClinicalAnalysisProviderError

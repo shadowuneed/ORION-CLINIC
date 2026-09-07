@@ -1,3 +1,4 @@
+import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
@@ -45,7 +46,7 @@ async function parseAccess(request: Request, encounterId: string) {
   const identity = getSiteIdentity(request);
   if (!identity) return null;
   const access = await resolveClinicianWorkspaceAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+    new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
     toSiteIdentityPrincipal(identity),
     encounterId,
   );
@@ -140,10 +141,14 @@ export async function POST(request: Request) {
       });
       return apiSuccess(context, { session, audioRetention: false }, 201);
     } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
       await provider.deleteSession(speechSession.upstreamSessionId).catch(() => undefined);
       throw error;
     }
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     return (
       knownFailure(context, error) ??
       apiFailure(context, 500, 'SPEECH_SESSION_FAILED', 'Не удалось начать локальное распознавание.')
@@ -196,6 +201,8 @@ export async function DELETE(request: Request) {
       providerCleanup,
     });
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     return (
       knownFailure(context, error) ??
       apiFailure(context, 500, 'SPEECH_SESSION_FINISH_FAILED', 'Не удалось завершить распознавание.')

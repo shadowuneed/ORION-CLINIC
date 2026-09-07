@@ -1,5 +1,7 @@
 'use client';
 
+import { useWorkspaceFetch, useWorkspaceUrl, useWorkspaceCanManage } from '@/lib/workspace-access-context';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LocalSpeechToken,
@@ -279,6 +281,9 @@ export function OrionWorkspace({
   clinicianName,
   requestedEncounterId,
 }: WorkspaceProps) {
+  const fetch = useWorkspaceFetch();
+  const scopeUrl = useWorkspaceUrl();
+  const canManageWorkspace = useWorkspaceCanManage();
   const [visitRailCollapsed, setVisitRailCollapsed] = useState(false);
   const [consentConfirmed, setConsentConfirmed] = useState(false);
   const [audioConsentConfirmed, setAudioConsentConfirmed] = useState(false);
@@ -472,7 +477,7 @@ export function OrionWorkspace({
       const currentUrl = new URL(window.location.href);
       if (currentUrl.searchParams.get('encounterId') !== resolvedEncounterId) {
         currentUrl.searchParams.set('encounterId', resolvedEncounterId);
-        window.history.replaceState(null, '', currentUrl);
+        window.history.replaceState(null, '', scopeUrl(`${currentUrl.pathname}${currentUrl.search}`));
       }
       return true;
     } catch (error) {
@@ -485,7 +490,7 @@ export function OrionWorkspace({
       );
       return false;
     }
-  }, []);
+  }, [fetch, scopeUrl]);
 
   async function recordLiveConsentDecision(
     consentType: ConsentType,
@@ -779,6 +784,7 @@ export function OrionWorkspace({
         const result = await requestClinicalAnalysis(
           { segments: analysisSegments, mode },
           controller.signal,
+          fetch,
         );
         if (
           controller.signal.aborted ||
@@ -860,7 +866,7 @@ export function OrionWorkspace({
         }
       }
     },
-    [
+    [fetch,
       analysisCharacterCount,
       analysisKey,
       analysisSegments,
@@ -1359,6 +1365,7 @@ export function OrionWorkspace({
             evidence,
           },
           controller.signal,
+          fetch,
         );
         if (controller.signal.aborted || researchAbortRef.current !== controller) {
           return;
@@ -1383,7 +1390,7 @@ export function OrionWorkspace({
         }));
       }
     },
-    [analysisSegments, authoritativeEncounterId, finalSpeechTokens, roleForSpeaker],
+    [fetch, analysisSegments, authoritativeEncounterId, finalSpeechTokens, roleForSpeaker],
   );
 
   const activeSuggestionEntries = useMemo(() => {
@@ -1835,15 +1842,15 @@ export function OrionWorkspace({
   const authoritativeEncounterIsActive =
     authoritativeSnapshot?.encounter.status === 'in_progress';
   const authoritativeReviewLocked = Boolean(
-    authoritativeSnapshot && !authoritativeEncounterIsActive,
+    !canManageWorkspace || (authoritativeSnapshot && !authoritativeEncounterIsActive),
   );
   const canStartAuthoritativeSpeech = Boolean(
-    authoritativeLoadState === 'ready' &&
+    canManageWorkspace && authoritativeLoadState === 'ready' &&
       authoritativeEncounterIsActive &&
       authoritativeConsent?.speechReady,
   );
   const canManageLiveConsents = Boolean(
-    authoritativeLoadState === 'ready' && authoritativeEncounterIsActive,
+    canManageWorkspace && authoritativeLoadState === 'ready' && authoritativeEncounterIsActive,
   );
 
   return (
@@ -1904,11 +1911,11 @@ export function OrionWorkspace({
               </button>
             )}
           <a
-            href={
+            href={scopeUrl(
               authoritativeEncounterId
                 ? `/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`
                 : '/'
-            }
+            )}
           >
             Клиническая запись
           </a>
@@ -2142,11 +2149,11 @@ export function OrionWorkspace({
                       : `Нужно зафиксировать ещё: ${missingRequiredConsents.length}.`}
                   </span>
                   <a
-                    href={
+                    href={scopeUrl(
                       authoritativeEncounterId
                         ? `/?encounterId=${encodeURIComponent(authoritativeEncounterId)}#patient-consents`
                         : '/#patient-consents'
-                    }
+                    )}
                   >
                     Все согласия и история отзывов
                   </a>
@@ -2264,7 +2271,7 @@ export function OrionWorkspace({
                 </small>
                 {detectedSpeakers.length >= 2 && authoritativeEncounterId ? (
                   <a
-                    href={`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`}
+                    href={scopeUrl(`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`)}
                   >
                     Исправить роли в записи
                   </a>
@@ -2399,7 +2406,7 @@ export function OrionWorkspace({
               {authoritativeReviewLocked && authoritativeEncounterId ? (
                 <a
                   className="secondary-action"
-                  href={`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`}
+                  href={scopeUrl(`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`)}
                 >
                   Открыть клиническую запись
                 </a>

@@ -1,3 +1,4 @@
+import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import {
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     parseRuntimeConfig(env);
     const config = parseClinicalProviderConfig(env);
     const access = await resolveClinicianWorkspaceAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
       toSiteIdentityPrincipal(identity),
       headers.data.encounterId,
     );
@@ -111,6 +112,8 @@ export async function POST(request: Request) {
       audioRetention: false,
     });
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     if (error instanceof MembershipRequiredError || error instanceof ClinicianRoleRequiredError) {
       return apiFailure(context, 403, 'FORBIDDEN', 'Распознавание доступно назначенному врачу.');
     }

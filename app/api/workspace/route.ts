@@ -1,3 +1,4 @@
+import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
 import { env } from 'cloudflare:workers';
 import {
   getSiteIdentity,
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
   try {
     const config = parseRuntimeConfig(env);
     const access = await resolveClinicianWorkspaceAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
       toSiteIdentityPrincipal(identity),
       requestedEncounterId,
     );
@@ -248,6 +249,8 @@ export async function GET(request: Request) {
       },
     );
   } catch (error) {
+    const assignmentFailure = workspaceAssignmentFailure(context, error);
+    if (assignmentFailure) return assignmentFailure;
     if (error instanceof MembershipRequiredError) {
       return apiFailure(
         context,
