@@ -810,6 +810,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2H exact-assignment communications | PASS for synthetic local data | All five communications handlers, UI and new D1 writes use one current doctor/nurse/registrar assignment with effective communications.manage. Full verify:ci passed secret policy for 426 files, no known dependency vulnerabilities, clean lint/types, 69 test files/415 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 66e8f363-cf74-4625-a1bd-cc6177f7da2e). Browser executed consent -> intention -> manual task -> response -> completion, then verified reload and invalid-assignment denial. A reproduced same-page denial recovery bug was fixed and regression-tested. |
 
+| 2026-09-07 | Phase 2I.1 compatibility-tool assignment boundary | PASS for this bounded local slice | Full pnpm verify:ci passed: 428-file secret policy, zero known dependency vulnerabilities, lint/types, 70 files/467 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 180ad8d5-d55f-4bd8-9dd5-b4aecbc4ff57). Route tests cover six operations and prove denied calls do not reach mocked providers. No live AI, microphone, UI-selection or full Phase 2I migration is claimed. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1170,7 +1172,11 @@ control, detection, response, and residual acceptance.
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
-- Exact next engineering checkpoint after Phase 2H: Phase 2I migrates the
+- Phase 2I is split into explicit checkpoints: 2I.1 migrates only the six
+  compatibility tool operations; the authoritative encounter family is still open.
+  See `docs/requirements/phase-2i-encounter-access.md` for the complete consumer
+  inventory and remaining acceptance gates. No full Phase 2I completion is claimed.
+- Exact next engineering checkpoint after Phase 2I.1: Phase 2I.2 migrates the
   assigned-encounter workspace access boundary. Start with
   `lib/auth/workspace-access.ts`, its repository and all consumers under
   `/api/workspace`, `/api/local-speech` and `/api/clinical`, plus the dashboard
@@ -1374,6 +1380,48 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.1 compatibility-tool assignment boundary
+
+- Implementation commit: `485ea68`. Final post-documentation secret scan passed
+  429 files and whitespace checks passed.
+- Scope: six operations in five route files under `/api/clinical` and
+  `/api/local-speech`. These now use `D1AccessGovernanceRepository`, not the
+  first legacy clinician membership. Reusable `resolveEncounterAssignmentAccess`
+  distinguishes encounter.read/manage, but is not yet wired to authoritative
+  `/api/workspace` routes. Exact encounter ownership remains a separate check.
+- Contract: current non-service doctor assignment plus effective
+  `encounter.manage`; explicit denial never falls back. Recheck on every call.
+  Query parameters are `accessAssignmentId` and optional `facilityId`; malformed
+  or duplicate selectors return 400, anonymous returns 401, denied/mismatched
+  selection neutral 403, multiple eligible assignments minimized 409, storage
+  failure 503. Only authorized calls reach STT/Groq. Analysis rate limiting
+  remains per identity, not per assignment.
+- Targeted verification: 56 tests across the resolver and real route-handler
+  tests pass with mocked D1 and provider boundaries. Cases cover all six handlers,
+  no provider call on rejection, exact health selection, next-call revocation,
+  same-origin rejection, minimized choices and inactive/denied/service scopes.
+  An initial test-only unknown-response type error was corrected before full CI.
+- Full gate: `pnpm verify:ci` passed secret policy for 428 files, dependency
+  audit with no known vulnerabilities, lint/types, 70 files/467 tests, Drizzle,
+  production build and isolated recovery after disposable-source destruction.
+  Recovery matched 86 tables, 148 rows, 35 migrations, three R2 objects and
+  490,091 bytes; run `180ad8d5-d55f-4bd8-9dd5-b4aecbc4ff57`, 83,887 ms.
+- Runtime verification: `/live`, `/api/health/ready` on 3200 and `/health` on
+  3101 returned 200; anonymous compatibility STT health returned 401. Existing
+  ngrok remains pointed at localhost:3200. No port was stopped or restarted.
+- No schema migration, patient mutation, microphone recording, speech model
+  replacement, provider configuration or UI redesign in this checkpoint.
+  The compatibility clients do not yet provide a multiple-assignment picker;
+  they fail closed instead of choosing a scope. Compatibility speech-session
+  ownership and clinical provenance are not solved by this tool permission check.
+- Next: Phase 2I.2, detailed in `docs/requirements/phase-2i-encounter-access.md`.
+  Migrate `WorkspaceScope` consumers, exact treating-clinician authorization,
+  read/manage distinction, dashboard/live selection and command propagation,
+  durable attribution, current-denial-before-replay and D1 actor guards together.
+  Preserve consent, final transcript, review/sign/export and recovery locks.
+- Keep legacy `ariaproject`, local secrets, active D1/R2 and the owner's standalone
+  unstaged `a` unchanged. Groq remains unconfigured; no live AI claim is made.
 
 ### 2026-09-07 — Phase 2H exact-assignment communications checkpoint
 
@@ -1963,10 +2011,11 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I: migrate the assigned-encounter
+The next bounded engineering slice is Phase 2I.2: migrate the assigned-encounter
 workspace and linked local-speech/clinical API callers from legacy membership
 resolution to one exact current doctor assignment with the appropriate encounter
-permission, preserving ownership, consent and doctor review. Phase 2H
+permission, preserving ownership, consent and doctor review. Phase 2I.1 migrates
+only compatibility tool authorization; full 2I remains IN_PROGRESS. Phase 2H
 communications is verified and complete for local synthetic data only. Keep every
 messaging provider disconnected. Phase 8B is
 already a complete activation-blocked review artifact; named clinic owners must

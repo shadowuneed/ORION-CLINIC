@@ -53,6 +53,21 @@ is still required for real Groq output; no disclosed legacy secret was copied.
 
 ## Deliberate compatibility boundaries
 
+### 2026-09-07 authorization update (Phase 2I.1)
+
+The six operations under `/api/clinical/*` and `/api/local-speech/*` now require
+one current non-service doctor assignment with effective `encounter.manage`.
+They accept `accessAssignmentId` and optional `facilityId` in the URL query.
+Unknown/denied/revoked selections return neutral 403 without fallback. Multiple
+eligible assignments return 409 and minimized assignment choices; the current
+compatibility clients do not yet display a picker. A single eligible assignment
+continues to work. No provider is called after a failed authorization check.
+
+This does not migrate `/api/workspace/*` or its database actor guards, and does
+not establish ownership of a compatibility upstream speech session. It is not
+proof of patient consent or durable clinical provenance. Remaining work is in
+`docs/requirements/phase-2i-encounter-access.md`.
+
 The `/live` module preserves the old browser-local encounter history, optional
 recording, automatic live Groq cadence, and export behavior because those are
 the functions the owner requested to carry over. They are not the authoritative
