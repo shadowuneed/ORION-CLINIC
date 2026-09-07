@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import {
   D1SuggestionReviewRepository,
   SuggestionConflictError,
   SuggestionConsentRequiredError,
-  SuggestionNotFoundError,
 } from './suggestion-review';
 
 type TestBoundStatement = {
@@ -104,11 +104,14 @@ function createFixture() {
   databases.push(database);
   applyMigrations(database);
   database.exec(readFileSync('db/seed.local.sql', 'utf8'));
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const scope: WorkspaceScope = {
     organizationId: 'org-a',
     facilityId: 'fac-a',
     encounterId: 'encounter-a',
     reviewerMembershipId: 'membership-a',
+    accessAssignmentId: 'access-assignment-a-general-medicine',
+    accessPermission: 'encounter.manage',
   };
   const d1 = createD1Adapter(database);
   return {
@@ -140,6 +143,35 @@ afterEach(() => {
 });
 
 describe('suggestion review repository', () => {
+  it('denies derivative replay and decisions after revocation and retains attribution', async () => {
+    const { database, repository, scope } = createFixture();
+    const command = editCommand();
+    await repository.createDerivative(command);
+    expect(database.prepare("select access_assignment_id from command_idempotency where operation='suggestion.derivative.create'").get()?.access_assignment_id).toBe(scope.accessAssignmentId);
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(repository.createDerivative(command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(repository.recordDecision({ recommendationId: 'rec-1', derivativeVersionId: null, decision: 'reject', expectedVersion: 2,
+      actorId: 'user-a', requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() })).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  it('blocks decision replay under a different assignment and preserves the basket', async () => {
+    const { database, d1, scope, repository } = createFixture();
+    const command = { recommendationId: 'rec-1', derivativeVersionId: null, decision: 'reject' as const, expectedVersion: 1,
+      actorId: 'user-a', requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() };
+    expect((await repository.recordDecision(command)).review.state).toBe('rejected');
+    expect((await repository.recordDecision(command)).review.state).toBe('rejected');
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    await expect(new D1SuggestionReviewRepository(d1, { ...scope, accessAssignmentId: 'access-assignment-a-secondary' }).recordDecision(command))
+      .rejects.toBeInstanceOf(SuggestionConflictError);
+  });
+
+  it('rejects missing assignment, read-only scope and wrong user', async () => {
+    const { d1, scope, repository } = createFixture();
+    await expect(repository.createDerivative(editCommand({ actorId: 'user-b' }))).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    for (const patch of [{ accessAssignmentId: undefined }, { accessPermission: 'encounter.read' as const }]) {
+      await expect(new D1SuggestionReviewRepository(d1, { ...scope, ...patch }).createDerivative(editCommand())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    }
+  });
   it('creates an immutable clinician derivative and exact replay without changing AI source', async () => {
     const { database, repository } = createFixture();
     const before = await repository.list();
@@ -306,7 +338,7 @@ describe('suggestion review repository', () => {
       new D1SuggestionReviewRepository(d1, foreignScope).createDerivative(
         editCommand(),
       ),
-    ).rejects.toBeInstanceOf(SuggestionNotFoundError);
+    ).rejects.toBeInstanceOf(AccessPermissionRequiredError);
   });
 
   it('writes a PHI-minimal chained audit for edit and decision', async () => {

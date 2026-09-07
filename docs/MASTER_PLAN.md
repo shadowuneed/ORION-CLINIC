@@ -823,6 +823,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2I.3e recommendation generation | PASS for bounded local slice | Full pnpm verify:ci passed secret policy (452 files), no known dependency vulnerabilities, lint/types, 78 files/551 tests, schema/build and isolated recovery after source destruction: 86 tables/153 rows/40 migrations/three R2 objects/518,476 bytes; run 9dde9315-3a01-41b7-bcf6-33037b260132, 90,114 ms. Migration 0039 applied; active quick_check ok, foreign_key_check empty. Web 200, STT ready, ngrok unchanged. Synthetic provider result only; no live AI/microphone or production claim. |
 
+| 2026-09-07 | Phase 2I.3f.1 recommendation repository boundary | PASS; SQL gate open | Full pnpm verify:ci passed secret policy (452 files), no known dependency vulnerabilities, lint/types, 78 files/554 tests, schema/build and isolated recovery after source destruction: 86 tables/153 rows/40 migrations/three R2 objects/518,476 bytes; run d72de977-bcdc-4284-8856-88ab9069a1e5, 88,558 ms. No schema migration. Web HTTP 200, STT ready, ngrok unchanged. Exact assignment on derivative/decision rows and transactional SQL guards remain 2I.3f.2; no full 2I.3f completion claim. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1211,9 +1213,13 @@ control, detection, response, and residual acceptance.
 - Completed 2I.3e implementation: attributed analysis runs/commands/audits, current
   access/consent/lifecycle before replay and delayed response persistence; migration
   0039 enforces attributed completion and interactive command/audit/result guards.
-- Exact next checkpoint: 2I.3f, human recommendation edit/decision commands.
-  Preserve immutable derivatives, basket and clinician approval, with exact
-  assignment attribution and current rights before replay/commit. Continue below;
+- Completed 2I.3f.1 repository boundary: edit/decision commands now require current
+  exact assignment, care consent and lifecycle before retry/replay/batch; command
+  rows/hashes and audit metadata carry assignment. Legacy unattributed replay is
+  rejected without rewriting history. Basket and derivative semantics remain.
+- Exact next checkpoint: 2I.3f.2, derivative/decision row attribution and SQL actor
+  guards. Test revocation between preflight and transaction, direct SQL bypass,
+  audit/result identity and rollback. Full 2I.3f is NOT complete. Continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1417,6 +1423,24 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.3f.1 recommendation command repository checkpoint
+
+- Derivative edits and accept/reject/restore commands require exact current
+  assignment/user, care consent and in-progress encounter before retries/replay
+  and batch. Command hashes/rows and audit metadata carry assignment.
+- Legacy decisions without attributed command rows cannot be replayed; reload
+  current state before a deliberate new action. Original recommendations, edits,
+  decisions and basket history are preserved. No UI or schema migration this slice.
+- Targeted tests retain the full edit/accept/restore/reject chain and add revoked
+  derivative replay/decision denial, cross-assignment decision replay denial,
+  explicit assignment/read-only/wrong user denial and command attribution.
+- **Next: 2I.3f.2**, not the next resource family. Add assignment to derivative and
+  review decision rows and transactional SQL guards, direct-SQL/race/rollback tests.
+  Repository preflight does not close revocation between check and batch. Full
+  2I.3f remains incomplete. Preserve historical fixtures without rewriting them.
+- Check verification ledger for full-suite evidence. Keep ports, STT, ngrok,
+  models/timings and providers unchanged. Preserve owner's standalone unstaged `a`.
 
 ### 2026-09-07 — Phase 2I.3e recommendation generation checkpoint
 
@@ -2216,8 +2240,9 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3f: human recommendation edits
-and decisions, with durable assignment and current authorization before replay/commit.
+The next bounded engineering slice is Phase 2I.3f.2: derivative/decision row
+assignment attribution and transactional SQL guards. 2I.3f.1 implements only the
+repository boundary and command/audit attribution; it does not close the SQL race.
 Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
 commands; 2I.3c covers manual transcript corrections, 2I.3d speech sessions and
 2I.3e recommendation generation.

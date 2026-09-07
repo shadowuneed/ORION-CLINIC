@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 
 export type RecommendationDecision = 'accept' | 'reject' | 'restore';
 export type RecommendationState = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -122,6 +123,7 @@ type AuditHeadRow = {
   lockVersion: number;
 };
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -400,15 +402,18 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
   }
 
   async createDerivative(input: CreateRecommendationDerivative) {
+    await this.assertWriteAccess(input.actorId);
     const title = normalize(input.title);
     const content = normalize(input.content);
     const reason = normalize(input.reason);
     this.assertDerivativeFields(title, content, reason);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertWriteAccess(input.actorId);
       const current = await this.getRow(input.recommendationId);
       if (!current) throw new SuggestionNotFoundError('Recommendation was not found');
       const requestHash = await sha256(JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         recommendationId: input.recommendationId,
         expectedVersion: input.expectedVersion,
@@ -419,7 +424,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       const replay = await this.findCommand(
         'suggestion.derivative.create', input.idempotencyKey,
       );
-      if (replay) return this.resolveCommandReplay(replay, requestHash);
+      if (replay) return this.resolveCommandReplay(replay, requestHash, input.actorId);
 
       this.assertMutable(current, input.expectedVersion);
       if (current.reviewState !== 'proposed' || current.currentDecisionId) {
@@ -440,10 +445,11 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
           input, current, auditHead, title, content, reason, requestHash,
         });
       } catch (error) {
+        await this.assertWriteAccess(input.actorId);
         const raced = await this.findCommand(
           'suggestion.derivative.create', input.idempotencyKey,
         );
-        if (raced) return this.resolveCommandReplay(raced, requestHash);
+        if (raced) return this.resolveCommandReplay(raced, requestHash, input.actorId);
         await this.throwCurrentFailure(input.recommendationId, input.expectedVersion);
         if (attempt === 2) throw error;
       }
@@ -452,7 +458,9 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
   }
 
   async recordDecision(input: RecordRecommendationDecision) {
+    await this.assertWriteAccess(input.actorId);
     const requestHash = await sha256(JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       encounterId: this.scope.encounterId,
       recommendationId: input.recommendationId,
       derivativeVersionId: input.derivativeVersionId,
@@ -460,11 +468,12 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       expectedVersion: input.expectedVersion,
     }));
     const replay = await this.findCommand('suggestion.decision', input.idempotencyKey);
-    if (replay) return this.resolveCommandReplay(replay, requestHash);
+    if (replay) return this.resolveCommandReplay(replay, requestHash, input.actorId);
     const legacy = await this.findLegacyDecision(input.idempotencyKey);
-    if (legacy) return this.resolveLegacyReplay(legacy, input);
+    if (legacy) return this.resolveLegacyReplay(input);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertWriteAccess(input.actorId);
       const current = await this.getRow(input.recommendationId);
       if (!current) throw new SuggestionNotFoundError('Recommendation was not found');
       this.assertMutable(current, input.expectedVersion);
@@ -480,10 +489,11 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       try {
         return await this.commitDecision({ input, current, auditHead, requestHash });
       } catch (error) {
+        await this.assertWriteAccess(input.actorId);
         const raced = await this.findCommand('suggestion.decision', input.idempotencyKey);
-        if (raced) return this.resolveCommandReplay(raced, requestHash);
+        if (raced) return this.resolveCommandReplay(raced, requestHash, input.actorId);
         const racedLegacy = await this.findLegacyDecision(input.idempotencyKey);
-        if (racedLegacy) return this.resolveLegacyReplay(racedLegacy, input);
+        if (racedLegacy) return this.resolveLegacyReplay(input);
         await this.throwCurrentFailure(input.recommendationId, input.expectedVersion);
         if (attempt === 2) throw error;
       }
@@ -513,6 +523,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
     const auditSequence = auditHead.lastSequence + 1;
     const contentHash = await sha256(content);
     const metadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       recommendationId: input.recommendationId,
       derivativeVersionId: derivativeId,
       derivativeVersion,
@@ -558,16 +569,18 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
           scope.encounterId, input.recommendationId, derivativeId, now,
         );
 
+    await this.assertWriteAccess(input.actorId);
     const results = await this.database.batch([
       this.database.prepare(`
         insert into command_idempotency (
           id, organization_id, facility_id, actor_membership_id, operation,
-          idempotency_key, request_hash, status, created_at
+          idempotency_key, request_hash, status, created_at, access_assignment_id
         ) values (?1, ?2, ?3, ?4, 'suggestion.derivative.create', ?5, ?6,
-          'processing', ?7)
+          'processing', ?7, ?8)
       `).bind(
         commandId, scope.organizationId, scope.facilityId,
         scope.reviewerMembershipId, input.idempotencyKey, requestHash, now,
+        scope.accessAssignmentId!,
       ),
       this.database.prepare(`
         insert into suggestion_derivative_versions (
@@ -653,6 +666,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       : input.decision === 'reject' ? 'rejected' : 'proposed';
     const auditSequence = auditHead.lastSequence + 1;
     const metadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       recommendationId: input.recommendationId,
       decisionId, decision: input.decision,
       reviewedDerivativeVersionId: input.derivativeVersionId,
@@ -673,16 +687,18 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       entityId: input.recommendationId, requestId: input.requestId,
       metadataJson: metadata, occurredAt: now,
     });
+    await this.assertWriteAccess(input.actorId);
     const results = await this.database.batch([
       this.database.prepare(`
         insert into command_idempotency (
           id, organization_id, facility_id, actor_membership_id, operation,
-          idempotency_key, request_hash, status, created_at
+          idempotency_key, request_hash, status, created_at, access_assignment_id
         ) values (?1, ?2, ?3, ?4, 'suggestion.decision', ?5, ?6,
-          'processing', ?7)
+          'processing', ?7, ?8)
       `).bind(
         commandId, scope.organizationId, scope.facilityId,
         scope.reviewerMembershipId, input.idempotencyKey, requestHash, now,
+        scope.accessAssignmentId!,
       ),
       this.database.prepare(`
         insert into review_decisions (
@@ -842,7 +858,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
   }
   private async findCommand(operation: string, key: string) {
     return this.database.prepare(`
-      select request_hash as requestHash, status,
+      select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
         result_resource_type as resultResourceType,
         result_resource_id as resultResourceId
       from command_idempotency
@@ -854,8 +870,18 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       this.scope.reviewerMembershipId, operation, key,
     ).first<IdempotencyRow>();
   }
-  private async resolveCommandReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertWriteAccess(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    if (!await this.hasEffectiveCareConsent()) throw new SuggestionConsentRequiredError('Care consent required');
+    const encounter = await this.database.prepare('select status from encounters where id=?1 and organization_id=?2 and facility_id=?3')
+      .bind(this.scope.encounterId, this.scope.organizationId, this.scope.facilityId).first<{status: string}>();
+    if (encounter?.status !== 'in_progress') throw new SuggestionLifecycleError('Recommendation review is locked');
+  }
+
+  private async resolveCommandReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertWriteAccess(actorId);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash || replay.status !== 'succeeded' ||
       !replay.resultResourceId
     ) throw new SuggestionConflictError('Idempotency key was already used');
@@ -894,14 +920,12 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
     ).first<ExistingDecisionRow>();
   }
   private async resolveLegacyReplay(
-    row: ExistingDecisionRow, input: RecordRecommendationDecision,
-  ) {
-    if (
-      row.suggestionId !== input.recommendationId ||
-      row.derivativeVersionId !== input.derivativeVersionId ||
-      row.decision !== input.decision || row.expectedVersion !== input.expectedVersion
-    ) throw new SuggestionConflictError('Idempotency key was already used');
-    return this.getById(row.suggestionId);
+    input: RecordRecommendationDecision,
+  ): Promise<never> {
+    await this.assertWriteAccess(input.actorId);
+    // Historical decisions have no exact-assignment command attribution.
+    // Preserve history but require reloading state rather than adopting a replay.
+    throw new SuggestionConflictError('Legacy decision cannot be replayed without assignment attribution');
   }
   private async getRow(id: string) {
     return this.database.prepare(`${suggestionSelect}

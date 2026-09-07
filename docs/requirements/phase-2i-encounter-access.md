@@ -139,13 +139,22 @@ unapproved drafts remain. Failure cleanup may mark the same owned run failed aft
 revocation, but cannot store a successful provider output. Historical unattributed
 fixtures are unchanged and not adopted by interactive replay.
 
-## Next bounded checkpoint: 2I.3f — human recommendation decisions
+## 2I.3f.1 — recommendation repository authorization
 
-Migrate recommendation edit/accept/reject/restore commands to durable exact
-assignment and current authorization before replay/commit, preserving the basket,
-immutable derivatives, evidence and physician approval. No provider activation.
-Protocols/exports/read audits and independent creation remain later gates;
-full 2I.3 and 2I are incomplete.
+Implemented current assignment/user, care consent and in-progress encounter checks
+at edit/decision entry, retry, replay and immediately before batch. Commands and
+hashed audit metadata now retain assignment. Unattributed legacy decision replay
+fails closed: reload current state before a deliberate new action; history remains.
+Existing immutable derivatives and accept/reject/restore behavior are preserved.
+
+## Next bounded checkpoint: 2I.3f.2 — recommendation database guards
+
+Do not mark 2I.3f complete yet. Add exact assignment to derivative versions and
+review decision rows, with forward-only schema and transactional actor/consent/
+lifecycle guards. Test revocation between preflight and batch, direct SQL bypass,
+audit/result attribution and rollback. Current repository checks alone do not
+close that race. Historical fixtures must remain immutable. No provider activation.
+Protocols/exports/read audits and independent creation remain later gates.
 
 ## Remaining 2I.3 acceptance gates
 
