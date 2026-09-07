@@ -9,6 +9,8 @@
 - Проверенный commit Phase 2E observations exact-assignment migration: `e29a4da`
 - Проверенный commit Phase 2F scheduling exact-assignment migration: `9df6510`
 - Проверенный commit Phase 2G chronic-care exact-assignment migration: `e5cfcde`
+- Phase 2H communications exact-assignment migration: реализована и проверена
+  локально; актуальная фиксация и команды — в Last handoff основного плана.
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -35,25 +37,29 @@
 | Восемь разделов клинической записи | `REQ-ENC-001/002` | `IMPLEMENTED_SYNTHETIC` | каждый раздел имеет draft/reviewed/explicitly-absent и версии; неподтверждённые разделы блокируют протокол |
 | Подсказки ИИ и решение врача | `REQ-ENC-005`, `CTX-001/002/003` | `IMPLEMENTED_SYNTHETIC` | original/doctor derivative/review state, accepted/rejected basket, evidence, audit |
 | Протокол и файлы | `CTX-005/007` | `IMPLEMENTED_SYNTHETIC` | DOCX/PDF/TXT/audit JSON/ZIP, SHA-256, R2, access audit; юридическая электронная подпись не подключена |
-| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient, orders, observations and scheduling APIs, facility/encounter checks and audit exist. Other API families still require incremental migration; production OIDC/MFA, session revocation and lifecycle users are absent |
+| Доступ и аудит | `REQ-NFR-001/002` | `PARTIAL` | Sites local identity, versioned departments and assignments, explicit-deny/effective permissions, exact-scope patient, orders, observations, scheduling, care and communications APIs, facility/encounter checks and audit exist. Workspace/clinical/local-speech API families still require migration; production OIDC/MFA, session revocation and lifecycle users are absent |
 | Анализы, ЭКГ, услуги и направления | `REQ-ENC-003`, `REQ-ORD-001..004` | `IN_PROGRESS` | D1 request/report version history; separate clinician approval; exact-payload review and terminal-state guards; manual PDF/JPEG/PNG result in R2 through a durable upload intent; immutable command-time replay; reviewed-final completion gate; scoped/audited download; two-pass cleanup for expired uncommitted uploads; integrated `/orders`. Локальный синтетический срез реализован; external delivery/acknowledgement and structured vendor mapping remain open |
 | Диспансерное наблюдение и планы | `REQ-CHR-001..007`, `REQ-NUR-001..002` | `IMPLEMENTED_SYNTHETIC` | doctor-confirmed enrollment от текущего signed protocol; immutable signed plan versions; dated plan-derived tasks; deterministic due reason; scoped doctor/nurse worklists; structured response, escalation and doctor resolution; D1/API/UI на `/care` |
 | Связь с пациентом | `REQ-COM-001..004`, `REQ-SCH-006` | `IMPLEMENTED_SYNTHETIC_NO_SEND` | отдельные channel/language consent versions, `approved_test` templates, exact-source outbox, quiet hours, bounded disconnected-provider retry and manual fallback на `/communications`; реальный канал и delivery receipt отсутствуют |
 | Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | exact-assignment D1/API/UI на `/observations`; effective `observations.manage`, отдельные doctor/nurse правила, scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
 
-Current Phase 2G gate: secret policy covered 422 repository files; dependency
-audit found no known vulnerabilities; lint, strict types, 67 test files/397 tests,
-Drizzle and the production build passed. The isolated recovery drill reproduced
-86 tables, 147 rows, 34 migrations and three R2 objects after destroying only its
-disposable source environment. This evidence applies only to synthetic local data.
+Phase 2H now binds communications to one current doctor/nurse/registrar assignment
+with effective `communications.manage`. The exact assignment is durable on
+consents, notification history, attempts, manual tasks/responses, outbox,
+idempotency and audit. Denial, revocation, expiry and mismatched actors are
+covered by behavioral tests and database guards. Historical immutable rows are
+not rewritten. Current verification details are in MASTER_PLAN.md Last handoff.
 
-Chronic care now uses one exact current doctor/nurse assignment with effective
-`care.manage` across API, UI, new writes and audit; explicit denial has no fallback.
-Historical immutable rows are not rewritten. Browser read-only checks covered
-task filtering, dialog open/close and refresh. Clinical mutation behavior is tested
-in isolated SQLite fixtures. Final UI changes passed types, ESLint, six UI tests
-and a fresh build. Next access migration: communications, with providers disabled.
-At the latest restart web/STT were restored, but Groq configuration was missing;
+Authenticated browser testing saved a clearly marked synthetic SMS decision,
+scheduled one test intention, created a manual task, recorded a synthetic response
+and completed the task. Reload preserved the four notification versions and
+completion. No provider was called. An invalid assignment was denied; a reproduced
+same-page navigation bug was fixed so the menu can reload the available assignment
+instead of remaining on the denial screen.
+
+Next access migration: assigned-encounter workspace and linked speech/clinical
+APIs. A real RU/KK/MIXED speech-quality run and production identity remain open.
+The runtime is left running, but Groq configuration was missing at restart;
 a working live AI analysis loop is not claimed.
 
 ## 3. Что отсутствует или остаётся частичным

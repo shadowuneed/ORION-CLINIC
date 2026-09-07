@@ -808,6 +808,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2G exact-assignment chronic-care checkpoint | PASS for synthetic local data | Commit `e5cfcde` binds `/api/care`, commands and `/care` to one current non-service doctor/nurse assignment with effective `care.manage`. Migration `0033` adds six assignment columns, one permission view and seven write guards. `pnpm verify:ci` passed 422-file secret policy, dependency audit, lint/types, 67 files/397 tests, Drizzle, build and isolated recovery (86 tables/147 rows/34 migrations/three R2 objects/476,175 bytes; `66516e81-f003-4171-954e-7246998eb977`). Final UI edits passed typecheck, targeted ESLint, six UI tests and a fresh build. Browser filter, task-dialog open/close and refresh passed without clinical mutations. Runtime was stopped on resumption and was restored; STT is ready, web health is 200 and ngrok points to 3200. Groq configuration is missing at restart; live AI is not verified. |
 
+| 2026-09-07 | Phase 2H exact-assignment communications | PASS for synthetic local data | All five communications handlers, UI and new D1 writes use one current doctor/nurse/registrar assignment with effective communications.manage. Full verify:ci passed secret policy for 426 files, no known dependency vulnerabilities, clean lint/types, 69 test files/415 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 66e8f363-cf74-4625-a1bd-cc6177f7da2e). Browser executed consent -> intention -> manual task -> response -> completion, then verified reload and invalid-assignment denial. A reproduced same-page denial recovery bug was fixed and regression-tested. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -894,6 +896,13 @@ control, detection, response, and residual acceptance.
   assignment. Seven SQLite guards preserve the distinct doctor/nurse action matrix.
   Historical rows remain readable; immutable history is not backfilled. The UI
   cancels stale loads and prevents assignment changes during an open command.
+- Completed current bounded slice: Phase 2H binds all five communications
+  handlers, the communications workspace, immutable communication events, outbox,
+  command replay and audit to one exact current doctor/nurse/registrar assignment
+  with effective `communications.manage`. New writes require a valid actor
+  assignment; existing history is not rewritten. UI loads are cancelled when
+  superseded and assignment changes are locked during commands or dialogs.
+  Providers remain disconnected.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -1161,13 +1170,19 @@ control, detection, response, and residual acceptance.
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
-- Exact next engineering checkpoint after Phase 2G: Phase 2H migrates only the
-  `/api/communications` family, its commands and `/communications` workspace to one
-  selected assignment plus effective `communications.manage`. Preserve distinct
-  doctor/nurse/registrar actions, exact source visibility, channel consent,
-  approved-test templates, quiet hours, manual response and escalation, optimistic
-  concurrency, idempotency, audit and neutral denial. Keep providers disconnected:
-  no real messages or calls, worker activation or production identity changes.
+- Exact next engineering checkpoint after Phase 2H: Phase 2I migrates the
+  assigned-encounter workspace access boundary. Start with
+  `lib/auth/workspace-access.ts`, its repository and all consumers under
+  `/api/workspace`, `/api/local-speech` and `/api/clinical`, plus the dashboard
+  and `/live` callers. Use one current non-service doctor assignment and the
+  appropriate existing `encounter.read` / `encounter.manage` effective permission;
+  never merge assignments or fall back after an explicit denial. Preserve exact
+  clinician-to-encounter ownership, separate consents, final-only transcript,
+  clinical review, immutable protocol/export history and server-only AI keys.
+  Add request/command attribution, DB guards and regression coverage before
+  declaring the migration complete. Do not grant nurse/medical-lead access to
+  clinician-only operations just because their baseline includes encounter.read.
+  Do not replace the speech model, connect a provider or change production identity.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1359,6 +1374,77 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2H exact-assignment communications checkpoint
+
+- Implementation committed as `c28ec6d`.
+- Active checkout: adjacent `ORION-CLINIC`, branch `main`. Legacy project,
+  speech model, existing recordings, local secrets and unrelated services were
+  not changed.
+- Delivered: `resolveCommunicationAccess` now resolves one exact current
+  non-service doctor/nurse/registrar assignment with effective
+  `communications.manage`. Five API handlers and the UI propagate that assignment.
+  A missing/expired/revoked/denied or mismatched selection never falls back.
+  Multiple eligible assignments require selection even in one facility.
+- Persistence: migration `0034_gigantic_stardust.sql` adds six nullable historical
+  attribution columns, one permission view and seven new actor guards. Two old
+  contract guards are replaced only to remove legacy actor-role authorization;
+  their consent, template, outbox, source and owner contracts remain enforced.
+  New communication writes require current assignment attribution; old immutable
+  events are not rewritten. Requests, replay lookup/hash and audit retain the
+  selected assignment. A rerunnable communications seed creates an explicit
+  synthetic nurse assignment after the care seed.
+- UI: superseded loads are aborted; late responses cannot replace the selected
+  context. Assignment/patient changes are blocked while a command or dialog is
+  active; operation keys include the assignment. The route now keys the client
+  workspace by its requested context: this fixes a reproduced failure to recover
+  through the menu after a denied assignment. A page-component regression test
+  verifies the different keys. Narrow notification panels use a container query
+  to stack queue/detail and manual cards instead of wrapping names letter by letter.
+- Final full gate: `pnpm verify:ci` passed 426-file secret policy, no known
+  dependency vulnerabilities, lint without warnings, strict types, 69 files/415
+  tests, Drizzle check, production build and isolated recovery after destroying
+  only the disposable source. Recovery matched 86 tables, 148 rows, 35 migrations,
+  three R2 objects and 490,091 bytes, run
+  `66e8f363-cf74-4625-a1bd-cc6177f7da2e`, elapsed 86,130 ms.
+  The subsequent visual-only container-query CSS passed a separate production
+  build, secret scan and browser screenshot review: responsible name and channel
+  label remain readable in the stacked notification detail. It changes no schema
+  or commands.
+- Active local D1: migration and communications seed applied successfully;
+  `PRAGMA quick_check` returned `ok`, foreign-key check returned no violations,
+  and 35 migrations were recorded.
+- Browser/API evidence: synthetic patient `patient-care-a` received a clearly
+  labelled test-only SMS decision. The UI then saved notification
+  `notification-d0922b7c-f91a-4c98-80af-18bb07633d9a`, created manual task
+  `communication-manual-task-43a4617c-e483-4a8b-bdf1-aa02fe84b67e`, recorded a
+  clearly labelled synthetic response and completed the task. After reload,
+  notification v4 remained `manual_contact_completed`. Direct local D1 inspection
+  confirmed all four notification versions have the exact doctor assignment and
+  the response still exists. No real patient consent/contact/delivery is claimed.
+  Invalid assignment denied and menu recovery succeeded after the fix.
+- Runtime: a later user continuation found web/STT no longer listening while
+  ngrok remained alive. The agent did not stop them. The stock START_ORION.bat
+  restored web/STT. Final checks returned HTTP 200 for /communications on 3200
+  and /health on 3101; ngrok on 4040 still targets localhost:3200 at
+  https://down-outfield-regular.ngrok-free.dev. All three remain running.
+  Groq was not configured at this restart: do not reuse chat credentials
+  or claim a verified live AI loop.
+- Next bounded task: Phase 2I assigned-encounter authorization migration. Inventory
+  every consumer of `D1WorkspaceAccessRepository` and
+  `resolveClinicianWorkspaceAccess`; include the workspace family, compatibility
+  clinical/local-speech endpoints and dashboard/live callers in the access
+  contract. Keep exact encounter ownership, clinician-only commands, separate
+  patient decisions, final transcript, review/sign/export gates and no-fallback
+  denial. Test URL-context changes, idempotency, stale assignment/record versions,
+  direct SQL guards and current-denial-before-replay. Do not create a new role
+  capability or replace the STT model to bypass a failing test.
+- Remaining product work is not complete: production identity/session lifecycle,
+  RU/KK/MIXED speech evaluation, scheduling reschedule/waitlist/trusted worker,
+  approved external integrations and Phase 8 clinical decisions remain open.
+  Phases 9-10 are not started. The clinic decision packet is not approval.
+- Preserve the owner's standalone `a` under Risk register, unstaged/uncommitted.
+  Do not commit local test data, audio, backups, environment files or credentials.
 
 ### 2026-09-07 — Phase 2G exact-assignment chronic-care checkpoint
 
@@ -1877,10 +1963,12 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2H: migrate only the communications API
-family, commands, UI and database actor guards to a selected assignment with
-effective `communications.manage`, preserving doctor/nurse/registrar behavior,
-source visibility and consent. Keep every provider disconnected. Phase 8B is
+The next bounded engineering slice is Phase 2I: migrate the assigned-encounter
+workspace and linked local-speech/clinical API callers from legacy membership
+resolution to one exact current doctor assignment with the appropriate encounter
+permission, preserving ownership, consent and doctor review. Phase 2H
+communications is verified and complete for local synthetic data only. Keep every
+messaging provider disconnected. Phase 8B is
 already a complete activation-blocked review artifact; named clinic owners must
 fill and sign `DEC-006`/`DEC-007` before any signed-policy implementation. Do not
 classify critical status, notify another hospital or initiate transfer before
