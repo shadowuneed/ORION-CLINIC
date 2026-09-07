@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import {
   analysisPolicyVersion,
   type AnalysisTranscriptSegment,
@@ -14,6 +15,7 @@ type AuditHeadRow = {
   lockVersion: number;
 };
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: 'processing' | 'succeeded' | 'failed';
   resultResourceType: string | null;
@@ -88,6 +90,7 @@ export class D1ClinicalAnalysisRepository {
     model: string;
     modelVersion: string;
   }): Promise<PreparedClinicalAnalysis> {
+    await this.assertAnalysisAccess(input.actorId);
     const [segments, consents, encounterStatus] = await Promise.all([
       this.getCanonicalTranscript(),
       this.getAnalysisConsentIds(),
@@ -110,6 +113,7 @@ export class D1ClinicalAnalysisRepository {
     const inputHash = await sha256(canonicalInput);
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         snapshot: input.snapshot,
         acknowledged: input.acknowledged,
@@ -121,6 +125,7 @@ export class D1ClinicalAnalysisRepository {
     const replay = await this.findIdempotency(input.idempotencyKey);
     if (replay) {
       if (
+        replay.accessAssignmentId !== this.scope.accessAssignmentId ||
         replay.requestHash !== requestHash ||
         replay.status !== 'succeeded' ||
         replay.resultResourceType !== 'analysis_run' ||
@@ -152,6 +157,7 @@ export class D1ClinicalAnalysisRepository {
     const sourceIds = segments.map((segment) => segment.id);
     const sourceJson = JSON.stringify(sourceIds);
     const consentJson = JSON.stringify([...consents].sort());
+    await this.assertAnalysisAccess(input.actorId);
     const results = await this.database.batch([
       this.database
         .prepare(`
@@ -160,10 +166,10 @@ export class D1ClinicalAnalysisRepository {
             provider, model, model_version, policy_version, input_hash,
             source_record_ids_json, requested_by_membership_id, request_id,
             consent_event_ids_json, transcript_acknowledged_at, status,
-            started_at, created_at
+            started_at, created_at, access_assignment_id
           )
           select ?1, ?2, ?3, ?4, 'suggestions', ?5, ?6, ?7, ?8, ?9,
-            ?10, ?11, ?12, ?13, ?14, 'running', ?14, ?14
+            ?10, ?11, ?12, ?13, ?14, 'running', ?14, ?14, ?16
           where exists (
             select 1 from encounters encounter
             where encounter.organization_id = ?2 and encounter.facility_id = ?3
@@ -238,15 +244,16 @@ export class D1ClinicalAnalysisRepository {
           consentJson,
           acknowledgedAt,
           sourceIds.length,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           )
           select ?1, ?2, ?3, ?4, 'analysis.generate', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?10
           where exists (
             select 1 from analysis_runs where organization_id = ?2
               and facility_id = ?3 and encounter_id = ?8 and id = ?9
@@ -263,6 +270,7 @@ export class D1ClinicalAnalysisRepository {
           acknowledgedAt,
           this.scope.encounterId,
           runId,
+          this.scope.accessAssignmentId!,
         ),
     ]);
     if (results.some((result) => result.meta.changes !== 1)) {
@@ -293,6 +301,9 @@ export class D1ClinicalAnalysisRepository {
     providerResult: ClinicalAnalysisProviderResult,
     input: { actorId: string; requestId: string },
   ) {
+    await this.assertAnalysisAccess(input.actorId);
+    const ownedRun = await this.getRun(prepared.runId);
+    if (!ownedRun || ownedRun.inputHash !== prepared.inputHash) throw new ClinicalAnalysisCommandConflictError();
     if (prepared.replayRunId) {
       return { runId: prepared.replayRunId, suggestionCount: 0, sectionDraftCount: 0 };
     }
@@ -340,6 +351,7 @@ export class D1ClinicalAnalysisRepository {
     const auditEventId = `audit-${crypto.randomUUID()}`;
     const auditSequence = auditHead.lastSequence + 1;
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       analysisRunId: prepared.runId,
       provider: providerResult.provider,
       model: providerResult.model,
@@ -663,6 +675,7 @@ export class D1ClinicalAnalysisRepository {
         ),
     );
 
+    await this.assertAnalysisAccess(input.actorId);
     const results = await this.database.batch(statements);
     if (requiredIndexes.some((index) => results[index]?.meta.changes !== 1)) {
       throw new ClinicalAnalysisCommitError();
@@ -682,6 +695,7 @@ export class D1ClinicalAnalysisRepository {
 
   async fail(prepared: PreparedClinicalAnalysis, errorCode: string) {
     if (prepared.replayRunId) return;
+    if (!await this.getRun(prepared.runId)) throw new ClinicalAnalysisCommandConflictError();
     const now = Date.now();
     await this.database.batch([
       this.database
@@ -719,6 +733,12 @@ export class D1ClinicalAnalysisRepository {
           prepared.requestHash,
         ),
     ]);
+  }
+
+  private async assertAnalysisAccess(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    if ((await this.getEncounterStatus()) !== 'in_progress') throw new ClinicalAnalysisLifecycleError();
+    if ((await this.getAnalysisConsentIds()).length !== 3) throw new ClinicalAnalysisConsentRequiredError();
   }
 
   private async getCanonicalTranscript() {
@@ -845,7 +865,7 @@ export class D1ClinicalAnalysisRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId
         from command_idempotency
@@ -867,7 +887,7 @@ export class D1ClinicalAnalysisRepository {
       .prepare(`
         select id, status, input_hash as inputHash from analysis_runs
         where organization_id = ?1 and facility_id = ?2 and encounter_id = ?3
-          and id = ?4 and requested_by_membership_id = ?5
+          and id = ?4 and requested_by_membership_id = ?5 and access_assignment_id = ?6
       `)
       .bind(
         this.scope.organizationId,
@@ -875,6 +895,7 @@ export class D1ClinicalAnalysisRepository {
         this.scope.encounterId,
         id,
         this.scope.reviewerMembershipId,
+        this.scope.accessAssignmentId!,
       )
       .first<AnalysisRunRow>();
   }

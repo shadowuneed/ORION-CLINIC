@@ -129,13 +129,23 @@ sessions are not adopted: start a new session after migration. Existing provider
 timeouts/cleanup remain unchanged; no new trusted expiry worker or live microphone
 verification. Raw fixture writes retain existing boundaries. Models/timings unchanged.
 
-## Next bounded checkpoint: 2I.3e — recommendation generation
+## 2I.3e — recommendation generation
 
-Require exact assignment on analysis runs/hashes/audits and current permissions
-and external-AI consent before replay and delayed result persistence. Preserve
-acknowledged transcript versions and unapproved drafts. Do not connect providers
-or use disclosed keys. Human decisions, protocols/exports/read audits and
-independent creation remain later gates; full 2I.3 and 2I are incomplete.
+Implemented exact assignment on analysis runs, command hashes/rows and audits;
+current rights, lifecycle and care/storage/external-AI consent are checked before
+replay and delayed result persistence. Migration 0039 guards attributed runs,
+completion and interactive command/audit/results. Transcript snapshot checks and
+unapproved drafts remain. Failure cleanup may mark the same owned run failed after
+revocation, but cannot store a successful provider output. Historical unattributed
+fixtures are unchanged and not adopted by interactive replay.
+
+## Next bounded checkpoint: 2I.3f — human recommendation decisions
+
+Migrate recommendation edit/accept/reject/restore commands to durable exact
+assignment and current authorization before replay/commit, preserving the basket,
+immutable derivatives, evidence and physician approval. No provider activation.
+Protocols/exports/read audits and independent creation remain later gates;
+full 2I.3 and 2I are incomplete.
 
 ## Remaining 2I.3 acceptance gates
 
