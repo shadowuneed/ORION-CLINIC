@@ -819,6 +819,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2I.3c manual transcript corrections | PASS for bounded local slice | Full pnpm verify:ci passed secret policy (446 files), zero known dependency vulnerabilities, lint/types, 76 files/539 tests, schema/build and isolated recovery after source destruction: 86 tables/151 rows/38 migrations/three R2 objects/509,175 bytes, run afc08d9b-7d1a-4c61-adc8-b4434b2bfdb2, 88,323 ms. Migration 0037 applied; active quick_check ok and foreign_key_check empty. Web 200, STT ready, ngrok unchanged. Raw ingestion/session migration, live audio/AI and production release remain outside this checkpoint. |
 
+| 2026-09-07 | Phase 2I.3d speech session ownership | PASS for local slice | Full pnpm verify:ci: 449-file secret policy, no known dependency vulnerabilities, lint/types, 77 files/546 tests, schema/build and recovery after isolated source destruction (86 tables/152 rows/39 migrations/three R2 objects/513,741 bytes; run 55fe1613-757c-4d2d-a987-78c3c4885a49, 89,212 ms). Migration 0038 applied; active quick_check ok and foreign_key_check empty. No live audio, new expiry worker or model/timing change. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1201,9 +1203,12 @@ control, detection, response, and residual acceptance.
   assignment on versions/commands/audit and recheck access, consent and lifecycle
   before replay/retries/commit. Migration 0037 guards attributed correction
   writes and interactive command/audit/results; raw ingestion remains separate.
-- Exact next checkpoint: 2I.3d, speech session ownership. Persist exact assignment
-  on sessions, recheck current permissions/consents before use and delayed result
-  commit, preserve expiry/recovery locks and STT models/timings. Continue below;
+- Completed 2I.3d: exact assignment on speech runs, scoped use/replay/cleanup,
+  current rights/consents before delayed result commit and SQL guards (0038).
+  Legacy unattributed sessions require a new session; no model/timing changes.
+- Exact next checkpoint: 2I.3e, recommendation generation. Add exact assignment
+  to analysis runs/hashes/audits and current permission/external-AI consent checks
+  before replay and delayed provider response persistence. Continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1407,6 +1412,29 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.3d speech ownership checkpoint
+
+- Transcription runs retain exact assignment. Start/use/replay and delayed result
+  persistence require current rights, in-progress encounter and three applicable
+  consents. Provider session/index mismatches fail closed. Cleanup is assignment-
+  scoped but does not require continuing audio consent.
+- Migration 0038 guards attributed runs/results and ingest audit; run assignment
+  cannot change. Legacy NULL sessions are not adopted and require a new session.
+  Historical data is not rewritten. Provider cleanup/timeouts remain unchanged;
+  no new trusted expiry worker, microphone run or STT quality claim.
+- Full pnpm verify:ci PASS: 77 files/546 tests, lint/types, schema/build, secrets and
+  dependency checks. Recovery PASS: 86 tables/152 rows/39 migrations/three R2 objects,
+  513,741 bytes, run 55fe1613-757c-4d2d-a987-78c3c4885a49. Local DB integrity PASS.
+- Seven repository tests cover attributed session/transcription/replay, revoked
+  access, withdrawn consent with cleanup, cross-assignment isolation, before-batch
+  rollback, wrong actor/provider session, and revocation during provider startup.
+- Next: **2I.3e recommendation generation**. Persist assignment on analysis runs,
+  hashes/audits; reject replay and delayed results after revocation or withdrawn
+  external-AI consent. Preserve acknowledged transcript version/draft boundaries.
+  Human decisions, protocols/exports/read audits/creation stay open.
+- Do not change models/timings, connect providers, use disclosed keys or shut down
+  runtime services. Preserve owner's standalone unstaged `a`.
 
 ### 2026-09-07 — Phase 2I.3c manual transcript correction checkpoint
 
@@ -2162,10 +2190,11 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3d: speech session ownership,
-current authorization before use and delayed transcription result commit.
+The next bounded engineering slice is Phase 2I.3e: recommendation generation,
+current authorization before replay and delayed provider result commit.
 Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
-commands; 2I.3c covers manual transcript corrections. Remaining encounter writers
+commands; 2I.3c covers manual transcript corrections and 2I.3d speech sessions.
+Remaining encounter writers
 still require durable guards, including slow provider result commits.
 Phase 2I.2 implements request/UI scope
 but does not close that database gate; full 2I remains IN_PROGRESS. Phase 2H

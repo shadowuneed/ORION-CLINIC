@@ -119,14 +119,23 @@ heads and current assignment at database execution time. Original text/timing
 and role history remain intact. Unattributed raw ingestion and legacy fixtures
 retain their existing boundaries; do not claim every raw SQL writer is migrated.
 
-## Next bounded checkpoint: 2I.3d — speech session ownership
+## 2I.3d — speech session ownership
 
-Bind speech session creation/use/deletion to the exact assignment, persist that
-ownership, and recheck current rights and audio/storage consents before use and
-before accepting delayed transcription results. Preserve session expiry, stream
-isolation, transcript versioning and recovery locks. Do not replace STT models or
-change audio timings. Recommendations and signed exports remain later families;
-2I.3 and full 2I remain incomplete.
+Implemented exact assignment on runs, scoped use/replay/cleanup, current rights
+and consents before text replay and delayed result commit. Migration 0038 guards
+attributed runs/results and ingest audits. Provider result session/index must
+match. Cleanup requires ownership but not continuing audio consent. Legacy NULL
+sessions are not adopted: start a new session after migration. Existing provider
+timeouts/cleanup remain unchanged; no new trusted expiry worker or live microphone
+verification. Raw fixture writes retain existing boundaries. Models/timings unchanged.
+
+## Next bounded checkpoint: 2I.3e — recommendation generation
+
+Require exact assignment on analysis runs/hashes/audits and current permissions
+and external-AI consent before replay and delayed result persistence. Preserve
+acknowledged transcript versions and unapproved drafts. Do not connect providers
+or use disclosed keys. Human decisions, protocols/exports/read audits and
+independent creation remain later gates; full 2I.3 and 2I are incomplete.
 
 ## Remaining 2I.3 acceptance gates
 

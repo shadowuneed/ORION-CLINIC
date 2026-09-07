@@ -1,5 +1,7 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import type {
   SpeechSession,
   SpeechTranscription,
@@ -102,6 +104,7 @@ export class D1TranscriptIngestionRepository {
   ) {}
 
   async preflightStart() {
+    await this.assertAssignment();
     const [consentIds, status] = await Promise.all([
       this.getEffectiveSpeechConsentIds(),
       this.getEncounterStatus(),
@@ -123,6 +126,8 @@ export class D1TranscriptIngestionRepository {
     actorId: string;
     requestId: string;
   }): Promise<SpeechCaptureSession> {
+    await this.assertAssignment(input.actorId);
+    await this.preflightStart();
     const now = Date.now();
     const id = `speech-run-${crypto.randomUUID()}`;
     const consentJson = JSON.stringify([...input.consentEventIds].sort());
@@ -132,10 +137,10 @@ export class D1TranscriptIngestionRepository {
           id, organization_id, facility_id, encounter_id,
           upstream_session_id, provider, model, model_version, policy_version,
           consent_event_ids_json, status, next_utterance_index,
-          started_by_membership_id, request_id, started_at, created_at, updated_at
+          started_by_membership_id, request_id, started_at, created_at, updated_at, access_assignment_id
         )
         select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local-speech-v1',
-          ?9, 'running', 0, ?10, ?11, ?12, ?12, ?12
+          ?9, 'running', 0, ?10, ?11, ?12, ?12, ?12, ?13
         where exists (
           select 1 from encounters encounter
           where encounter.organization_id = ?2 and encounter.facility_id = ?3
@@ -176,6 +181,7 @@ export class D1TranscriptIngestionRepository {
         this.scope.reviewerMembershipId,
         input.requestId,
         now,
+        this.scope.accessAssignmentId!,
       )
       .run();
     if (result.meta.changes !== 1) {
@@ -202,6 +208,10 @@ export class D1TranscriptIngestionRepository {
     utteranceIndex: number;
     audio: Uint8Array;
   }) {
+    await this.preflightStart();
+    const ownedRun = await this.getRun(input.sessionId);
+    if (!ownedRun) throw new SpeechCaptureNotFoundError();
+    if (ownedRun.status !== 'running') throw new SpeechCaptureLifecycleError();
     const inputHash = await sha256(input.audio);
     const replay = await this.getReplay(input.sessionId, input.utteranceIndex);
     if (replay) {
@@ -234,6 +244,14 @@ export class D1TranscriptIngestionRepository {
     actorId: string;
     requestId: string;
   }): Promise<PersistedTranscriptTurn> {
+    await this.assertAssignment(input.actorId);
+    await this.preflightStart();
+    const ownedRun = await this.getRun(input.sessionId);
+    if (!ownedRun) throw new SpeechCaptureNotFoundError();
+    if (ownedRun.status !== 'running') throw new SpeechCaptureLifecycleError();
+    if (input.result.upstreamSessionId !== ownedRun.upstreamSessionId || input.result.utteranceIndex !== input.utteranceIndex) {
+      throw new SpeechCaptureConflictError('Provider result belongs to another utterance or session');
+    }
     const existing = await this.getReplay(input.sessionId, input.utteranceIndex);
     if (existing) {
       if (existing.inputHash !== input.inputHash) throw new SpeechCaptureConflictError();
@@ -277,6 +295,7 @@ export class D1TranscriptIngestionRepository {
     };
     const auditSequence = auditHead.lastSequence + 1;
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       transcriptionRunId: run.id,
       utteranceIndex: input.utteranceIndex,
       provider: run.provider,
@@ -466,8 +485,11 @@ export class D1TranscriptIngestionRepository {
           auditEventId,
         ),
     ];
+    await this.assertAssignment(input.actorId);
+    await this.preflightStart();
     const batch = await this.database.batch(statements);
     if (batch.some((entry) => entry.meta.changes !== 1)) {
+      await this.preflightStart();
       const replay = await this.getReplay(input.sessionId, input.utteranceIndex);
       if (replay && replay.inputHash === input.inputHash) return mapReplay(replay);
       const consentNow = await this.getEffectiveSpeechConsentIds();
@@ -478,13 +500,14 @@ export class D1TranscriptIngestionRepository {
   }
 
   async finishSession(sessionId: string, status: 'completed' | 'cancelled') {
+    await this.assertAssignment();
     const now = Date.now();
     const result = await this.database
       .prepare(`
         update transcription_runs
         set status = ?1, completed_at = ?2, updated_at = ?2
         where organization_id = ?3 and facility_id = ?4 and encounter_id = ?5
-          and id = ?6 and started_by_membership_id = ?7 and status = 'running'
+          and id = ?6 and started_by_membership_id = ?7 and status = 'running' and access_assignment_id = ?8
       `)
       .bind(
         status,
@@ -494,6 +517,7 @@ export class D1TranscriptIngestionRepository {
         this.scope.encounterId,
         sessionId,
         this.scope.reviewerMembershipId,
+        this.scope.accessAssignmentId!,
       )
       .run();
     if (result.meta.changes !== 1) {
@@ -505,6 +529,7 @@ export class D1TranscriptIngestionRepository {
   }
 
   async getUpstreamSessionId(sessionId: string) {
+    await this.assertAssignment();
     const run = await this.getRun(sessionId);
     if (!run) throw new SpeechCaptureNotFoundError();
     return run.upstreamSessionId;
@@ -520,7 +545,7 @@ export class D1TranscriptIngestionRepository {
           started_by_membership_id as startedByMembershipId
         from transcription_runs
         where organization_id = ?1 and facility_id = ?2 and encounter_id = ?3
-          and id = ?4 and started_by_membership_id = ?5
+          and id = ?4 and started_by_membership_id = ?5 and access_assignment_id = ?6
       `)
       .bind(
         this.scope.organizationId,
@@ -528,6 +553,7 @@ export class D1TranscriptIngestionRepository {
         this.scope.encounterId,
         id,
         this.scope.reviewerMembershipId,
+        this.scope.accessAssignmentId!,
       )
       .first<CaptureRunRow>();
   }
@@ -555,7 +581,7 @@ export class D1TranscriptIngestionRepository {
           and segment.id = result.transcript_segment_id
         where result.organization_id = ?1 and result.facility_id = ?2
           and result.encounter_id = ?3 and result.transcription_run_id = ?4
-          and result.utterance_index = ?5 and run.started_by_membership_id = ?6
+          and result.utterance_index = ?5 and run.started_by_membership_id = ?6 and run.access_assignment_id = ?7
       `)
       .bind(
         this.scope.organizationId,
@@ -564,8 +590,16 @@ export class D1TranscriptIngestionRepository {
         sessionId,
         utteranceIndex,
         this.scope.reviewerMembershipId,
+        this.scope.accessAssignmentId!,
       )
       .first<ReplayRow>();
+  }
+
+  private async assertAssignment(actorId?: string) {
+    const member = await this.database.prepare('select user_id as userId from memberships where id=?1 and organization_id=?2 and facility_id=?3')
+      .bind(this.scope.reviewerMembershipId, this.scope.organizationId, this.scope.facilityId).first<{ userId: string }>();
+    if (!member || (actorId && actorId !== member.userId)) throw new AccessPermissionRequiredError('encounter.manage');
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, member.userId);
   }
 
   private async getEffectiveSpeechConsentIds(at = Date.now()) {
