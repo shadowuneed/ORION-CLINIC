@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import {
   getProtocolReadiness,
   type ClinicalSectionCode,
@@ -116,6 +117,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -335,16 +337,19 @@ export class D1ProtocolReviewRepository {
   }
 
   async beginReview(input: BeginProtocolReviewCommand) {
+    await this.assertAuthorized(input.actorId);
     const requestHash = await sha256(
       JSON.stringify({
         encounterId: this.scope.encounterId,
+        accessAssignmentId: this.scope.accessAssignmentId,
         expectedEncounterVersion: input.expectedEncounterVersion,
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertAuthorized(input.actorId);
       const now = Date.now();
       const [
         encounter,
@@ -414,8 +419,9 @@ export class D1ProtocolReviewRepository {
           auditHead,
         });
       } catch (error) {
+        await this.assertAuthorized(input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const latest = await this.getEncounter();
         if (!latest || latest.version !== input.expectedEncounterVersion) {
@@ -509,6 +515,7 @@ export class D1ProtocolReviewRepository {
     };
     const responseJson = JSON.stringify(result);
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       sourceHash,
       protocolVersion: 1,
       previousEncounterVersion: encounter.version,
@@ -699,6 +706,7 @@ export class D1ProtocolReviewRepository {
       protocolInsertBindings.push(now, now);
     }
 
+    await this.assertAuthorized(input.actorId);
     const batchResults = await this.database.batch([
       this.database
         .prepare(`
@@ -864,9 +872,9 @@ export class D1ProtocolReviewRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'protocol.begin_review', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -878,6 +886,7 @@ export class D1ProtocolReviewRepository {
           requestHash,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -1098,7 +1107,7 @@ export class D1ProtocolReviewRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId,
           response_json as responseJson
@@ -1116,9 +1125,22 @@ export class D1ProtocolReviewRepository {
       .first<IdempotencyRow>();
   }
 
-  private resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertAuthorized(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    const current = await this.getEncounter();
+    if (!current || !["in_progress","review","finalized","amended"].includes(current.status)) {
+      throw new ProtocolReviewLifecycleError('Encounter lifecycle does not allow this command or replay');
+    }
+    if (!isEffective(await this.getConsent('care'), Date.now())) {
+      throw new ProtocolReviewConsentRequiredError('Effective care consent is required');
+    }
+  }
+
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertAuthorized(actorId);
     const result = parseStoredResult(replay.responseJson);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'protocol_draft' ||

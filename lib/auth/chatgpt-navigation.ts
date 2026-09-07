@@ -7,7 +7,7 @@ export function chatGPTSignInPath(returnTo: string): string {
     safeRelativeReturnPath(returnTo),
   )}`;
 }
-export function chatGPTSignOutPath(returnTo = '/'): string {
+export function chatGPTSignOutPath(returnTo = '/signed-out'): string {
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(
     safeRelativeReturnPath(returnTo),
   )}`;

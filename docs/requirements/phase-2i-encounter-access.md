@@ -159,15 +159,30 @@ immutable attribution, mismatched result/audit and accept/restore/reject history
 Historical nullable attribution is preserved for fixtures, not a blanket ban on
 all raw unattributed SQL. Production DB access remains trusted and restricted.
 
-## Next bounded checkpoint: 2I.3g.1 — protocol repository authorization
+## 2I.3g.1 — protocol repository authorization
 
-Inventory draft/sign/amend commands in the protocol repository. Require exact
-current encounter assignment/user at entry, replay and before batch; bind command
-hashes/rows and audits to that assignment. Preserve section review, consent,
-signed snapshots and amendments. Add revocation and cross-assignment replay tests.
-Plan additive protocol-row/SQL guards separately as 2I.3g.2; do not mark full
-2I.3g complete with repository checks alone. Exports/read audits and independent
-creation remain later gates. No provider activation or real patient data.
+Draft, sign and amend now require the exact current encounter assignment/user,
+active patient, care consent and compatible lifecycle at entry/retry/replay and
+before batch. Commands retain assignment in request hashes, rows and audit
+metadata. Unattributed old command replays fail closed without rewriting history.
+Successful same-assignment replay remains possible after the command's lifecycle
+transition. Source snapshot, section review and transcript consent checks remain.
+Tests cover missing/read-only/wrong actor, cross-assignment replay, revocation
+after source reads before saving, immutable signing/amendments and replay denial.
+
+## Next bounded checkpoint: 2I.3g.2 — protocol database guards
+
+Add forward-only assignment attribution to protocol versions and amendments.
+Guard attributed row writes and interactive commands/audits/results for current
+assignment, exact treating clinician, care consent and appropriate lifecycle.
+Draft changes in_progress -> review; signing review -> finalized; amendments
+finalized/amended -> amended. Account for statement order and final-state audits.
+Test revocation between final preflight and batch, direct SQL bypass, wrong
+result/audit attribution, full rollback and immutable historical snapshots.
+Retain legacy nullable fixtures explicitly; do not rewrite signed data or claim
+that repository preflight closes the transaction race. Full 2I.3g is not complete.
+Exports/read audits and independent creation remain later gates. No provider
+activation or real patient data.
 
 ## Remaining 2I.3 acceptance gates
 

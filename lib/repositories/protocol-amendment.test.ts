@@ -3,13 +3,13 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import type { SignedProtocolContent } from '@/lib/documents/protocol-artifacts';
 import { D1DocumentExportRepository } from './document-export';
 import {
   D1ProtocolAmendmentRepository,
   ProtocolAmendmentConflictError,
   ProtocolAmendmentConsentRequiredError,
-  ProtocolAmendmentNotFoundError,
   ProtocolAmendmentSourceChangedError,
 } from './protocol-amendment';
 
@@ -47,7 +47,7 @@ function d1Result<T>(results: T[], changes = 0) {
   } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync): D1Database {
+function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -59,6 +59,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
     },
     async first<T = unknown>(columnName?: string) {
       const row = target.prepare(sql).get(...bindings) as Record<string, T> | undefined;
+      afterRead?.(sql, target);
       if (!row) return null;
       if (columnName) return row[columnName] ?? null;
       return row as T;
@@ -170,6 +171,7 @@ function signedContent(encounterId: string): SignedProtocolContent {
 async function createFixture(options?: {
   careDecision?: 'granted' | 'denied';
   invalidSourceHash?: boolean;
+  afterRead?: (sql: string, database: DatabaseSync) => void;
 }) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
@@ -287,13 +289,16 @@ async function createFixture(options?: {
     ) values ('audit-head-a', 'org-a', 'fac-a', 0, null, 1);
   `);
 
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const scope: WorkspaceScope = {
     organizationId: 'org-a',
     facilityId: 'fac-a',
     encounterId: 'encounter-a',
     reviewerMembershipId: 'membership-a',
+    accessAssignmentId: 'access-assignment-a-general-medicine',
+    accessPermission: 'encounter.manage',
   };
-  const d1 = createD1Adapter(database);
+  const d1 = createD1Adapter(database, options?.afterRead);
   return {
     database,
     d1,
@@ -325,6 +330,32 @@ afterEach(() => {
 });
 
 describe('signed protocol amendment repository', () => {
+  it('rechecks amendment access after the source snapshot without changing signed history', async () => {
+    const { database, repository } = await createFixture({ afterRead: (sql, db) => {
+      if (sql.includes('from audit_stream_heads')) db.exec("update memberships set status='disabled' where id='membership-a'");
+    } });
+    const before = database.prepare('select * from protocol_versions order by id').all();
+    await expect(repository.amend(command())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select * from protocol_versions order by id').all()).toEqual(before);
+    expect(database.prepare('select count(*) as count from protocol_amendments').get()?.count).toBe(0);
+  });
+  it('requires current exact assignment for new commands and replay', async () => {
+    const { database, d1, scope, repository } = await createFixture();
+    for (const patch of [{ accessAssignmentId: undefined }, { accessPermission: 'encounter.read' as const }]) {
+      await expect(new D1ProtocolAmendmentRepository(d1, { ...scope, ...patch }).amend(command()))
+        .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    }
+    await expect(repository.amend(command({ actorId: 'user-b' }))).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    const input = command();
+    await repository.amend(input);
+    expect(database.prepare("select access_assignment_id from command_idempotency where operation='protocol.amend'").get()?.access_assignment_id).toBe(scope.accessAssignmentId);
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    await expect(new D1ProtocolAmendmentRepository(d1, { ...scope, accessAssignmentId: 'access-assignment-a-secondary' }).amend(input))
+      .rejects.toBeInstanceOf(ProtocolAmendmentConflictError);
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(repository.amend(input)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as count from protocol_amendments').get()?.count).toBe(1);
+  });
   it('creates one immutable signed successor, advances heads, and appends audit', async () => {
     const { database, d1, repository, scope } = await createFixture();
     const input = command();
@@ -467,7 +498,7 @@ describe('signed protocol amendment repository', () => {
       },
     );
     await expect(crossTenant.amend(command())).rejects.toBeInstanceOf(
-      ProtocolAmendmentNotFoundError,
+      AccessPermissionRequiredError,
     );
 
     const corrupted = await createFixture({ invalidSourceHash: true });

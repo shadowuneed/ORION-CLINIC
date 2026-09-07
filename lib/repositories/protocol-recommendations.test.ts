@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import { D1ClinicalSectionRepository } from './clinical-sections';
 import { D1ProtocolReviewRepository } from './protocol-review';
 import { D1ProtocolSigningRepository } from './protocol-signing';
@@ -78,7 +79,7 @@ function d1Result<T>(results: T[], changes = 0) {
   } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync): D1Database {
+function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -95,6 +96,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
       const row = target.prepare(sql).get(...bindings) as
         | Record<string, T>
         | undefined;
+      afterRead?.(sql, target);
       if (!row) return null;
       return columnName ? row[columnName] ?? null : (row as T);
     },
@@ -148,7 +150,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
   } as unknown as D1Database;
 }
 
-function createFixture() {
+function createFixture(afterRead?: (sql: string, database: DatabaseSync) => void) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
   applyMigrations(database);
@@ -162,9 +164,10 @@ function createFixture() {
     accessAssignmentId: 'access-assignment-a-general-medicine',
     accessPermission: 'encounter.manage',
   };
-  const d1 = createD1Adapter(database);
+  const d1 = createD1Adapter(database, afterRead);
   return {
     database,
+    d1,
     scope,
     sections: new D1ClinicalSectionRepository(d1, scope),
     suggestions: new D1SuggestionReviewRepository(d1, scope),
@@ -213,6 +216,54 @@ afterEach(() => {
 });
 
 describe('recommendations in the immutable protocol source', () => {
+  it.each(['draft', 'sign'] as const)('rechecks access after reading the %s snapshot and before saving', async (operation) => {
+    let armed = false;
+    const { database, sections, review, signing } = createFixture((sql, db) => {
+      if (armed && sql.includes('from audit_stream_heads')) {
+        armed = false;
+        db.exec("update memberships set status='disabled' where id='membership-a'");
+      }
+    });
+    await resolveMandatorySections(sections);
+    const draftInput = { expectedEncounterVersion: Number(database.prepare("select version from encounters where id='encounter-a'").get()?.version),
+      idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() };
+    const draft = operation === 'sign' ? await review.beginReview(draftInput) : null;
+    const before = database.prepare('select count(*) as count from protocol_versions').get();
+    armed = true;
+    const result = operation === 'draft' ? review.beginReview(draftInput) : signing.sign({
+      protocolId: draft!.protocol.id, expectedProtocolVersion: draft!.protocol.version,
+      expectedProtocolHeadVersion: draft!.protocol.headVersion, expectedEncounterVersion: draft!.transition.version,
+      idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID(),
+    });
+    await expect(result).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as count from protocol_versions').get()).toEqual(before);
+  });
+  it.each(['draft', 'sign'] as const)('requires current assignment for %s commands and replay', async (operation) => {
+    const { database, d1, scope, sections, review, signing } = createFixture();
+    await resolveMandatorySections(sections);
+    const draftInput = { expectedEncounterVersion: Number(database.prepare("select version from encounters where id='encounter-a'").get()?.version),
+      idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() };
+    const draft = operation === 'sign' ? await review.beginReview(draftInput) : null;
+    const signInput = { protocolId: draft?.protocol.id ?? '', expectedProtocolVersion: draft?.protocol.version ?? 0,
+      expectedProtocolHeadVersion: draft?.protocol.headVersion ?? 0, expectedEncounterVersion: draft?.transition.version ?? 0,
+      idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() };
+    const invoke = (selected = scope, actorId = 'user-a') => operation === 'draft'
+      ? new D1ProtocolReviewRepository(d1, selected).beginReview({ ...draftInput, actorId })
+      : new D1ProtocolSigningRepository(d1, selected).sign({ ...signInput, actorId });
+    for (const patch of [{ accessAssignmentId: undefined }, { accessPermission: 'encounter.read' as const }]) {
+      await expect(invoke({ ...scope, ...patch })).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    }
+    await expect(invoke(scope, 'user-b')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    const result = operation === 'draft' ? await review.beginReview(draftInput) : await signing.sign(signInput);
+    expect(await invoke()).toEqual(result);
+    const op = operation === 'draft' ? 'protocol.begin_review' : 'protocol.sign';
+    expect(database.prepare('select access_assignment_id from command_idempotency where operation=?').get(op)?.access_assignment_id).toBe(scope.accessAssignmentId);
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    await expect(invoke({ ...scope, accessAssignmentId: 'access-assignment-a-secondary' })).rejects.toThrow('Idempotency key');
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(invoke()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(readProtocolContent(database, result.protocol.id).raw).toBeTruthy();
+  });
   it('snapshots only the exact clinician-accepted derivative and signs that same source', async () => {
     const { database, sections, suggestions, review, signing } = createFixture();
     await resolveMandatorySections(sections);

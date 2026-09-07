@@ -5,6 +5,9 @@ import {
 } from './chatgpt-navigation';
 
 describe('ChatGPT auth navigation', () => {
+  it('ends logout on a public page instead of restarting protected-page sign-in', () => {
+    expect(chatGPTSignOutPath()).toBe('/signout-with-chatgpt?return_to=%2Fsigned-out');
+  });
   it('preserves only a relative application return path', () => {
     expect(chatGPTSignOutPath('/patients?status=active#list')).toBe(
       '/signout-with-chatgpt?return_to=%2Fpatients%3Fstatus%3Dactive%23list',

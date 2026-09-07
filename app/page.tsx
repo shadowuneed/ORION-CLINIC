@@ -1,4 +1,5 @@
 import { ClinicalWorkspace } from './clinical-workspace';
+import { ClinicDashboard } from './clinic-dashboard';
 import { WorkspaceAssignmentBoundary } from './workspace-assignment-boundary';
 import { workspacePageUrl, type WorkspacePageQuery } from '@/lib/workspace-access-url';
 import {
@@ -18,7 +19,7 @@ export default async function Home({
   return (
     <AuthenticatedClinicPage context={context} requiredCapability="clinician">
       <WorkspaceAssignmentBoundary user={context.user} returnTo={returnTo}>
-        <ClinicalWorkspace />
+        {query.encounterId ? <ClinicalWorkspace /> : <ClinicDashboard capabilities={context.capabilities} />}
       </WorkspaceAssignmentBoundary>
     </AuthenticatedClinicPage>
   );

@@ -87,7 +87,13 @@ export function ClinicShell({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const workspaceLink = (target: string) => workspaceNavigationUrl(target, pathname, searchParams.toString());
+  const workspaceLink = (target: string) => {
+    const url = workspaceNavigationUrl(target, pathname, searchParams.toString());
+    if (target !== '/') return url;
+    const dashboard = new URL(url, 'https://orion.invalid');
+    dashboard.searchParams.delete('encounterId');
+    return `${dashboard.pathname}${dashboard.search}`;
+  };
   const [collapsed, setCollapsed] = useState(false);
   const [theme, setTheme] = useState<Theme>('light');
 
@@ -186,7 +192,7 @@ export function ClinicShell({
           <a
             aria-label="Выйти из ORION Clinic"
             className={styles.signOut}
-            href={chatGPTSignOutPath('/')}
+            href={chatGPTSignOutPath()}
             target="_top"
             title="Выйти из ORION Clinic"
           >

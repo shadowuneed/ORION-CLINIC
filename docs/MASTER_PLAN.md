@@ -827,6 +827,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2I.3f.2 recommendation DB attribution | PASS, bounded checkpoint | pnpm verify:ci passed: secret policy 454 files, no known dependency vulnerabilities, lint/types, 78 files/558 tests, schema/build and isolated recovery after source destruction: 86 tables/154 rows/41 migrations/three R2 objects/524,761 bytes; run a5a31a83-ea45-4c16-a575-47e3dfff425b, 90,562 ms. Focused recommendation suite 13 tests passed, including audit/result mismatch and revoked pre-batch/direct SQL writes; subsequent typecheck passed. Migration 0040 applied only locally; quick_check ok and foreign_key_check empty. Web HTTP 200, STT ready, existing ngrok unchanged. Historical nullable fixtures retained; no UI/audio/provider validation claim. Next 2I.3g.1; full 2I remains open. |
 
+| 2026-09-07 | Protocol repository authorization, dashboard and logout | PASS for bounded local checkpoint | Full pnpm verify:ci passed security/dependency checks, lint/types, 80 files/568 tests, Drizzle, build and isolated recovery: 86 tables/154 rows/41 migrations/three R2 objects/524,761 bytes; run 30bb7adc-a230-4602-b013-020cacc54651, 119,931 ms. Browser checks before runtime restart covered dashboard search/filter/navigation and logout/reload/explicit login. Final restart returned web HTTP 200. Groq configuration missing; no provider/audio validation claim. Ngrok restart blocked by execution policy; external URL offline. Next 2I.3g.2, not full 2I completion. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1222,8 +1224,11 @@ control, detection, response, and residual acceptance.
 - Completed 2I.3f.2: migration 0040 attributes derivative/decision rows and guards
   attributed inserts, interactive commands, results and audits. Revocation before
   batch rolls back the operation; immutable historical nullable fixtures remain.
-- Exact next checkpoint: 2I.3g.1, protocol draft/sign/amend repository authorization.
-  Keep protocol-row SQL guards as a separate 2I.3g.2 gate. Continue below;
+- Completed 2I.3g.1: protocol draft/sign/amend entry/retry/replay/pre-batch checks
+  require exact current assignment/user, care and compatible lifecycle; command
+  hashes/rows/audits retain assignment. No signed history or schema rewritten.
+- Exact next checkpoint: 2I.3g.2, protocol-row attribution and SQL guards.
+  Repository preflight does not close the transaction race. Continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1427,6 +1432,44 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — protocol commands, dashboard and logout checkpoint
+
+- Completed 2I.3g.1 across protocol-review.beginReview, protocol-signing.sign and
+  protocol-amendment.amend: current exact assignment/user, active patient, care
+  and compatible lifecycle at entry/retry/replay and immediately before batch.
+  Command hashes/rows and hashed audit metadata retain assignment. Unattributed
+  legacy/cross-assignment replay fails closed. Signed snapshots remain immutable.
+- Tests cover missing/read-only/wrong actor, cross-assignment and revoked replay,
+  revocation after source reads before save, normal draft/sign/amendment history.
+- User-reported logout loop reproduced: logout returned to protected /, causing
+  immediate local Sites sign-in. It now returns to public /signed-out; explicit
+  sign-in returns to /. Dispatcher still owns auth routes and HttpOnly cookies.
+- / without encounterId now renders ClinicDashboard with actual assigned D1
+  encounters through existing scoped/audited /api/workspace. Counts cover all
+  dates, not today's appointments or clinic-wide KPIs. Search/filter/open/refresh
+  are available. Exact encounter links still open ClinicalWorkspace. Shell home
+  strips encounterId and retains assignment. Quick links honor capabilities.
+- Browser verified 5 assigned encounters, active filter (2), MRN search (1),
+  opening the exact encounter and returning home; logout/reload stayed signed
+  out; deliberate sign-in returned to dashboard. Light/dark inspected at 918 px,
+  no body horizontal overflow and no warning/error logs. API navigation after
+  logout was blocked by the browser tool, not claimed as an API-session test.
+- Earlier public tunnel responded 401 without credentials; external authenticated
+  flow unverified. Final check found services stopped. START_ORION_CLINIC restored
+  web (HTTP 200) and speech service; final STT and speaker health both ready.
+  Groq configuration was absent at restart. Ngrok restart was blocked by execution
+  policy, and its public endpoint is offline. Final browser attachment to a stale
+  error tab was blocked by URL policy. Earlier UI checks above remain the evidence;
+  no post-restart browser, live audio or provider validation claim.
+- **Next: 2I.3g.2** protocol-version/amendment row attribution and SQL guards:
+  preserve in_progress -> review -> finalized and finalized/amended -> amended,
+  including command/audit statement order after transition. Test final preflight
+  to batch revocation, direct SQL, wrong result/audit and rollback. Keep nullable
+  legacy fixtures; never rewrite signed history. Full 2I remains incomplete;
+  exports/read audits/creation are later gates. See requirement handoff file.
+- Plan file was recovered from HEAD after an interrupted write left null bytes;
+  only known current changes were reapplied. Preserve owner's unstaged `a`.
 
 ### 2026-09-07 — Phase 2I.3f.2 recommendation database checkpoint
 
@@ -2265,9 +2308,9 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3g.1: protocol draft/sign/amend
-repository authorization and command/audit attribution. 2I.3g.2 must then add
-protocol-row attribution and SQL guards. Recommendation guards (2I.3f.2) are in
+The next bounded engineering slice is Phase 2I.3g.2: protocol-row attribution
+and SQL guards. 2I.3g.1 implements repository and command/audit boundaries but
+does not close the SQL transaction race. Recommendation guards (2I.3f.2) are in
 migration 0040; historical nullable fixtures are intentionally retained.
 Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
 commands; 2I.3c covers manual transcript corrections, 2I.3d speech sessions and

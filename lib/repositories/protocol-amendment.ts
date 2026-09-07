@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import {
   signedProtocolContentSchema,
   type SignedProtocolContent,
@@ -34,6 +35,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -196,11 +198,13 @@ export class D1ProtocolAmendmentRepository {
   }
 
   async amend(input: AmendProtocolCommand) {
+    await this.assertAuthorized(input.actorId);
     const reason = input.reason.trim();
     const text = input.text.trim();
     const requestHash = await sha256Text(
       JSON.stringify({
         encounterId: this.scope.encounterId,
+        accessAssignmentId: this.scope.accessAssignmentId,
         baseProtocolId: input.baseProtocolId,
         expectedProtocolVersion: input.expectedProtocolVersion,
         expectedProtocolHeadVersion: input.expectedProtocolHeadVersion,
@@ -210,9 +214,10 @@ export class D1ProtocolAmendmentRepository {
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertAuthorized(input.actorId);
       const now = Date.now();
       const [current, careConsent, auditHead] = await Promise.all([
         this.getCurrentSigned(),
@@ -278,8 +283,9 @@ export class D1ProtocolAmendmentRepository {
           now,
         });
       } catch (error) {
+        await this.assertAuthorized(input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const [latest, latestConsent] = await Promise.all([
           this.getCurrentSigned(),
@@ -396,6 +402,7 @@ export class D1ProtocolAmendmentRepository {
     };
     const responseJson = JSON.stringify(result);
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       amendmentId,
       amendmentSequence,
       baseProtocolId: current.protocolId,
@@ -426,6 +433,7 @@ export class D1ProtocolAmendmentRepository {
       occurredAt: now,
     });
 
+    await this.assertAuthorized(input.actorId);
     const results = await this.database.batch([
       this.database
         .prepare(`
@@ -642,9 +650,9 @@ export class D1ProtocolAmendmentRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'protocol.amend', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -656,6 +664,7 @@ export class D1ProtocolAmendmentRepository {
           requestHash,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -755,7 +764,7 @@ export class D1ProtocolAmendmentRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId,
           response_json as responseJson
@@ -773,9 +782,22 @@ export class D1ProtocolAmendmentRepository {
       .first<IdempotencyRow>();
   }
 
-  private resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertAuthorized(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    const current = await this.getCurrentSigned();
+    if (!current || !["finalized","amended"].includes(current.encounterStatus)) {
+      throw new ProtocolAmendmentLifecycleError('Encounter lifecycle does not allow this command or replay');
+    }
+    if (!isEffective(await this.getCareConsent(), Date.now())) {
+      throw new ProtocolAmendmentConsentRequiredError('Effective care consent is required');
+    }
+  }
+
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertAuthorized(actorId);
     const result = parseStoredResult(replay.responseJson);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'protocol_amendment' ||
