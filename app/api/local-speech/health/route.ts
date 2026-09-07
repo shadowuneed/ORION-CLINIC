@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { verifyClinicalToolAccess } from '@/lib/auth/clinical-tool-access';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,11 +37,11 @@ export async function GET(request: Request) {
   }
 
   const access = await verifyClinicalToolAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+    new D1AccessGovernanceRepository(env.DB),
     request,
   );
   if (!access.ok) {
-    return json({ error: access.message, code: access.code }, access.status);
+    return json({ error: access.message, code: access.code, assignments: access.assignments }, access.status);
   }
 
   try {

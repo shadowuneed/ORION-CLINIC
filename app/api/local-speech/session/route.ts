@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { verifyClinicalToolAccess } from '@/lib/auth/clinical-tool-access';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +38,12 @@ async function authorize(request: Request) {
       ok: false as const,
       status: 403 as const,
       code: 'cross_origin',
+      assignments: undefined,
       message: 'Запрос из другого источника отклонён.',
     };
   }
   return verifyClinicalToolAccess(
-    new D1WorkspaceAccessRepository(env.DB),
+    new D1AccessGovernanceRepository(env.DB),
     request,
   );
 }
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
   const authorizationError = await authorize(request);
   if (!authorizationError.ok) {
     return json(
-      { error: authorizationError.message, code: authorizationError.code },
+      { error: authorizationError.message, code: authorizationError.code, assignments: authorizationError.assignments },
       authorizationError.status,
     );
   }
@@ -117,7 +118,7 @@ export async function DELETE(request: Request) {
   const authorizationError = await authorize(request);
   if (!authorizationError.ok) {
     return json(
-      { error: authorizationError.message, code: authorizationError.code },
+      { error: authorizationError.message, code: authorizationError.code, assignments: authorizationError.assignments },
       authorizationError.status,
     );
   }
