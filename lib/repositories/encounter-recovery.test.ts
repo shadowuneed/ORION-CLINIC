@@ -110,6 +110,8 @@ function scopeFor(encounterId = 'encounter-a'): WorkspaceScope {
     facilityId: 'fac-a',
     encounterId,
     reviewerMembershipId: 'membership-a',
+    accessAssignmentId: 'access-assignment-a-general-medicine',
+    accessPermission: 'encounter.manage',
   };
 }
 
@@ -118,6 +120,7 @@ function createFixture(encounterId = 'encounter-a') {
   databases.push(database);
   applyMigrations(database);
   database.exec(readFileSync('db/seed.local.sql', 'utf8'));
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const d1 = createD1Adapter(database);
   const scope = scopeFor(encounterId);
   return {

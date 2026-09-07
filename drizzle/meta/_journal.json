@@ -246,6 +246,13 @@
       "when": 1788765233834,
       "tag": "0034_gigantic_stardust",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1788774829185,
+      "tag": "0035_stale_raza",
+      "breakpoints": true
     }
   ]
 }

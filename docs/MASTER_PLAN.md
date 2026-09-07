@@ -813,6 +813,8 @@ rendering, authorization, backup, or external integration behavior.
 | 2026-09-07 | Phase 2I.1 compatibility-tool assignment boundary | PASS for this bounded local slice | Full pnpm verify:ci passed: 428-file secret policy, zero known dependency vulnerabilities, lint/types, 70 files/467 tests, Drizzle, build and isolated recovery (86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 180ad8d5-d55f-4bd8-9dd5-b4aecbc4ff57). Route tests cover six operations and prove denied calls do not reach mocked providers. No live AI, microphone, UI-selection or full Phase 2I migration is claimed. |
 | 2026-09-07 | Phase 2I.2 encounter request/UI scope | PASS for request/UI slice, DB migration gate open | Code a208a60. pnpm verify:ci passed 436-file secret policy, zero known vulnerabilities, lint/types, 73 files/501 tests, Drizzle, build and isolated recovery after source destruction: 86 tables/148 rows/35 migrations/three R2 objects/490,091 bytes; run 8b685653-c2e0-4630-9d19-7813db3afb2e, 85,806 ms. Authenticated browser verified dashboard/live scope transport and invalid-selection denial/recovery; dark live view inspected. Web/STT health 200; ngrok unchanged. Durable assignment attribution, SQL guards, replay/slow-provider revocation remain 2I.3. No live microphone, AI or end-to-end signed-export claim. |
 
+| 2026-09-07 | Phase 2I.3a clinical section durable authorization | PASS for bounded local slice | Full pnpm verify:ci: 440-file secret policy, zero known dependency vulnerabilities, lint/types, 74 files/517 tests, Drizzle, build and isolated recovery after source destruction (86 tables/149 rows/36 migrations/three R2 objects/500,050 bytes; run a367cf01-3cfe-47f1-88f0-ee1e76cbdd49, 86,095 ms). Migration 0035 applied locally; quick_check ok and foreign_key_check empty. Web 3200 HTTP 200, STT ready on 3101, existing ngrok targets localhost:3200. No microphone, live AI, visual or production-readiness claim. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1181,7 +1183,15 @@ control, detection, response, and residual acceptance.
   Selection survives scoped requests, downloads and dashboard/live navigation.
   The original combined 2I.2 gate is NOT fully closed: durable attribution and
   database guards were deliberately split into the next checkpoint below.
-- Exact next checkpoint: 2I.3, durable encounter authorization. Inventory every
+- Completed implementation slice 2I.3a: clinical section commands now carry exact
+  assignment attribution and recheck current authority before replay and commit.
+  Additive migration 0035 guards human-authored/reviewed successor versions,
+  command results and matching audit provenance. Historical rows remain unchanged;
+  initial roots and service AI drafts are separate, still-open migration gates.
+- Exact next checkpoint: 2I.3b, consent command authorization. Preserve initial
+  consent granting without requiring prior care consent, plus withdrawal and
+  immutable history. Continue the remaining durable encounter inventory below;
+  full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
   migrations. Replace remaining legacy clinician-role SQL only together with
@@ -1384,6 +1394,36 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.3a clinical section durable authorization
+
+- Completed only the eight clinical section command boundary, not full 2I.3.
+  The repository requires the exact current doctor assignment and treating
+  encounter/user, current care consent and manage permission before replay,
+  retries and commit. New commands/versions/provenance/audit retain assignment.
+- Migration 0035 is additive and applied to local D1. Transactional guards reject
+  unauthorized human successors, mismatched audit provenance and command results.
+  Existing history is not backfilled. Initial roots and service AI draft writes
+  remain separate gates; other repositories and legacy role SQL are not declared
+  migrated. Legacy unattributed command replay fails closed; reload current state
+  before a deliberate new edit, never blindly replace a retry key.
+- Verified full `pnpm verify:ci`: 74 files/517 tests, lint/types, schema/build,
+  dependency and secret checks; recovery PASS with 86 tables/149 rows/36 migrations,
+  three R2 objects, 500,050 bytes, run a367cf01-3cfe-47f1-88f0-ee1e76cbdd49.
+  Active D1 quick_check ok, foreign_key_check empty. Web 200 and STT ready;
+  ngrok still targets localhost:3200. No runtime was stopped or model changed.
+- Tests include revoked/denied/expired/future/service/nurse scopes, wrong acting
+  user and facility, missing/read-only scope, cross-assignment replay, withdrawn
+  care consent, revocation between preflight and batch, direct SQL attribution
+  and audit rollback. Generic schema invariant tests remain actor-independent.
+- Next bounded task: **2I.3b consent commands**. Add durable assignment attribution
+  and replay/commit guards without requiring existing care consent to grant the
+  initial consent. Preserve withdrawals, ownership and immutable event versions.
+  Then migrate transcript/speech, recommendations, protocols/exports and access
+  audits; resolve independent encounter creation before closing full 2I.
+- Keep the owner's standalone unstaged `a`, ports 3200/3101 and ngrok. No real
+  patient data, external provider delivery, live microphone/AI verification,
+  signed-export end-to-end or production approval is implied by these checks.
 
 ### 2026-09-07 — Phase 2I.2 request/UI checkpoint
 
@@ -2059,9 +2099,11 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3: durable assignment attribution
-and database actor guards for the encounter family, with revocation-before-replay
-and before slow provider result commits. Phase 2I.2 implements request/UI scope
+The next bounded engineering slice is Phase 2I.3b: consent command attribution
+and database actor guards, with current authorization before replay and commit.
+Phase 2I.3a covers clinical section commands only. Remaining encounter writers
+still require durable guards, including slow provider result commits.
+Phase 2I.2 implements request/UI scope
 but does not close that database gate; full 2I remains IN_PROGRESS. Phase 2H
 communications is verified and complete for local synthetic data only. Keep every
 messaging provider disconnected. Phase 8B is

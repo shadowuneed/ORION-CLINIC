@@ -1,5 +1,7 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
+import { D1ConsentRepository } from './consent';
 
 export const clinicalSectionCodes = [
   'complaints',
@@ -71,6 +73,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -91,6 +94,7 @@ const sectionTitles: Record<ClinicalSectionCode, string> = {
 export class ClinicalSectionNotFoundError extends Error {}
 export class ClinicalSectionConflictError extends Error {}
 export class ClinicalSectionValidationError extends Error {}
+export class ClinicalSectionCareConsentRequiredError extends Error {}
 
 export interface ClinicalSectionRepository {
   list(): Promise<PersistedClinicalSection[]>;
@@ -229,10 +233,12 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
   }
 
   async recordCommand(input: RecordClinicalSectionCommand) {
+    await this.assertCommandAccess(input.actorId);
     const content = normalizedContent(input);
     const reviewState = targetReviewState(input, content);
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         sectionCode: input.sectionCode,
         action: input.action,
@@ -243,10 +249,11 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
     const replay = await this.findIdempotency(input.idempotencyKey);
 
     if (replay) {
-      return this.resolveReplay(replay, requestHash);
+      return this.resolveReplay(replay, requestHash, input.actorId);
     }
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertCommandAccess(input.actorId);
       const current = await this.getRowByCode(input.sectionCode);
       if (!current) throw new ClinicalSectionNotFoundError('Section was not found');
       if (!['in_progress', 'review'].includes(current.encounterStatus)) {
@@ -269,8 +276,9 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
           requestHash,
         });
       } catch (error) {
+        await this.assertCommandAccess(input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const latest = await this.getRowByCode(input.sectionCode);
         if (!latest || latest.lockVersion !== input.expectedVersion) {
@@ -306,11 +314,13 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
     const reviewedAt = reviewerMembershipId ? now : null;
     const provenance = JSON.stringify({
       sourceType: 'clinician',
+      accessAssignmentId: scope.accessAssignmentId,
       sourceIds: parseProvenance(current.provenanceJson).sourceIds,
       previousVersionId: current.currentVersionId,
     });
     const contentHash = await sha256(content);
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: scope.accessAssignmentId,
       sectionCode: input.sectionCode,
       action: input.action,
       previousVersion: input.expectedVersion,
@@ -338,15 +348,16 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
       occurredAt: now,
     });
 
+    await this.assertCommandAccess(input.actorId);
     const results = await this.database.batch([
       this.database
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) values (
             ?1, ?2, ?3, ?4, 'clinical_section.command', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?8
           )
         `)
         .bind(
@@ -357,6 +368,7 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
           input.idempotencyKey,
           requestHash,
           now,
+          scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -364,10 +376,10 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
             id, organization_id, facility_id, encounter_id, code, content,
             review_state, provenance_json, created_by_type, created_by_id,
             reviewed_by_membership_id, reviewed_at, version,
-            supersedes_section_version_id, created_at
+            supersedes_section_version_id, created_at, access_assignment_id
           ) values (
             ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'user', ?9,
-            ?10, ?11, ?12, ?13, ?14
+            ?10, ?11, ?12, ?13, ?14, ?15
           )
         `)
         .bind(
@@ -385,6 +397,7 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
           nextContentVersion,
           current.currentVersionId,
           now,
+          scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -571,7 +584,7 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
     const scope = this.scope;
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId
         from command_idempotency
@@ -589,8 +602,17 @@ export class D1ClinicalSectionRepository implements ClinicalSectionRepository {
       .first<IdempotencyRow>();
   }
 
-  private async resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertCommandAccess(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    if (!await new D1ConsentRepository(this.database, this.scope).hasEffectiveConsent('care')) {
+      throw new ClinicalSectionCareConsentRequiredError();
+    }
+  }
+
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertCommandAccess(actorId);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'clinical_section_version' ||

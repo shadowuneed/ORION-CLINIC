@@ -23,6 +23,7 @@ import {
   ClinicalSectionConflictError,
   ClinicalSectionNotFoundError,
   ClinicalSectionValidationError,
+  ClinicalSectionCareConsentRequiredError,
   D1ClinicalSectionRepository,
 } from '@/lib/repositories/clinical-sections';
 import { D1ConsentRepository } from '@/lib/repositories/consent';
@@ -115,6 +116,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const assignmentFailure = workspaceAssignmentFailure(context, error);
     if (assignmentFailure) return assignmentFailure;
+    if (error instanceof ClinicalSectionCareConsentRequiredError) {
+      return apiFailure(context, 409, 'CARE_CONSENT_REQUIRED',
+        'Сначала зафиксируйте действующее решение пациента о приёме.');
+    }
     if (error instanceof MembershipRequiredError) {
       return apiFailure(
         context,

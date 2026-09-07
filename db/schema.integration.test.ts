@@ -763,6 +763,7 @@ describe('D1 schema security invariants', () => {
   });
 
   it('allows only linear clinical section head advancement', () => {
+    // Lineage is actor-independent; human assignment guards have dedicated tests.
     seedClinicalSection(database);
     database.exec(`
       insert into clinical_section_versions (
@@ -771,7 +772,7 @@ describe('D1 schema security invariants', () => {
         version, supersedes_section_version_id
       ) values (
         'section-v2', 'org-a', 'fac-a', 'encounter-a', 'complaints',
-        'Edited', 'clinician_edited', '{}', 'user', 'user-a', 2, 'section-v1'
+        'Draft', 'ai_draft', '{}', 'service', 'synthetic-analysis', 2, 'section-v1'
       );
     `);
 
@@ -983,7 +984,7 @@ describe('D1 schema security invariants', () => {
         operation, idempotency_key, request_hash, status
       ) values (
         'command-a', 'org-a', 'fac-a', 'membership-a',
-        'clinical_section.command', 'key-a', 'hash-a', 'processing'
+        'test.command', 'key-a', 'hash-a', 'processing'
       );
     `);
 

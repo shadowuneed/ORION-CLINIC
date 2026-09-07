@@ -82,7 +82,32 @@ records, consents, audio, provider settings or speech model were changed.
 | `app/authenticated-clinic-page.tsx` | remove legacy clinician capability lookup; shell visibility never substitutes for API authorization |
 | dashboard, `/live`, patient-to-encounter links, compatibility clients | selection/URL propagation, no stale-response context replacement, no stream reuse across assignments |
 
-## Next bounded checkpoint: 2I.3 — durable authorization
+## 2I.3a — clinical section write boundary
+
+Implemented for `clinical_section.command` only: exact current assignment is
+required at repository entry, before completed replay, retries and commit. The
+assignment is included in request hashes, command rows, new section versions,
+provenance and hashed audit metadata. Migration 0035 adds a nullable historical
+column, a current-assignment permission view and transactional actor guards.
+The guards preserve exact treating-doctor ownership, active patient, care consent
+and encounter lifecycle. Missing/read-only/expired/revoked/denied scopes fail closed.
+
+Historical rows are not backfilled. A legacy command without assignment cannot
+be replayed as a new attributed command; reload the current section and resolve
+its current version before a fresh edit. Initial version-one creation and service
+AI drafts retain their existing boundaries and are NOT covered by this migration.
+Read audits, consent, transcript, speech sessions, recommendation generation and
+decisions, protocols, exports and independent creation remain open below.
+
+## Next bounded checkpoint: 2I.3b — consent command authorization
+
+Apply the same durable attribution and current-assignment/replay checks to
+consent commands next. Preserve the ability to grant initial care consent (do not
+require pre-existing care consent to grant it), withdrawal semantics, immutable
+versions and exact patient/encounter ownership. Continue the remaining inventory
+one writer family at a time; 2I.3 and full 2I remain incomplete.
+
+## Remaining 2I.3 acceptance gates
 
 1. Read the current master-plan handoff and preserve the owner's unstaged `a`.
 2. Reuse the 2I.1 assignment resolver, but also enforce the exact encounter's

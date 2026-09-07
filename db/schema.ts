@@ -2635,6 +2635,9 @@ export const clinicalSectionVersions = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references(
+      () => departmentAccessAssignments.id,
+    ),
     encounterId: text('encounter_id')
       .notNull()
       .references(() => encounters.id),

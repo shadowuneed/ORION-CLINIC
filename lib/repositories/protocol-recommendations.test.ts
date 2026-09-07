@@ -153,11 +153,14 @@ function createFixture() {
   databases.push(database);
   applyMigrations(database);
   database.exec(readFileSync('db/seed.local.sql', 'utf8'));
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const scope: WorkspaceScope = {
     organizationId: 'org-a',
     facilityId: 'fac-a',
     encounterId: 'encounter-a',
     reviewerMembershipId: 'membership-a',
+    accessAssignmentId: 'access-assignment-a-general-medicine',
+    accessPermission: 'encounter.manage',
   };
   const d1 = createD1Adapter(database);
   return {
