@@ -109,13 +109,24 @@ initial care grant or withdrawal. Historical/fixture and independent creation
 events may still have NULL attribution; their separate writer remains a later
 gate. Do not infer protection of all direct consent-event SQL from command tests.
 
-## Next bounded checkpoint: 2I.3c — transcript correction commands
+## 2I.3c — transcript correction commands
 
-Migrate manual transcript corrections to exact durable assignment provenance,
-current permission before replay/commit and SQL guards. Preserve segment versions,
-speaker corrections, finality and consent requirements. Do not replace STT or
-fold speech-session/provider work into this slice. Continue the remaining
-inventory one writer family at a time; 2I.3 and full 2I remain incomplete.
+Manual corrections now store assignment on the segment version, command and
+hashed audit metadata. Current access, editable encounter and care/storage
+consents are checked before replay, retries and commit. Migration 0037 guards
+attributed segments plus correction command/audit/results, using current consent
+heads and current assignment at database execution time. Original text/timing
+and role history remain intact. Unattributed raw ingestion and legacy fixtures
+retain their existing boundaries; do not claim every raw SQL writer is migrated.
+
+## Next bounded checkpoint: 2I.3d — speech session ownership
+
+Bind speech session creation/use/deletion to the exact assignment, persist that
+ownership, and recheck current rights and audio/storage consents before use and
+before accepting delayed transcription results. Preserve session expiry, stream
+isolation, transcript versioning and recovery locks. Do not replace STT models or
+change audio timings. Recommendations and signed exports remain later families;
+2I.3 and full 2I remain incomplete.
 
 ## Remaining 2I.3 acceptance gates
 

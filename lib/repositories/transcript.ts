@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import {
   encounterStatusSchema,
   isEncounterClinicalRecordEditable,
@@ -38,6 +39,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -115,9 +117,11 @@ export class D1TranscriptRepository {
   }
 
   async correct(input: CorrectTranscriptCommand) {
+    await this.assertCorrectionAccess(input.actorId);
     const text = input.text.trim();
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         segmentId: input.segmentId,
         expectedVersion: input.expectedVersion,
@@ -127,9 +131,10 @@ export class D1TranscriptRepository {
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertCorrectionAccess(input.actorId);
       const [current, auditHead, hasRequiredConsents, encounterStatus] =
         await Promise.all([
         this.getCurrentById(input.segmentId),
@@ -175,8 +180,9 @@ export class D1TranscriptRepository {
           auditHead,
         });
       } catch (error) {
+        await this.assertCorrectionAccess(input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const [latest, stillConsented, latestEncounterStatus] = await Promise.all([
           this.getCurrentByIndex(current.segmentIndex),
@@ -235,6 +241,7 @@ export class D1TranscriptRepository {
       state: 'corrected',
     };
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       segmentIndex: current.segmentIndex,
       previousVersion: current.version,
       resultingVersion: nextVersion,
@@ -263,6 +270,7 @@ export class D1TranscriptRepository {
       occurredAt: now,
     });
 
+    await this.assertCorrectionAccess(input.actorId);
     const batchResults = await this.database.batch([
       this.database
         .prepare(`
@@ -270,11 +278,11 @@ export class D1TranscriptRepository {
             id, organization_id, facility_id, encounter_id, segment_index,
             version, speaker_role, speaker_role_source, speaker_confidence_basis_points,
             language_code, text, started_at_ms, ended_at_ms, state,
-            corrected_by_membership_id, supersedes_segment_id, created_at
+            corrected_by_membership_id, supersedes_segment_id, created_at, access_assignment_id
           )
           select ?1, organization_id, facility_id, encounter_id, segment_index,
             version + 1, ?2, 'manual', null, ?3, ?4, started_at_ms, ended_at_ms,
-            'corrected', ?5, id, ?6
+            'corrected', ?5, id, ?6, ?12
           from transcript_segments parent
           where parent.organization_id = ?7 and parent.facility_id = ?8
             and parent.encounter_id = ?9 and parent.id = ?10 and parent.version = ?11
@@ -323,6 +331,7 @@ export class D1TranscriptRepository {
           this.scope.encounterId,
           input.segmentId,
           input.expectedVersion,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -380,9 +389,9 @@ export class D1TranscriptRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'transcript.correct', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -394,6 +403,7 @@ export class D1TranscriptRepository {
           requestHash,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -557,7 +567,7 @@ export class D1TranscriptRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId
         from command_idempotency
@@ -574,8 +584,17 @@ export class D1TranscriptRepository {
       .first<IdempotencyRow>();
   }
 
-  private async resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertCorrectionAccess(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    const status = await this.getEncounterStatus();
+    if (!status || !isEncounterClinicalRecordEditable(status)) throw new TranscriptLifecycleError('Transcript is not editable');
+    if (!await this.hasEffectiveRequiredConsents()) throw new TranscriptConsentRequiredError('Care and transcript storage consent are required');
+  }
+
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertCorrectionAccess(actorId);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'transcript_segment_version' ||
