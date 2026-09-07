@@ -6,7 +6,7 @@ import { recordChannelConsentSchema } from '@/lib/domain/patient-communications'
 import { apiFailure, apiSuccess, createApiRequestContext, hasSameOrigin } from '@/lib/http/api-response';
 import { communicationApiFailure } from '@/lib/http/communication-api-errors';
 import { D1PatientCommunicationsRepository } from '@/lib/repositories/patient-communications';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,8 +33,9 @@ export async function POST(request: Request) {
     const identity = getSiteIdentity(request);
     if (!identity) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const access = await resolveCommunicationAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      payload.accessAssignmentId,
       payload.facilityId,
     );
     const consent = await new D1PatientCommunicationsRepository(

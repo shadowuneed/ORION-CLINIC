@@ -1202,6 +1202,7 @@ export class D1PatientCommunicationsRepository {
       );
     }
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       patientId: normalized.patientId,
       channel: normalized.channel,
       decision: normalized.decision,
@@ -1296,9 +1297,9 @@ export class D1PatientCommunicationsRepository {
         supersedes_consent_event_id, decision, preferred_language,
         destination_ref, destination_hint, destination_fingerprint,
         destination_verified_at, notice_version, notice_hash, source,
-        effective_at, captured_by_membership_id, change_reason, created_at
+        effective_at, captured_by_membership_id, change_reason, created_at, access_assignment_id
       ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-        ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`)
+        ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`)
         .bind(
           eventId,
           this.scope.organizationId,
@@ -1320,6 +1321,7 @@ export class D1PatientCommunicationsRepository {
           this.scope.membershipId,
           normalized.reason,
           now,
+          this.scope.accessAssignmentId,
         ),
     ];
     if (current) {
@@ -1390,6 +1392,7 @@ export class D1PatientCommunicationsRepository {
     const now = Date.now();
     const normalizedReason = normalizeText(input.reason);
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       sourceType: input.sourceType,
       sourceRecordId: input.sourceRecordId,
       sourceVersionId: input.sourceVersionId,
@@ -1546,9 +1549,9 @@ export class D1PatientCommunicationsRepository {
       this.database.prepare(`insert into outbox_events (
         id, organization_id, facility_id, aggregate_type, aggregate_id,
         aggregate_version, command_id, event_type, payload_json,
-        event_idempotency_key, status, attempts, next_attempt_at, created_at
+        event_idempotency_key, status, attempts, next_attempt_at, created_at, access_assignment_id
       ) values (?1, ?2, ?3, 'patient_notification', ?4, 1, null,
-        'patient_notification.dispatch_requested', ?5, ?6, 'pending', 0, ?7, ?8)`)
+        'patient_notification.dispatch_requested', ?5, ?6, 'pending', 0, ?7, ?8, ?9)`)
         .bind(
           outboxEventId,
           this.scope.organizationId,
@@ -1567,6 +1570,7 @@ export class D1PatientCommunicationsRepository {
           `patient-notification:${notificationId}`,
           window.nextAttemptAt,
           now,
+          this.scope.accessAssignmentId,
         ),
       this.notificationEventInsert(row, null, this.scope.membershipId, normalizedReason, now),
       this.database.prepare(`insert into patient_notification_heads (
@@ -1620,6 +1624,7 @@ export class D1PatientCommunicationsRepository {
     const reason = normalizeText(input.reason);
     const operation = `communication.notification.${input.action}`;
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       notificationId: input.notificationId,
       action: input.action,
       expectedVersion: input.expectedVersion,
@@ -1741,10 +1746,10 @@ export class D1PatientCommunicationsRepository {
                 id, organization_id, facility_id, notification_id,
                 notification_event_id, attempt_number, provider_adapter,
                 outcome, error_code, provider_message_id, next_attempt_at,
-                recorded_by_membership_id, occurred_at, created_at
+                recorded_by_membership_id, occurred_at, created_at, access_assignment_id
               ) values (?1, ?2, ?3, ?4, ?5, ?6, 'disconnected',
                 'provider_unavailable', 'PROVIDER_NOT_CONFIGURED', null,
-                ?7, ?8, ?9, ?9)`)
+                ?7, ?8, ?9, ?9, ?10)`)
                 .bind(
                   attemptId,
                   this.scope.organizationId,
@@ -1755,6 +1760,7 @@ export class D1PatientCommunicationsRepository {
                   retryAt,
                   this.scope.membershipId,
                   now,
+                  this.scope.accessAssignmentId,
                 ),
             );
             next.attemptCount = attemptNumber;
@@ -1929,6 +1935,7 @@ export class D1PatientCommunicationsRepository {
     const responseSummary = normalizeNullable(input.responseSummary);
     const operation = `communication.manual_task.${input.action}`;
     const requestHash = await sha256Json({
+      accessAssignmentId: this.scope.accessAssignmentId,
       taskId: input.taskId,
       action: input.action,
       expectedVersion: input.expectedVersion,
@@ -2028,9 +2035,9 @@ export class D1PatientCommunicationsRepository {
         this.database.prepare(`insert into communication_patient_responses (
           id, organization_id, facility_id, notification_id, manual_task_id,
           response_kind, language, summary, source,
-          recorded_by_membership_id, received_at, created_at
+          recorded_by_membership_id, received_at, created_at, access_assignment_id
         ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
-          'staff_recorded', ?9, ?10, ?10)`)
+          'staff_recorded', ?9, ?10, ?10, ?11)`)
           .bind(
             responseId,
             this.scope.organizationId,
@@ -2042,6 +2049,7 @@ export class D1PatientCommunicationsRepository {
             responseSummary,
             this.scope.membershipId,
             now,
+            this.scope.accessAssignmentId,
           ),
       );
     }
@@ -2471,11 +2479,11 @@ export class D1PatientCommunicationsRepository {
       destination_fingerprint, rendered_body, template_values_json,
       content_hash, outbox_event_id,
       attempt_count, failure_owner_membership_id, last_failure_code,
-      changed_by_membership_id, change_reason, created_at
+      changed_by_membership_id, change_reason, created_at, access_assignment_id
     ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
       ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
       ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31,
-      ?32)`)
+      ?32, ?33)`)
       .bind(
         row.currentEventId,
         this.scope.organizationId,
@@ -2509,6 +2517,7 @@ export class D1PatientCommunicationsRepository {
         actorMembershipId,
         reason,
         now,
+        this.scope.accessAssignmentId,
       );
   }
 
@@ -2569,9 +2578,9 @@ export class D1PatientCommunicationsRepository {
       id, organization_id, facility_id, task_id, notification_id,
       version, supersedes_task_event_id, state, assigned_membership_id,
       due_at, failure_reason, response_id, outcome_summary,
-      changed_by_membership_id, change_reason, created_at
+      changed_by_membership_id, change_reason, created_at, access_assignment_id
     ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-      ?11, ?12, ?13, ?14, ?15, ?16)`)
+      ?11, ?12, ?13, ?14, ?15, ?16, ?17)`)
       .bind(
         row.currentEventId,
         this.scope.organizationId,
@@ -2589,6 +2598,7 @@ export class D1PatientCommunicationsRepository {
         actorMembershipId,
         reason,
         now,
+        this.scope.accessAssignmentId,
       );
   }
 
@@ -2613,7 +2623,7 @@ export class D1PatientCommunicationsRepository {
     occurredAt: number;
   }) {
     const sequence = input.auditHead.lastSequence + 1;
-    const metadataJson = JSON.stringify(input.metadata);
+    const metadataJson = JSON.stringify({ ...input.metadata, accessAssignmentId: this.scope.accessAssignmentId });
     const eventHash = await hashAuditEvent({
       previousHash: input.auditHead.lastEventHash,
       organizationId: this.scope.organizationId,
@@ -2696,13 +2706,14 @@ export class D1PatientCommunicationsRepository {
       from command_idempotency
       where organization_id = ?1 and facility_id = ?2
         and actor_membership_id = ?3 and operation = ?4
-        and idempotency_key = ?5 limit 1`)
+        and idempotency_key = ?5 and access_assignment_id = ?6 limit 1`)
       .bind(
         this.scope.organizationId,
         this.scope.facilityId,
         this.scope.membershipId,
         operation,
         key,
+        this.scope.accessAssignmentId,
       )
       .first<IdempotencyRow>();
   }
@@ -2738,8 +2749,8 @@ export class D1PatientCommunicationsRepository {
   }) {
     return this.database.prepare(`insert into command_idempotency (
       id, organization_id, facility_id, actor_membership_id,
-      operation, idempotency_key, request_hash, status, created_at
-    ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)`)
+      operation, idempotency_key, request_hash, status, created_at, access_assignment_id
+    ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8, ?9)`)
       .bind(
         input.id,
         this.scope.organizationId,
@@ -2749,6 +2760,7 @@ export class D1PatientCommunicationsRepository {
         input.key,
         input.requestHash,
         input.now,
+        this.scope.accessAssignmentId,
       );
   }
 

@@ -1,8 +1,12 @@
-import type {
-  ActiveMembership,
-  IdentityPrincipal,
-  WorkspaceAccessRepository,
-} from '@/lib/auth/workspace-access';
+import {
+  AccessAssignmentNotFoundError,
+  AccessMembershipRequiredError,
+  AccessPermissionRequiredError,
+  isAccessAssignmentCurrentlyActive,
+  type AccessAssignmentSummary,
+  type AccessGovernanceRepository,
+} from '@/lib/auth/access-governance';
+import type { IdentityPrincipal } from '@/lib/auth/workspace-access';
 import type { CommunicationSourceType } from '@/lib/domain/patient-communications';
 
 export type CommunicationRole = 'clinician' | 'nurse' | 'registrar';
@@ -25,37 +29,40 @@ export type CommunicationScope = {
   facilityId: string;
   userId: string;
   membershipId: string;
+  accessAssignmentId: string;
   role: CommunicationRole;
 };
 
-export type CommunicationFacilityOption = {
-  organizationId: string;
+export type CommunicationAccessAssignmentOption = {
+  assignmentId: string;
   organizationName: string;
   facilityId: string;
   facilityName: string;
+  departmentName: string;
   role: CommunicationRole;
 };
 
 export type CommunicationAccess = {
   principal: IdentityPrincipal;
+  assignment: AccessAssignmentSummary;
+  assignments: CommunicationAccessAssignmentOption[];
   user: { id: string; displayName: string };
   organization: { id: string; name: string };
   facility: { id: string; name: string };
-  facilities: CommunicationFacilityOption[];
-  membership: ActiveMembership & { role: CommunicationRole };
   scope: CommunicationScope;
 };
 
-export class CommunicationMembershipRequiredError extends Error {}
-export class CommunicationFacilitySelectionRequiredError extends Error {
-  constructor(public readonly facilities: CommunicationFacilityOption[]) {
-    super('A communications facility must be selected');
+export class MultipleCommunicationAccessSelectionRequiredError extends Error {
+  constructor(public readonly assignments: CommunicationAccessAssignmentOption[]) {
+    super('A communication access assignment must be selected');
+    this.name = 'MultipleCommunicationAccessSelectionRequiredError';
   }
 }
-export class CommunicationFacilityNotFoundError extends Error {}
+
 export class CommunicationPermissionRequiredError extends Error {
   constructor(public readonly permission: CommunicationPermission) {
     super(`The ${permission} communication permission is required`);
+    this.name = 'CommunicationPermissionRequiredError';
   }
 }
 
@@ -123,84 +130,109 @@ export function communicationCapabilities(role: CommunicationRole) {
   ) as Record<CommunicationPermission, boolean>;
 }
 
-function isCommunicationMembership(
-  membership: ActiveMembership,
-): membership is ActiveMembership & { role: CommunicationRole } {
+function communicationRole(assignment: AccessAssignmentSummary) {
+  if (assignment.roles.includes('doctor')) return 'clinician' as const;
+  if (assignment.roles.includes('nurse')) return 'nurse' as const;
+  if (assignment.roles.includes('registrar')) return 'registrar' as const;
+  return null;
+}
+
+function isCommunicationAssignment(assignment: AccessAssignmentSummary) {
   return (
-    membership.role === 'clinician' ||
-    membership.role === 'nurse' ||
-    membership.role === 'registrar'
+    communicationRole(assignment) !== null &&
+    assignment.effectivePermissions.includes('communications.manage')
   );
 }
 
-const roleOrder: Record<CommunicationRole, number> = {
-  clinician: 0,
-  nurse: 1,
-  registrar: 2,
-};
+function toOption(
+  assignment: AccessAssignmentSummary,
+): CommunicationAccessAssignmentOption {
+  return {
+    assignmentId: assignment.assignmentId,
+    organizationName: assignment.organization.name,
+    facilityId: assignment.facility.id,
+    facilityName: assignment.facility.name,
+    departmentName: assignment.department.name,
+    role: communicationRole(assignment)!,
+  };
+}
 
+/**
+ * Resolves exactly one current department assignment. Role and permission are
+ * always taken from that same assignment; separate assignments are never merged.
+ */
 export async function resolveCommunicationAccess(
-  repository: Pick<WorkspaceAccessRepository, 'listActiveMemberships'>,
+  repository: AccessGovernanceRepository,
   principal: IdentityPrincipal,
+  requestedAssignmentId?: string,
   requestedFacilityId?: string,
+  now = Date.now(),
 ): Promise<CommunicationAccess> {
-  const memberships = (await repository.listActiveMemberships(principal))
-    .filter(isCommunicationMembership)
-    .sort(
-      (left, right) =>
-        roleOrder[left.role] - roleOrder[right.role] ||
-        left.membershipId.localeCompare(right.membershipId),
-    );
-  if (memberships.length === 0) throw new CommunicationMembershipRequiredError();
+  const current = (await repository.listPrincipalAssignments(principal))
+    .filter((assignment) => isAccessAssignmentCurrentlyActive(assignment, now))
+    .filter((assignment) => !assignment.roles.includes('service'));
 
-  const uniqueScopes = new Map<string, (typeof memberships)[number]>();
-  for (const membership of memberships) {
-    const key = `${membership.organizationId}:${membership.facilityId}`;
-    if (!uniqueScopes.has(key)) uniqueScopes.set(key, membership);
+  if (current.length === 0) throw new AccessMembershipRequiredError();
+
+  let selected: AccessAssignmentSummary | undefined;
+  if (requestedAssignmentId) {
+    selected = current.find(
+      (assignment) => assignment.assignmentId === requestedAssignmentId,
+    );
+    if (!selected) throw new AccessAssignmentNotFoundError();
+    if (requestedFacilityId && selected.facility.id !== requestedFacilityId) {
+      throw new AccessAssignmentNotFoundError();
+    }
+    if (!isCommunicationAssignment(selected)) {
+      throw new AccessPermissionRequiredError('communications.manage');
+    }
+  } else {
+    const candidates = current.filter(
+      (assignment) =>
+        (!requestedFacilityId ||
+          assignment.facility.id === requestedFacilityId) &&
+        isCommunicationAssignment(assignment),
+    );
+    if (candidates.length === 0) {
+      throw new AccessPermissionRequiredError('communications.manage');
+    }
+    if (candidates.length > 1) {
+      throw new MultipleCommunicationAccessSelectionRequiredError(
+        candidates.map(toOption),
+      );
+    }
+    [selected] = candidates;
   }
-  const facilities = [...uniqueScopes.values()]
-    .map((membership) => ({
-      organizationId: membership.organizationId,
-      organizationName: membership.organizationName,
-      facilityId: membership.facilityId,
-      facilityName: membership.facilityName,
-      role: membership.role,
-    }))
+
+  const role = communicationRole(selected);
+  if (!role) throw new AccessPermissionRequiredError('communications.manage');
+
+  const assignments = current
+    .filter(isCommunicationAssignment)
+    .map(toOption)
     .sort((left, right) =>
-      `${left.organizationName}:${left.facilityName}`.localeCompare(
-        `${right.organizationName}:${right.facilityName}`,
+      `${left.organizationName}:${left.facilityName}:${left.departmentName}:${left.assignmentId}`.localeCompare(
+        `${right.organizationName}:${right.facilityName}:${right.departmentName}:${right.assignmentId}`,
       ),
     );
 
-  let membership: (typeof memberships)[number] | undefined;
-  if (requestedFacilityId) {
-    membership = memberships.find(
-      (candidate) => candidate.facilityId === requestedFacilityId,
-    );
-    if (!membership) throw new CommunicationFacilityNotFoundError();
-  } else {
-    if (uniqueScopes.size > 1) {
-      throw new CommunicationFacilitySelectionRequiredError(facilities);
-    }
-    membership = memberships[0];
-  }
-
   return {
     principal,
-    user: { id: membership.userId, displayName: membership.userDisplayName },
+    assignment: selected,
+    assignments,
+    user: { id: selected.user.id, displayName: selected.user.displayName },
     organization: {
-      id: membership.organizationId,
-      name: membership.organizationName,
+      id: selected.organization.id,
+      name: selected.organization.name,
     },
-    facility: { id: membership.facilityId, name: membership.facilityName },
-    facilities,
-    membership,
+    facility: { id: selected.facility.id, name: selected.facility.name },
     scope: {
-      organizationId: membership.organizationId,
-      facilityId: membership.facilityId,
-      userId: membership.userId,
-      membershipId: membership.membershipId,
-      role: membership.role,
+      organizationId: selected.organization.id,
+      facilityId: selected.facility.id,
+      userId: selected.user.id,
+      membershipId: selected.membership.id,
+      accessAssignmentId: selected.assignmentId,
+      role,
     },
   };
 }

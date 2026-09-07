@@ -239,6 +239,13 @@
       "when": 1788715163681,
       "tag": "0033_tricky_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1788765233834,
+      "tag": "0034_gigantic_stardust",
+      "breakpoints": true
     }
   ]
 }

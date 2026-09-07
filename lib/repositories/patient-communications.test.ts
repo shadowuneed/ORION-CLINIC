@@ -32,6 +32,7 @@ type TestBoundStatement = {
 
 const databases: DatabaseSync[] = [];
 const clinicianScope: CommunicationScope = {
+  accessAssignmentId: 'access-assignment-a-general-medicine',
   organizationId: 'org-a',
   facilityId: 'fac-a',
   userId: 'user-a',
@@ -39,6 +40,7 @@ const clinicianScope: CommunicationScope = {
   role: 'clinician',
 };
 const nurseScope: CommunicationScope = {
+  accessAssignmentId: 'access-assignment-care-nurse',
   organizationId: 'org-a',
   facilityId: 'fac-a',
   userId: 'user-care-nurse',
@@ -365,9 +367,9 @@ function expectTamperedInitialNotificationRejected(
     target.prepare(`insert into outbox_events (
       id, organization_id, facility_id, aggregate_type, aggregate_id,
       aggregate_version, command_id, event_type, payload_json,
-      event_idempotency_key, status, attempts, next_attempt_at, created_at
+      event_idempotency_key, status, attempts, next_attempt_at, created_at, access_assignment_id
     ) values (?, 'org-a', 'fac-a', 'patient_notification', ?, 1, null,
-      'patient_notification.dispatch_requested', ?, ?, 'pending', 0, ?, ?)`)
+      'patient_notification.dispatch_requested', ?, ?, 'pending', 0, ?, ?, 'access-assignment-a-general-medicine')`)
       .run(
         outboxId,
         notificationId,
@@ -387,10 +389,10 @@ function expectTamperedInitialNotificationRejected(
         destination_fingerprint, rendered_body, template_values_json,
         content_hash, outbox_event_id, attempt_count,
         failure_owner_membership_id, last_failure_code,
-        changed_by_membership_id, change_reason, created_at
+        changed_by_membership_id, change_reason, created_at, access_assignment_id
       ) values (?, 'org-a', 'fac-a', ?, ?, 1, null, ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, null,
-        'membership-a', 'Проверка защиты от подмены', ?)`)
+        'membership-a', 'Проверка защиты от подмены', ?, 'access-assignment-a-general-medicine')`)
         .run(
           eventId,
           notificationId,
@@ -430,7 +432,51 @@ afterEach(() => {
   while (databases.length) databases.pop()?.close();
 });
 
+function changeCommunicationAssignment(target: DatabaseSync, mode: 'denied' | 'revoked' | 'expired' | 'service') {
+  target.prepare(`insert into department_access_assignment_versions (
+    id, organization_id, facility_id, assignment_id, department_id, membership_id,
+    version, supersedes_version_id, status, source_type, roles_json,
+    allow_permissions_json, deny_permissions_json, effective_from, effective_until,
+    change_reason, changed_by_membership_id, changed_at, created_at
+  ) select 'communication-access-v-next', v.organization_id, v.facility_id,
+    v.assignment_id, v.department_id, v.membership_id, v.version + 1, v.id,
+    ?, 'administrator', ?, v.allow_permissions_json, ?, v.effective_from, ?,
+    'Synthetic communication access regression', 'membership-a', v.changed_at + 1, v.created_at + 1
+  from department_access_assignment_heads h join department_access_assignment_versions v
+    on v.id = h.current_version_id where h.assignment_id = ?`).run(
+      mode === 'revoked' ? 'revoked' : 'active',
+      JSON.stringify(mode === 'service' ? ['service'] : ['doctor']),
+      JSON.stringify(mode === 'denied' ? ['communications.manage'] : []),
+      mode === 'expired' ? Date.now() - 60_000 : null,
+      clinicianScope.accessAssignmentId,
+    );
+  target.prepare(`update department_access_assignment_heads
+    set current_version_id = 'communication-access-v-next', lock_version = lock_version + 1,
+      updated_at = updated_at + 1 where assignment_id = ?`).run(clinicianScope.accessAssignmentId);
+}
+
 describe('D1 patient communications', () => {
+  it.each(['denied', 'revoked', 'expired', 'service'] as const)('rejects a stale scoped writer after assignment becomes %s', async (mode) => {
+    const { target, database } = createFixture();
+    const repository = new D1PatientCommunicationsRepository(database, clinicianScope);
+    changeCommunicationAssignment(target, mode);
+    await expect(grantSms(repository)).rejects.toThrow(/exact current assignment/);
+    expect(target.prepare('select count(*) as count from patient_channel_consent_events').get()).toEqual({ count: 0 });
+    expect(target.prepare("select count(*) as count from command_idempotency where operation like 'communication.%'").get()).toEqual({ count: 0 });
+  });
+
+  it.each(['', 'access-assignment-care-nurse', 'missing-assignment'])('rejects missing or mismatched actor assignment %s', async (accessAssignmentId) => {
+    const { database } = createFixture();
+    const repository = new D1PatientCommunicationsRepository(database, { ...clinicianScope, accessAssignmentId });
+    await expect(grantSms(repository)).rejects.toThrow(/exact current assignment/);
+  });
+
+  it('uses the current department role instead of the legacy membership role for consent writes', async () => {
+    const { target, database } = createFixture();
+    target.exec("update memberships set role = 'administrator' where id = 'membership-a'");
+    await expect(grantSms(new D1PatientCommunicationsRepository(database, clinicianScope))).resolves.toMatchObject({ decision: 'granted' });
+  });
+
   it('loads the complete local policy and template matrix idempotently', () => {
     const { target } = createFixture();
     target.exec(readFileSync(join('db', 'seed.communications.local.sql'), 'utf8'));
@@ -633,6 +679,27 @@ describe('D1 patient communications', () => {
       now: retryAt + 120_000,
     });
     expect(completed.current.state).toBe('completed');
+for (const [table, actorColumn] of [
+      ['patient_channel_consent_events', 'captured_by_membership_id'],
+      ['patient_notification_events', 'changed_by_membership_id'],
+      ['notification_delivery_attempts', 'recorded_by_membership_id'],
+      ['communication_manual_task_events', 'changed_by_membership_id'],
+      ['communication_patient_responses', 'recorded_by_membership_id'],
+      ['command_idempotency', 'actor_membership_id'],
+    ]) {
+      const rows = target.prepare(`select access_assignment_id as assignmentId, ${actorColumn} as actor from ${table}`).all();
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) expect(row.assignmentId).toBe(
+        row.actor === clinicianScope.membershipId ? clinicianScope.accessAssignmentId : nurseScope.accessAssignmentId,
+      );
+    }
+    expect(target.prepare('select access_assignment_id as assignmentId from outbox_events').get())
+      .toEqual({ assignmentId: clinicianScope.accessAssignmentId });
+    for (const row of target.prepare("select actor_membership_id as actor, metadata_json as metadata from audit_events where action like 'communication.%'").all()) {
+      expect(JSON.parse(String(row.metadata)).accessAssignmentId).toBe(
+        row.actor === clinicianScope.membershipId ? clinicianScope.accessAssignmentId : nurseScope.accessAssignmentId,
+      );
+    }
     expect(target.prepare('select count(*) as count from communication_patient_responses').get())
       .toEqual({ count: 1 });
     const finalWorkspace = await clinician.list({ patientId: 'patient-care-a' });
@@ -935,10 +1002,10 @@ describe('D1 patient communications', () => {
         supersedes_consent_event_id, decision, preferred_language,
         destination_ref, destination_hint, destination_fingerprint,
         destination_verified_at, notice_version, notice_hash, source,
-        effective_at, captured_by_membership_id, change_reason, created_at
+        effective_at, captured_by_membership_id, change_reason, created_at, access_assignment_id
       ) values (?, 'org-a', 'fac-a', 'patient-care-a', 'telegram', 1,
         null, 'granted', 'ru', 'test:telegram:patient-care-a', ?, ?, ?,
-        'ORION-COMMS-LOCAL-V1', ?, 'verbal', ?, 'membership-a', ?, ?)`)
+        'ORION-COMMS-LOCAL-V1', ?, 'verbal', ?, 'membership-a', ?, ?, 'access-assignment-a-general-medicine')`)
         .run(
           'tampered-real-destination',
           '+7 700 000 00 00',
@@ -1006,11 +1073,11 @@ describe('D1 patient communications', () => {
         id, organization_id, facility_id, task_id, notification_id, version,
         supersedes_task_event_id, state, assigned_membership_id, due_at,
         failure_reason, response_id, outcome_summary,
-        changed_by_membership_id, change_reason, created_at
+        changed_by_membership_id, change_reason, created_at, access_assignment_id
       ) select 'tampered-cross-task-event', organization_id, facility_id,
         task_id, notification_id, 2, id, 'in_progress', assigned_membership_id,
         due_at, failure_reason, ?, 'Подставлен ответ другой задачи',
-        'membership-care-nurse', 'Проверка связи ответа с задачей', ?
+        'membership-care-nurse', 'Проверка связи ответа с задачей', ?, 'access-assignment-care-nurse'
       from communication_manual_task_events
       where task_id = ? and version = 1`)
         .run(response.id, daytime + 120_000, secondTask.id),

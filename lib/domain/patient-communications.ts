@@ -95,6 +95,7 @@ export const LOCAL_COMMUNICATION_POLICY_CODE = 'ORION_LOCAL_COMMS_V1';
 
 export const communicationListQuerySchema = z
   .object({
+    accessAssignmentId: id.optional(),
     facilityId: z.string().trim().min(1).max(100).optional(),
     patientId: id.optional(),
     state: z.enum([...notificationStates, 'all']).default('all'),
@@ -104,6 +105,7 @@ export const communicationListQuerySchema = z
 
 export const recordChannelConsentSchema = z
   .object({
+    accessAssignmentId: id.optional(),
     facilityId: z.string().trim().min(1).max(100).optional(),
     patientId: id,
     channel: z.enum(communicationChannels),
@@ -165,6 +167,7 @@ export const recordChannelConsentSchema = z
 
 export const scheduleNotificationSchema = z
   .object({
+    accessAssignmentId: id.optional(),
     facilityId: z.string().trim().min(1).max(100).optional(),
     sourceType: z.enum(communicationSourceTypes),
     sourceRecordId: id,
@@ -180,6 +183,7 @@ export const scheduleNotificationSchema = z
 
 export const processNotificationSchema = z
   .object({
+    accessAssignmentId: id.optional(),
     facilityId: z.string().trim().min(1).max(100).optional(),
     action: z.enum(['process_due', 'retry_now', 'cancel', 'require_manual_contact']),
     expectedVersion: z.number().int().positive(),
@@ -190,6 +194,7 @@ export const processNotificationSchema = z
 
 export const manualContactCommandSchema = z
   .object({
+    accessAssignmentId: id.optional(),
     facilityId: z.string().trim().min(1).max(100).optional(),
     action: z.enum(['start', 'record_response', 'complete', 'escalate', 'cancel']),
     expectedVersion: z.number().int().positive(),

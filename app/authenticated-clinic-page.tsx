@@ -106,11 +106,12 @@ export async function getAuthenticatedClinicContext(
             assignment.roles.includes('nurse')) &&
           assignment.effectivePermissions.includes('observations.manage'),
       ),
-      communications: memberships.some(
-        (membership) =>
-          membership.role === 'clinician' ||
-          membership.role === 'nurse' ||
-          membership.role === 'registrar',
+      communications: accessAssignments.some(
+        (assignment) =>
+          isAccessAssignmentCurrentlyActive(assignment) &&
+          !assignment.roles.includes('service') &&
+          ['doctor', 'nurse', 'registrar'].some((role) => assignment.roles.includes(role as 'doctor' | 'nurse' | 'registrar')) &&
+          assignment.effectivePermissions.includes('communications.manage'),
       ),
       // Every authenticated principal may reach the resolver, which then
       // requires a current interactive assignment with access.self.read.

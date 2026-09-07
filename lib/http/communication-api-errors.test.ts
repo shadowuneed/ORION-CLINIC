@@ -1,10 +1,9 @@
+import { AccessAssignmentNotFoundError, AccessMembershipRequiredError } from '@/lib/auth/access-governance';
 import { describe, expect, it } from 'vitest';
 import {
-  CommunicationFacilityNotFoundError,
-  CommunicationFacilitySelectionRequiredError,
-  CommunicationMembershipRequiredError,
+  MultipleCommunicationAccessSelectionRequiredError,
   CommunicationPermissionRequiredError,
-  type CommunicationFacilityOption,
+  type CommunicationAccessAssignmentOption,
 } from '@/lib/auth/communication-access';
 import {
   CommunicationAuditUnavailableError,
@@ -27,9 +26,10 @@ const context: ApiRequestContext = {
   startedAt: 0,
 };
 
-const facilities: CommunicationFacilityOption[] = [
+const assignments: CommunicationAccessAssignmentOption[] = [
   {
-    organizationId: 'organization-a',
+    assignmentId: 'assignment-a',
+    departmentName: 'Терапия',
     organizationName: 'ORION Clinic',
     facilityId: 'facility-a',
     facilityName: 'Филиал A',
@@ -46,28 +46,28 @@ const cases: Array<{
 }> = [
   {
     name: 'нет активной роли',
-    error: new CommunicationMembershipRequiredError(),
+    error: new AccessMembershipRequiredError(),
     status: 403,
-    code: 'COMMUNICATION_ACCESS_REQUIRED',
+    code: 'COMMUNICATION_FORBIDDEN',
   },
   {
     name: 'нужен выбор клиники',
-    error: new CommunicationFacilitySelectionRequiredError(facilities),
+    error: new MultipleCommunicationAccessSelectionRequiredError(assignments),
     status: 409,
-    code: 'FACILITY_SELECTION_REQUIRED',
-    details: { facilities },
+    code: 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+    details: { assignments },
   },
   {
     name: 'клиника недоступна',
-    error: new CommunicationFacilityNotFoundError(),
-    status: 404,
-    code: 'COMMUNICATION_NOT_FOUND',
+    error: new AccessAssignmentNotFoundError(),
+    status: 403,
+    code: 'COMMUNICATION_FORBIDDEN',
   },
   {
     name: 'нет права на действие',
     error: new CommunicationPermissionRequiredError('notification.schedule'),
     status: 403,
-    code: 'COMMUNICATION_PERMISSION_REQUIRED',
+    code: 'COMMUNICATION_FORBIDDEN',
   },
   {
     name: 'запись не найдена',

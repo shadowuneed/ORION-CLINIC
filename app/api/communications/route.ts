@@ -6,7 +6,7 @@ import { communicationListQuerySchema } from '@/lib/domain/patient-communication
 import { apiFailure, apiSuccess, createApiRequestContext } from '@/lib/http/api-response';
 import { communicationApiFailure } from '@/lib/http/communication-api-errors';
 import { D1PatientCommunicationsRepository } from '@/lib/repositories/patient-communications';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const context = createApiRequestContext(request, '/api/communications');
   const url = new URL(request.url);
   const parsed = communicationListQuerySchema.safeParse({
+    accessAssignmentId: url.searchParams.get('accessAssignmentId') ?? undefined,
     facilityId: url.searchParams.get('facilityId') ?? undefined,
     patientId: url.searchParams.get('patientId') ?? undefined,
     state: url.searchParams.get('state') ?? undefined,
@@ -41,8 +42,9 @@ export async function GET(request: Request) {
       return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     }
     const access = await resolveCommunicationAccess(
-      new D1WorkspaceAccessRepository(env.DB),
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
+      parsed.data.accessAssignmentId,
       parsed.data.facilityId,
     );
     const repository = new D1PatientCommunicationsRepository(env.DB, access.scope);
@@ -57,10 +59,13 @@ export async function GET(request: Request) {
         id: access.user.id,
         displayName: access.user.displayName,
         role: access.scope.role,
+        membershipId: access.scope.membershipId,
+        accessAssignmentId: access.scope.accessAssignmentId,
       },
       organization: access.organization,
       facility: access.facility,
-      facilities: access.facilities,
+      accessAssignment: { assignmentId: access.scope.accessAssignmentId },
+      accessAssignments: access.assignments,
       ...workspace,
       persistence: 'd1',
     });

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { CommunicationWorkspace, ManualContactTaskRecord, NotificationRecord } from '@/lib/repositories/patient-communications';
 import {
   allowedManualActions,
+  buildCommunicationAccessQuery,
+  buildCommunicationOperationKey,
   allowedNotificationActions,
   findChannelConsent,
   fromZonedLocalInput,
@@ -86,6 +88,13 @@ function manualTask(state: ManualContactTaskRecord['current']['state']): ManualC
 }
 
 describe('communications workspace decisions', () => {
+  it('preserves exact assignment in links and isolates operation keys', () => {
+    const query = buildCommunicationAccessQuery('fac-a', 'assignment-a');
+    expect(query.get('facilityId')).toBe('fac-a');
+    expect(query.get('accessAssignmentId')).toBe('assignment-a');
+    expect(buildCommunicationOperationKey('assignment-a', 'consent:p:sms')).not.toBe(buildCommunicationOperationKey('assignment-b', 'consent:p:sms'));
+    expect(buildCommunicationOperationKey('a:b', 'c')).not.toBe(buildCommunicationOperationKey('a', 'b:c'));
+  });
   it('selects the consent for the exact patient and channel', () => {
     const consents = [
       {

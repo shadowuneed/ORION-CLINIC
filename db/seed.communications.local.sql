@@ -1,4 +1,49 @@
 -- Phase 7 local fixtures. No provider credentials and no real destinations.
+INSERT INTO department_access_assignments (
+  id, organization_id, facility_id, department_id, membership_id,
+  created_by_membership_id, created_at
+)
+SELECT
+  'access-assignment-care-nurse', 'org-a', 'fac-a',
+  'department-a-general-medicine', 'membership-care-nurse', 'membership-a', 1704067200000
+WHERE NOT EXISTS (
+  SELECT 1 FROM department_access_assignments
+  WHERE id = 'access-assignment-care-nurse'
+);
+
+INSERT INTO department_access_assignment_versions (
+  id, organization_id, facility_id, assignment_id, department_id,
+  membership_id, version, supersedes_version_id, status, source_type,
+  roles_json, allow_permissions_json, deny_permissions_json,
+  effective_from, effective_until, change_reason,
+  changed_by_membership_id, changed_at, created_at
+)
+SELECT
+  'access-assignment-care-nurse-v1', 'org-a', 'fac-a',
+  'access-assignment-care-nurse', 'department-a-general-medicine',
+  'membership-care-nurse', 1, NULL, 'active', 'bootstrap',
+  '["nurse"]', '[]', '[]', 1704067200000, NULL,
+  'synthetic_local_access_bootstrap', 'membership-a',
+  1704067200000, 1704067200000
+WHERE NOT EXISTS (
+  SELECT 1 FROM department_access_assignment_versions
+  WHERE id = 'access-assignment-care-nurse-v1'
+);
+
+INSERT INTO department_access_assignment_heads (
+  id, organization_id, facility_id, assignment_id, department_id,
+  membership_id, current_version_id, lock_version, created_at, updated_at
+)
+SELECT
+  'access-assignment-head-care-nurse', 'org-a', 'fac-a',
+  'access-assignment-care-nurse', 'department-a-general-medicine',
+  'membership-care-nurse', 'access-assignment-care-nurse-v1', 1,
+  1704067200000, 1704067200000
+WHERE NOT EXISTS (
+  SELECT 1 FROM department_access_assignment_heads
+  WHERE id = 'access-assignment-head-care-nurse'
+);
+
 INSERT OR IGNORE INTO communication_policy_versions (
   id, organization_id, facility_id, policy_code, version, status,
   source_type, quiet_start_minute, quiet_end_minute, max_attempts,

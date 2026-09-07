@@ -45,19 +45,13 @@ import type {
 } from '@/lib/repositories/patient-communications';
 import styles from './communications.module.css';
 
-type FacilityOption = {
-  organizationId: string;
-  organizationName: string;
-  facilityId: string;
-  facilityName: string;
-  role: 'clinician' | 'nurse' | 'registrar';
-};
+type AssignmentOption = import('@/lib/auth/communication-access').CommunicationAccessAssignmentOption;
 
 type ApiError = {
   code: string;
   message: string;
   requestId?: string;
-  details?: { facilities?: FacilityOption[] };
+  details?: { assignments?: AssignmentOption[] };
 };
 
 type CommunicationsResponse = Partial<CommunicationWorkspace> & {
@@ -68,7 +62,8 @@ type CommunicationsResponse = Partial<CommunicationWorkspace> & {
   };
   organization?: { id: string; name: string };
   facility?: { id: string; name: string };
-  facilities?: FacilityOption[];
+  accessAssignments?: AssignmentOption[];
+  accessAssignment?: { assignmentId: string };
   persistence?: 'd1';
   notification?: NotificationRecord;
   error?: ApiError;
@@ -77,7 +72,7 @@ type CommunicationsResponse = Partial<CommunicationWorkspace> & {
 type LoadState =
   | 'loading'
   | 'ready'
-  | 'facility'
+  | 'assignment'
   | 'unauthenticated'
   | 'forbidden'
   | 'error';
@@ -128,7 +123,7 @@ const responseLabels: Record<PatientResponseKind, string> = {
   other: 'Другое',
 };
 
-const roleLabels: Record<FacilityOption['role'], string> = {
+const roleLabels: Record<AssignmentOption['role'], string> = {
   clinician: 'Врач',
   nurse: 'Медсестра',
   registrar: 'Регистратор',
@@ -270,11 +265,19 @@ function ChannelIcon({ channel }: { channel: CommunicationChannel }) {
   return <MessageCircleMore aria-hidden="true" size={18} />;
 }
 
+export function buildCommunicationAccessQuery(facilityId: string, assignmentId: string) {
+  return new URLSearchParams({ facilityId, accessAssignmentId: assignmentId });
+}
+
+export function buildCommunicationOperationKey(assignmentId: string, operation: string) {
+  return JSON.stringify([assignmentId, operation]);
+}
+
 export function CommunicationsWorkspace() {
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<CommunicationsResponse>({});
-  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
-  const [selectedFacilityId, setSelectedFacilityId] = useState('');
+  const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOption[]>([]);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [selectedNotificationId, setSelectedNotificationId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -298,6 +301,10 @@ export function CommunicationsWorkspace() {
   const [responseSummary, setResponseSummary] = useState('');
 
   const facilityRef = useRef('');
+  const assignmentRef = useRef('');
+  const loadController = useRef<AbortController | null>(null);
+  const loadGeneration = useRef(0);
+  const commandBusy = useRef(false);
   const patientRef = useRef('');
   const notificationRef = useRef('');
   const commandKeys = useRef(new Map<string, string>());
@@ -311,24 +318,31 @@ export function CommunicationsWorkspace() {
   }, []);
 
   const load = useCallback(async (quiet = false) => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
+    const generation = ++loadGeneration.current;
     if (!quiet) setState('loading');
     try {
       const params = new URLSearchParams({ state: 'all', limit: '200' });
       if (facilityRef.current) params.set('facilityId', facilityRef.current);
+      if (assignmentRef.current) params.set('accessAssignmentId', assignmentRef.current);
       const response = await fetch(`/api/communications?${params.toString()}`, {
+        signal: controller.signal,
         cache: 'no-store',
         credentials: 'same-origin',
       });
       const payload = (await response.json()) as CommunicationsResponse;
+      if (controller.signal.aborted || generation !== loadGeneration.current) return;
       setData(payload);
       if (response.status === 401) {
         setState('unauthenticated');
       } else if (
         response.status === 409 &&
-        payload.error?.code === 'FACILITY_SELECTION_REQUIRED'
+        payload.error?.code === 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED'
       ) {
-        setFacilityOptions(payload.error.details?.facilities ?? []);
-        setState('facility');
+        setAssignmentOptions(payload.error.details?.assignments ?? []);
+        setState('assignment');
       } else if (response.status === 403) {
         setState('forbidden');
       } else if (
@@ -339,14 +353,18 @@ export function CommunicationsWorkspace() {
         !payload.notifications ||
         !payload.manualTasks ||
         !payload.templates ||
+        !payload.accessAssignment?.assignmentId ||
         !payload.capabilities
       ) {
         setState('error');
       } else {
         const resolvedFacility = payload.facility?.id ?? facilityRef.current;
         facilityRef.current = resolvedFacility;
-        setSelectedFacilityId(resolvedFacility);
-        setFacilityOptions(payload.facilities ?? []);
+        assignmentRef.current = payload.accessAssignment?.assignmentId ?? '';
+        setSelectedAssignmentId(assignmentRef.current);
+        setAssignmentOptions(payload.accessAssignments ?? []);
+        const params = buildCommunicationAccessQuery(resolvedFacility, assignmentRef.current);
+        window.history.replaceState(null, '', `/communications?${params}`);
         const nextPatient = payload.patients.some((item) => item.id === patientRef.current)
           ? patientRef.current
           : payload.patients[0]?.id ?? '';
@@ -365,6 +383,7 @@ export function CommunicationsWorkspace() {
         setState('ready');
       }
     } catch {
+      if (controller.signal.aborted || generation !== loadGeneration.current) return;
       setState('error');
     }
   }, []);
@@ -373,10 +392,14 @@ export function CommunicationsWorkspace() {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       facilityRef.current = params.get('facilityId') ?? '';
-      setSelectedFacilityId(facilityRef.current);
+      assignmentRef.current = params.get('accessAssignmentId') ?? '';
+      setSelectedAssignmentId(assignmentRef.current);
       void load();
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      loadController.current?.abort();
+    };
   }, [load]);
 
   const dialogOpen = consentTarget !== null || scheduleTarget !== null || responseTarget !== null;
@@ -464,6 +487,9 @@ export function CommunicationsWorkspace() {
     body: Record<string, unknown>,
     successMessage: string | ((payload: CommunicationsResponse) => string),
   ) {
+    if (commandBusy.current || !facilityRef.current || !assignmentRef.current) return null;
+    commandBusy.current = true;
+    key = buildCommunicationOperationKey(assignmentRef.current, key);
     const idempotencyKey = commandKeys.current.get(key) ?? crypto.randomUUID();
     commandKeys.current.set(key, idempotencyKey);
     setBusy(key);
@@ -477,7 +503,8 @@ export function CommunicationsWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...body,
-          facilityId: facilityRef.current || undefined,
+          facilityId: facilityRef.current,
+          accessAssignmentId: assignmentRef.current,
           idempotencyKey,
         }),
       });
@@ -500,20 +527,30 @@ export function CommunicationsWorkspace() {
       });
       return null;
     } finally {
+      commandBusy.current = false;
       setBusy(null);
     }
   }
 
-  function chooseFacility(facilityId: string) {
-    facilityRef.current = facilityId;
-    setSelectedFacilityId(facilityId);
-    const params = new URLSearchParams(window.location.search);
-    params.set('facilityId', facilityId);
-    window.history.replaceState(null, '', `/communications?${params.toString()}`);
+  function chooseAssignment(assignmentId: string) {
+    if (commandBusy.current || dialogOpen) return;
+    const choice = assignmentOptions.find((item) => item.assignmentId === assignmentId);
+    if (!choice) return;
+    facilityRef.current = choice.facilityId;
+    assignmentRef.current = assignmentId;
+    patientRef.current = '';
+    notificationRef.current = '';
+    setSelectedPatientId('');
+    setSelectedNotificationId('');
+    setMessage(null);
+    setOperationError(null);
+    setSelectedAssignmentId(assignmentId);
+    window.history.replaceState(null, '', `/communications?${buildCommunicationAccessQuery(choice.facilityId, assignmentId)}`);
     void load();
   }
 
   function choosePatient(patientId: string) {
+    if (commandBusy.current || dialogOpen) return;
     patientRef.current = patientId;
     notificationRef.current = '';
     setSelectedPatientId(patientId);
@@ -704,9 +741,9 @@ export function CommunicationsWorkspace() {
   if (state !== 'ready' || !capabilities) {
     const panel = {
       loading: ['Загружаем очередь', 'Читаем согласия, источники и ручные задачи из D1.'],
-      facility: ['Выберите клинику', 'Для работы с коммуникациями нужен один конкретный филиал.'],
+      assignment: ['Выберите рабочее назначение', 'Права разных отделений не объединяются. Выберите назначение для этой работы.'],
       unauthenticated: ['Нужен вход', 'Откройте ORION Clinic через авторизованный контур.'],
-      forbidden: ['Нет доступа', 'Нужна активная роль врача, медсестры или регистратора.'],
+      forbidden: ['Нет доступа', 'Назначение недоступно. Откройте «Связь с пациентом» в меню для выбора действующего назначения.'],
       error: ['Контур недоступен', data.error?.message ?? 'Не удалось прочитать данные D1.'],
       ready: ['', ''],
     }[state];
@@ -716,10 +753,10 @@ export function CommunicationsWorkspace() {
         <small>Связь с пациентом</small>
         <h1>{panel[0]}</h1>
         <p>{panel[1]}</p>
-        {state === 'facility' ? (
-          <select aria-label="Клиника" value={selectedFacilityId} onChange={(event) => chooseFacility(event.target.value)}>
-            <option value="">Выберите клинику</option>
-            {facilityOptions.map((facility) => <option key={facility.facilityId} value={facility.facilityId}>{facility.organizationName} · {facility.facilityName}</option>)}
+        {state === 'assignment' ? (
+          <select aria-label="Рабочее назначение" disabled={busy !== null || dialogOpen} value={selectedAssignmentId} onChange={(event) => chooseAssignment(event.target.value)}>
+            <option value="">Выберите рабочее назначение</option>
+            {assignmentOptions.map((facility) => <option key={facility.assignmentId} value={facility.assignmentId}>{facility.organizationName} · {facility.facilityName} · {facility.departmentName} · {roleLabels[facility.role]}</option>)}
           </select>
         ) : state === 'error' ? (
           <button className={styles.primaryButton} onClick={() => void load()} type="button"><RefreshCw size={17} /> Повторить</button>
@@ -752,7 +789,7 @@ export function CommunicationsWorkspace() {
       <section className={styles.toolbar}>
         <div className={styles.toolbarMeta}><MessageSquareText size={18} /><span><strong>{data.facility?.name ?? 'Филиал'}</strong><small>{data.viewer?.displayName} · {data.viewer?.role ? roleLabels[data.viewer.role] : ''}</small></span></div>
         <div className={styles.toolbarActions}>
-          {facilityOptions.length > 1 ? <select aria-label="Сменить клинику" value={selectedFacilityId} onChange={(event) => chooseFacility(event.target.value)}>{facilityOptions.map((facility) => <option key={facility.facilityId} value={facility.facilityId}>{facility.facilityName}</option>)}</select> : null}
+          {assignmentOptions.length > 1 ? <select aria-label="Сменить рабочее назначение" disabled={busy !== null || dialogOpen} value={selectedAssignmentId} onChange={(event) => chooseAssignment(event.target.value)}>{assignmentOptions.map((facility) => <option key={facility.assignmentId} value={facility.assignmentId}>{facility.facilityName} · {facility.departmentName} · {roleLabels[facility.role]}</option>)}</select> : null}
           <button className={styles.secondaryButton} disabled={busy !== null} onClick={() => void load()} type="button"><RefreshCw size={16} /> Обновить</button>
         </div>
       </section>

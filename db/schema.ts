@@ -5377,6 +5377,7 @@ export const outboxEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     aggregateType: text('aggregate_type').notNull(),
     aggregateId: text('aggregate_id').notNull(),
     aggregateVersion: integer('aggregate_version').notNull(),
@@ -6438,6 +6439,7 @@ export const patientChannelConsentEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     patientId: text('patient_id')
       .notNull()
       .references(() => patients.id),
@@ -6602,6 +6604,7 @@ export const patientNotificationEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     notificationId: text('notification_id').notNull(),
     patientId: text('patient_id')
       .notNull()
@@ -6855,6 +6858,7 @@ export const notificationDeliveryAttempts = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     notificationId: text('notification_id').notNull(),
     notificationEventId: text('notification_event_id')
       .notNull()
@@ -6933,6 +6937,7 @@ export const communicationPatientResponses = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     notificationId: text('notification_id').notNull(),
     manualTaskId: text('manual_task_id').notNull(),
     responseKind: text('response_kind', {
@@ -7004,6 +7009,7 @@ export const communicationManualTaskEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references((): AnySQLiteColumn => departmentAccessAssignments.id),
     taskId: text('task_id').notNull(),
     notificationId: text('notification_id').notNull(),
     version: integer('version').notNull(),

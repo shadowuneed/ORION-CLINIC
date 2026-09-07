@@ -1,7 +1,6 @@
+import { AccessAssignmentNotFoundError, AccessMembershipRequiredError, AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import {
-  CommunicationFacilityNotFoundError,
-  CommunicationFacilitySelectionRequiredError,
-  CommunicationMembershipRequiredError,
+  MultipleCommunicationAccessSelectionRequiredError,
   CommunicationPermissionRequiredError,
 } from '@/lib/auth/communication-access';
 import {
@@ -23,41 +22,22 @@ export function communicationApiFailure(
   fallbackCode: string,
   fallbackMessage: string,
 ) {
-  if (error instanceof CommunicationMembershipRequiredError) {
-    return apiFailure(
-      context,
-      403,
-      'COMMUNICATION_ACCESS_REQUIRED',
-      'Нужна активная роль врача, медсестры или регистратора.',
-    );
+  if (error instanceof MultipleCommunicationAccessSelectionRequiredError) {
+    return apiFailure(context, 409, 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED',
+      'Выберите рабочее назначение для связи с пациентом.',
+      { assignments: error.assignments.map(({ assignmentId, organizationName, facilityId, facilityName, departmentName, role }) =>
+        ({ assignmentId, organizationName, facilityId, facilityName, departmentName, role })) });
   }
-  if (error instanceof CommunicationFacilitySelectionRequiredError) {
-    return apiFailure(
-      context,
-      409,
-      'FACILITY_SELECTION_REQUIRED',
-      'Выберите клинику для работы с коммуникациями.',
-      { facilities: error.facilities },
-    );
+  if (error instanceof AccessMembershipRequiredError ||
+      error instanceof AccessAssignmentNotFoundError ||
+      error instanceof AccessPermissionRequiredError ||
+      error instanceof CommunicationPermissionRequiredError) {
+    return apiFailure(context, 403, 'COMMUNICATION_FORBIDDEN',
+      'Рабочее назначение недоступно или недостаточно прав для этого действия.');
   }
-  if (
-    error instanceof CommunicationFacilityNotFoundError ||
-    error instanceof CommunicationNotFoundError
-  ) {
-    return apiFailure(
-      context,
-      404,
-      'COMMUNICATION_NOT_FOUND',
-      'Запись коммуникации не найдена или недоступна.',
-    );
-  }
-  if (error instanceof CommunicationPermissionRequiredError) {
-    return apiFailure(
-      context,
-      403,
-      'COMMUNICATION_PERMISSION_REQUIRED',
-      'Недостаточно прав для этого действия.',
-    );
+  if (error instanceof CommunicationNotFoundError) {
+    return apiFailure(context, 404, 'COMMUNICATION_NOT_FOUND',
+      'Запись коммуникации не найдена или недоступна.');
   }
   if (error instanceof CommunicationVersionConflictError) {
     return apiFailure(

@@ -283,7 +283,7 @@ html[data-theme='dark'] .primaryButton { color: #13231f; }
 .patientCard em { margin-top: 5px; color: var(--ink-soft); font-size: .71rem; font-style: normal; }
 .patientCard > svg { color: var(--ink-muted); }
 
-.detail { min-width: 0; padding: 23px; }
+.detail { min-width: 0; padding: 23px; container-type: inline-size; }
 .detailHeader { align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 19px; border-bottom: 1px solid var(--line); }
 .detailHeader h2 { margin-top: 7px; font-size: clamp(1.35rem, 2.4vw, 1.9rem); }
 .detailHeader p { margin: 7px 0 0; color: var(--ink-soft); font-size: .77rem; }
@@ -440,13 +440,20 @@ html[data-theme='dark'] .primaryButton { color: #13231f; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* The patient rail can leave little room even on a desktop-sized viewport. */
+@container (max-width: 740px) {
+  .queueSection { grid-template-columns: 1fr; }
+  .queueList { border-right: 0; border-bottom: 1px solid var(--line); }
+  .manualList { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1180px) {
   .main { padding: 26px 24px 48px; }
   .workspace { grid-template-columns: 245px minmax(0, 1fr); }
   .channelGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .channelCard:nth-child(2) { border-right: 0; }
   .channelCard:nth-child(n + 3) { border-top: 1px solid var(--line); }
-  .queueSection { grid-template-columns: 280px minmax(0, 1fr); }
+  /* Queue/detail columns respond to the actual panel width, not the viewport. */
 }
 
 @media (max-width: 860px) {
