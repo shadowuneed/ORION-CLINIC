@@ -96,16 +96,26 @@ Historical rows are not backfilled. A legacy command without assignment cannot
 be replayed as a new attributed command; reload the current section and resolve
 its current version before a fresh edit. Initial version-one creation and service
 AI drafts retain their existing boundaries and are NOT covered by this migration.
-Read audits, consent, transcript, speech sessions, recommendation generation and
+Read audits, transcript, speech sessions, recommendation generation and
 decisions, protocols, exports and independent creation remain open below.
 
-## Next bounded checkpoint: 2I.3b — consent command authorization
+## 2I.3b — consent command authorization
 
-Apply the same durable attribution and current-assignment/replay checks to
-consent commands next. Preserve the ability to grant initial care consent (do not
-require pre-existing care consent to grant it), withdrawal semantics, immutable
-versions and exact patient/encounter ownership. Continue the remaining inventory
-one writer family at a time; 2I.3 and full 2I remain incomplete.
+Implemented current-assignment checks at repository entry, replay, retry and
+commit; assignment is stored on consent events, command rows, hashes and audit
+metadata. Migration 0036 guards attributed events and every interactive consent
+command/audit/result. No pre-existing care consent is required, including for
+initial care grant or withdrawal. Historical/fixture and independent creation
+events may still have NULL attribution; their separate writer remains a later
+gate. Do not infer protection of all direct consent-event SQL from command tests.
+
+## Next bounded checkpoint: 2I.3c — transcript correction commands
+
+Migrate manual transcript corrections to exact durable assignment provenance,
+current permission before replay/commit and SQL guards. Preserve segment versions,
+speaker corrections, finality and consent requirements. Do not replace STT or
+fold speech-session/provider work into this slice. Continue the remaining
+inventory one writer family at a time; 2I.3 and full 2I remain incomplete.
 
 ## Remaining 2I.3 acceptance gates
 

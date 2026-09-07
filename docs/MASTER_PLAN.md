@@ -815,6 +815,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2I.3a clinical section durable authorization | PASS for bounded local slice | Full pnpm verify:ci: 440-file secret policy, zero known dependency vulnerabilities, lint/types, 74 files/517 tests, Drizzle, build and isolated recovery after source destruction (86 tables/149 rows/36 migrations/three R2 objects/500,050 bytes; run a367cf01-3cfe-47f1-88f0-ee1e76cbdd49, 86,095 ms). Migration 0035 applied locally; quick_check ok and foreign_key_check empty. Web 3200 HTTP 200, STT ready on 3101, existing ngrok targets localhost:3200. No microphone, live AI, visual or production-readiness claim. |
 
+| 2026-09-07 | Phase 2I.3b interactive consent commands | PASS for bounded local slice | pnpm verify:ci passed secret policy (443 files), dependency audit, lint/types, 75 files/526 tests, schema/build and isolated recovery (86 tables/150 rows/37 migrations/three R2 objects/504,359 bytes; run 164d912b-d98c-482e-839d-cd67b96b16b6, 88,530 ms). Two final test additions followed by full pnpm test: 75 files/528 tests PASS; targeted ESLint and typecheck PASS. Migration 0036 applied; active quick_check ok, foreign_key_check empty, subsecond clock supported. Web HTTP 200, STT ready and ngrok unchanged. No browser consent mutation or real patient/provider validation. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1188,9 +1190,14 @@ control, detection, response, and residual acceptance.
   Additive migration 0035 guards human-authored/reviewed successor versions,
   command results and matching audit provenance. Historical rows remain unchanged;
   initial roots and service AI drafts are separate, still-open migration gates.
-- Exact next checkpoint: 2I.3b, consent command authorization. Preserve initial
-  consent granting without requiring prior care consent, plus withdrawal and
-  immutable history. Continue the remaining durable encounter inventory below;
+- Completed 2I.3b implementation: interactive consent commands persist assignment
+  on events, commands and hashed audit; current authorization is checked before
+  replay/retries/commit. Migration 0036 guards attributed events and interactive
+  command/audit/results, without requiring prior care consent. Unattributed
+  historical/fixture/independent creation events retain their existing boundaries.
+- Exact next checkpoint: 2I.3c, manual transcript correction commands. Preserve
+  consent, segment versions, finality and speaker corrections; leave STT models
+  and speech-session/provider migration separate. Continue the inventory below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1394,6 +1401,33 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.3b interactive consent command checkpoint
+
+- Exact current assignment is required before consent command replay/retries and
+  commit. It is persisted on consent events, command rows, request hashes and
+  hashed audit metadata. Migration 0036 adds a nullable event field and guards
+  attributed events plus every interactive consent command, audit and result.
+- Preserve initial care grant without any prior consent, withdrawals and regrant.
+  No new encounter lifecycle restriction was added that could block withdrawal.
+  Old history is not rewritten. Unattributed fixture/independent creation events
+  remain a separate migration gate; do not claim all raw event insertion is closed.
+- Verified `pnpm verify:ci`, then final full tests (75 files/528 tests), targeted
+  ESLint and typecheck after two test-only additions. Recovery PASS after isolated
+  source destruction: 86 tables/150 rows/37 migrations/three R2 objects/504,359
+  bytes, run 164d912b-d98c-482e-839d-cd67b96b16b6. Active D1 integrity checks PASS.
+- Eleven new tests exercise initial care grant with no history, withdrawal and
+  regrant, absent/read-only/wrong scopes, wrong user, revoked membership replay,
+  revocation between preflight and batch, cross-assignment replay and direct SQL
+  unattributed command denial. Shared current-assignment resolver already has
+  role/deny/expiry coverage; no production identity or clinical accuracy claim.
+- Next: **2I.3c manual transcript corrections**. Add assignment to durable
+  correction provenance/commands/audits, recheck rights before replay and commit,
+  and guard SQL. Preserve storage consent, versioning, finality and speaker edits.
+  Keep speech sessions/slow provider results a distinct subsequent checkpoint.
+  Full 2I.3 remains incomplete; remaining inventory is in the requirements file.
+- Runtime remains on 3200/3101 with existing ngrok. No model, UI, provider, secret
+  or legacy-project changes. Preserve the owner's standalone unstaged `a`.
 
 ### 2026-09-07 — Phase 2I.3a clinical section durable authorization
 
@@ -2099,9 +2133,10 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3b: consent command attribution
-and database actor guards, with current authorization before replay and commit.
-Phase 2I.3a covers clinical section commands only. Remaining encounter writers
+The next bounded engineering slice is Phase 2I.3c: manual transcript correction
+attribution and database actor guards, with authorization before replay and commit.
+Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
+commands. Remaining encounter writers
 still require durable guards, including slow provider result commits.
 Phase 2I.2 implements request/UI scope
 but does not close that database gate; full 2I remains IN_PROGRESS. Phase 2H

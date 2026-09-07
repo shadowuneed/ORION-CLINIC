@@ -253,6 +253,13 @@
       "when": 1788774829185,
       "tag": "0035_stale_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1788777009129,
+      "tag": "0036_even_nick_fury",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import {
   assertConsentDecisionTransition,
   type ConsentDecision,
@@ -64,6 +65,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -169,8 +171,10 @@ export class D1ConsentRepository {
   }
 
   async recordCommand(input: RecordConsentCommand) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, input.actorId);
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         consentType: input.consentType,
         decision: input.decision,
@@ -184,9 +188,10 @@ export class D1ConsentRepository {
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await assertCurrentEncounterWriteAccess(this.database, this.scope, input.actorId);
       const [encounter, current, auditHead] = await Promise.all([
         this.getEncounterPatient(),
         this.getCurrent(input.consentType),
@@ -221,8 +226,9 @@ export class D1ConsentRepository {
           auditHead,
         });
       } catch (error) {
+        await assertCurrentEncounterWriteAccess(this.database, this.scope, input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const latest = await this.getCurrent(input.consentType);
         if ((latest?.lockVersion ?? 0) !== input.expectedVersion) {
@@ -253,6 +259,7 @@ export class D1ConsentRepository {
       input.consentType === 'external_ai_processing' ? 'groq' : null;
     const auditSequence = auditHead.lastSequence + 1;
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       consentType: input.consentType,
       decision: input.decision,
       previousVersion: input.expectedVersion,
@@ -289,10 +296,10 @@ export class D1ConsentRepository {
               id, organization_id, facility_id, patient_id, encounter_id,
               version, consent_type, decision, captured_by_membership_id,
               policy_version, policy_hash, notice_language, external_processor, source,
-              occurred_at, effective_at, supersedes_consent_event_id, created_at
+              occurred_at, effective_at, supersedes_consent_event_id, created_at, access_assignment_id
             )
             select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9,
-              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18
+              ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?20
             from consent_heads
             where organization_id = ?2 and facility_id = ?3
               and patient_id = ?4 and encounter_id = ?5 and consent_type = ?7
@@ -318,6 +325,7 @@ export class D1ConsentRepository {
             current.currentEventId,
             now,
             input.expectedVersion,
+            this.scope.accessAssignmentId!,
           )
       : this.database
           .prepare(`
@@ -325,10 +333,10 @@ export class D1ConsentRepository {
               id, organization_id, facility_id, patient_id, encounter_id,
               version, consent_type, decision, captured_by_membership_id,
               policy_version, policy_hash, notice_language, external_processor, source,
-              occurred_at, effective_at, created_at
+              occurred_at, effective_at, created_at, access_assignment_id
             ) values (
               ?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8,
-              ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16
+              ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
             )
           `)
           .bind(
@@ -348,6 +356,7 @@ export class D1ConsentRepository {
             now,
             now,
             now,
+            this.scope.accessAssignmentId!,
           );
 
     const advanceHead = current
@@ -393,6 +402,7 @@ export class D1ConsentRepository {
             now,
           );
 
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, input.actorId);
     const results = await this.database.batch([
       insertEvent,
       advanceHead,
@@ -447,9 +457,9 @@ export class D1ConsentRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'consent.command', ?5, ?6,
-            'processing', ?8
+            'processing', ?8, ?10
           where exists (select 1 from consent_events where id = ?7)
             and exists (select 1 from audit_events where id = ?9)
         `)
@@ -463,6 +473,7 @@ export class D1ConsentRepository {
           eventId,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -601,7 +612,7 @@ export class D1ConsentRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId
         from command_idempotency
@@ -618,8 +629,10 @@ export class D1ConsentRepository {
       .first<IdempotencyRow>();
   }
 
-  private async resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'consent_event' ||

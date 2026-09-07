@@ -1868,6 +1868,7 @@ export const consentEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references(() => departmentAccessAssignments.id),
     patientId: text('patient_id')
       .notNull()
       .references(() => patients.id),
