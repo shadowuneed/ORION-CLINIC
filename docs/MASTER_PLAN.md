@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-06
+- Last updated: 2026-09-07
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -806,6 +806,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-06 | Phase 2F exact-assignment migration for scheduling and queue | PASS for synthetic local data | Commit `9df6510` migrates all seven `/api/scheduling` handlers and `/scheduling` to one selected current non-service doctor/registrar assignment with effective `scheduling.manage`. The clinician/registrar action matrix remains distinct; exact assignment attribution is durable on commands, preference snapshots, appointment/queue roots, every new slot/appointment/queue version, request hashes and audit metadata, and migration `0032` adds D1 actor/role guards. `pnpm verify:ci` passed secret policy for 418 files, zero known dependency vulnerabilities, lint/strict types, 65 test files/385 tests, Drizzle drift check, every Vinext route and isolated recovery after source destruction matching 86 tables/146 rows/33 migrations/three R2 objects/460,540 bytes (`ec9f467a-f59e-405b-8ad9-59e7fefce5fa`). Active D1 integrity, authenticated read-only scheduling browser QA and all local/public health endpoints also passed. |
 
+| 2026-09-07 | Phase 2G exact-assignment chronic-care checkpoint | PASS for synthetic local data | Commit `e5cfcde` binds `/api/care`, commands and `/care` to one current non-service doctor/nurse assignment with effective `care.manage`. Migration `0033` adds six assignment columns, one permission view and seven write guards. `pnpm verify:ci` passed 422-file secret policy, dependency audit, lint/types, 67 files/397 tests, Drizzle, build and isolated recovery (86 tables/147 rows/34 migrations/three R2 objects/476,175 bytes; `66516e81-f003-4171-954e-7246998eb977`). Final UI edits passed typecheck, targeted ESLint, six UI tests and a fresh build. Browser filter, task-dialog open/close and refresh passed without clinical mutations. Runtime was stopped on resumption and was restored; STT is ready, web health is 200 and ngrok points to 3200. Groq configuration is missing at restart; live AI is not verified. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -884,6 +886,14 @@ control, detection, response, and residual acceptance.
   clinical action matrix. Approved-referral visibility, manual-test schedule label,
   hold concurrency, patient confirmation, lifecycle, audit and neutral denial remain
   in force. Historical rows remain readable without being rewritten.
+- Completed current bounded slice: Phase 2G migrates `/api/care`, all care commands
+  and `/care` to one exact current non-service doctor/nurse assignment with
+  effective `care.manage`. Explicit denial has no fallback; multiple eligible
+  assignments require selection even within one facility. Enrollment, plan and
+  task roots/versions, command replay hashes and audit metadata retain the exact
+  assignment. Seven SQLite guards preserve the distinct doctor/nurse action matrix.
+  Historical rows remain readable; immutable history is not backfilled. The UI
+  cancels stale loads and prevents assignment changes during an open command.
 - Phase 4 has an operational local `Направления` module without external
   delivery/acknowledgement. Phase 5 has local scheduling and queue without an
   authoritative KMIS source. Phase 6 has local signed-plan observation without
@@ -1151,12 +1161,13 @@ control, detection, response, and residual acceptance.
   code checkpoint is an immutable signed-policy registry with no runtime alerts;
   critical classification, hospital notification and transfer stay blocked until
   their later explicit gates pass.
-- Exact next engineering checkpoint after Phase 2F: Phase 2G migrates only the
-  `/api/care` family, care-task commands and `/care` workspace to one selected
-  assignment plus effective `care.manage`. Preserve the existing clinician/nurse
-  action matrix, signed-plan source, enrollment and task lifecycle, optimistic
-  concurrency, idempotency, audit and neutral denial. Do not migrate communications
-  in that checkpoint.
+- Exact next engineering checkpoint after Phase 2G: Phase 2H migrates only the
+  `/api/communications` family, its commands and `/communications` workspace to one
+  selected assignment plus effective `communications.manage`. Preserve distinct
+  doctor/nurse/registrar actions, exact source visibility, channel consent,
+  approved-test templates, quiet hours, manual response and escalation, optimistic
+  concurrency, idempotency, audit and neutral denial. Keep providers disconnected:
+  no real messages or calls, worker activation or production identity changes.
 - Do not add ERDB/PUZ/free-medication adapters or infer a
   diagnosis from AI until their owners, terminology and legal basis are approved.
   The external parts of Phases 4 and 5 remain blocked on DEC-001/002/005 and the
@@ -1348,6 +1359,51 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2G exact-assignment chronic-care checkpoint
+
+- Repository: adjacent `ORION-CLINIC`, branch `main`; implementation `e5cfcde`.
+  Legacy `ariaproject`, models and other projects were not changed.
+- Delivered: exact current assignment resolution, effective `care.manage`,
+  no-fallback explicit denial, minimized assignment selection, API propagation,
+  assignment-scoped UI loading and command keys, durable actor attribution in six
+  care tables and idempotency/audit, migration `0033` with seven guards and one view.
+- Preserved: signed-protocol enrollment, doctor-signed plans, dated plan tasks,
+  nurse-only assigned responses/escalation, doctor resolution, immutable history,
+  optimistic conflicts, replay and patient/facility visibility. Historical null
+  assignments remain readable but new writes require a valid assignment.
+- Verification: `pnpm verify:ci` passed secret policy (422 files), no known
+  dependency vulnerabilities, lint, strict types, 67 files/397 tests, Drizzle check,
+  production build and isolated recovery after disposable-source destruction.
+  Recovery matched 86 tables, 147 rows, 34 migrations, three R2 objects and 476,175
+  bytes; run `66516e81-f003-4171-954e-7246998eb977`, 86,334 ms.
+  After final UI guards/text changes, `pnpm typecheck`, targeted ESLint,
+  `pnpm exec vitest run app/care/care-workspace.test.ts --maxWorkers=1` (6 tests),
+  `pnpm build` and `pnpm security:secrets` passed again.
+- Active D1: migration and rerunnable care seed applied; `quick_check=ok`, no
+  foreign-key violations, 34 migrations, seven access triggers and permission view.
+- Browser: valid exact assignment loads the synthetic patient and three tasks;
+  invalid assignment denies without fallback. Final fresh-session smoke exercised
+  overdue filtering (one task), task-dialog open/close and refresh; no clinical
+  command was submitted in the browser. Behavioral mutation coverage runs against
+  isolated synthetic SQLite fixtures, not live patient records.
+- Runtime on resumption was no longer listening. The stock launcher restored web
+  3200 and STT 3101 without touching other listeners. Web health returned 200; STT
+  and speaker health are ready (CUDA). Ngrok was restored with the existing access
+  policy, pointing `https://down-outfield-regular.ngrok-free.dev` at localhost:3200.
+  Services are left running. The launcher reports Groq is not configured; do not
+  claim a working live AI loop. No old chat credential was copied into configuration.
+- Owner working-tree note: preserve the standalone `a` under Risk register,
+  unstaged and uncommitted. No recordings, exports, local secrets or runtime files
+  belong in this checkpoint commit.
+- Next: Phase 2H exact-assignment migration of communications only. Read
+  `lib/auth/communication-access.ts` and the existing communications repository,
+  API and UI. Keep every no-send/consent/source/role boundary, add direct-SQL,
+  replay/conflict/denial tests, migrate local D1, run `pnpm verify:ci`, inspect UI
+  and update this handoff. Do not connect a provider or activate sending.
+- Limitations: synthetic local data only; no real microphone accuracy run, live
+  Groq call, production authentication, KMIS/LIS/ERDB/PUZ/notification integration,
+  clinical thresholds or hospital-transfer approval is claimed.
 
 ### 2026-09-06 — Phase 2F exact-assignment scheduling checkpoint
 
@@ -1821,10 +1877,10 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2G: migrate only the chronic-care API
-family, care-task commands and database actor guards to a selected assignment with
-effective `care.manage`, while preserving distinct clinician/nurse behavior. Do not
-migrate communications in that checkpoint. Phase 8B is
+The next bounded engineering slice is Phase 2H: migrate only the communications API
+family, commands, UI and database actor guards to a selected assignment with
+effective `communications.manage`, preserving doctor/nurse/registrar behavior,
+source visibility and consent. Keep every provider disconnected. Phase 8B is
 already a complete activation-blocked review artifact; named clinic owners must
 fill and sign `DEC-006`/`DEC-007` before any signed-policy implementation. Do not
 classify critical status, notify another hospital or initiate transfer before

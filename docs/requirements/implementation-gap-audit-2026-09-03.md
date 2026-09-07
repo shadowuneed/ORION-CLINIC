@@ -1,6 +1,6 @@
 # ORION Clinic — аудит реализации требований руководителя клиники
 
-- Дата последней проверки: `2026-09-06`
+- Дата последней проверки: `2026-09-07`
 - Базовый commit до Phase 4 checkpoint: `7f2272c`
 - Проверенный commit локального Phase 5 checkpoint: `3439e21`
 - Проверенный commit локального Phase 8A checkpoint: `89819fe`
@@ -8,6 +8,7 @@
 - Проверенный commit Phase 2D orders exact-assignment migration: `a9e73e9`
 - Проверенный commit Phase 2E observations exact-assignment migration: `e29a4da`
 - Проверенный commit Phase 2F scheduling exact-assignment migration: `9df6510`
+- Проверенный commit Phase 2G chronic-care exact-assignment migration: `e5cfcde`
 - Режим данных: только синтетические данные в локальных D1/R2
 - Основание: `SRC-WA-001`, `SRC-WA-002` и каталог
   `clinic-leadership-catalogue.md`
@@ -40,11 +41,20 @@
 | Связь с пациентом | `REQ-COM-001..004`, `REQ-SCH-006` | `IMPLEMENTED_SYNTHETIC_NO_SEND` | отдельные channel/language consent versions, `approved_test` templates, exact-source outbox, quiet hours, bounded disconnected-provider retry and manual fallback на `/communications`; реальный канал и delivery receipt отсутствуют |
 | Смотровая: рост/вес/ИМТ/давление/температура | `REQ-OBS-001..004` | `IMPLEMENTED_SYNTHETIC_CAPTURE` | exact-assignment D1/API/UI на `/observations`; effective `observations.manage`, отдельные doctor/nurse правила, scaled units, derived BMI, exact source/author/time, immutable correction history, idempotency, optimistic conflicts and audit; медицинская интерпретация отключена |
 
-Current Phase 2F gate: secret policy covered 418 repository files; dependency
-audit found no known vulnerabilities; lint, strict types, 65 test files/385 tests,
+Current Phase 2G gate: secret policy covered 422 repository files; dependency
+audit found no known vulnerabilities; lint, strict types, 67 test files/397 tests,
 Drizzle and the production build passed. The isolated recovery drill reproduced
-86 tables, 146 rows, 33 migrations and three R2 objects after destroying only its
+86 tables, 147 rows, 34 migrations and three R2 objects after destroying only its
 disposable source environment. This evidence applies only to synthetic local data.
+
+Chronic care now uses one exact current doctor/nurse assignment with effective
+`care.manage` across API, UI, new writes and audit; explicit denial has no fallback.
+Historical immutable rows are not rewritten. Browser read-only checks covered
+task filtering, dialog open/close and refresh. Clinical mutation behavior is tested
+in isolated SQLite fixtures. Final UI changes passed types, ESLint, six UI tests
+and a fresh build. Next access migration: communications, with providers disabled.
+At the latest restart web/STT were restored, but Groq configuration was missing;
+a working live AI analysis loop is not claimed.
 
 ## 3. Что отсутствует или остаётся частичным
 
