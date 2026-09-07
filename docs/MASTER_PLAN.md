@@ -825,6 +825,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Phase 2I.3f.1 recommendation repository boundary | PASS; SQL gate open | Full pnpm verify:ci passed secret policy (452 files), no known dependency vulnerabilities, lint/types, 78 files/554 tests, schema/build and isolated recovery after source destruction: 86 tables/153 rows/40 migrations/three R2 objects/518,476 bytes; run d72de977-bcdc-4284-8856-88ab9069a1e5, 88,558 ms. No schema migration. Web HTTP 200, STT ready, ngrok unchanged. Exact assignment on derivative/decision rows and transactional SQL guards remain 2I.3f.2; no full 2I.3f completion claim. |
 
+| 2026-09-07 | Phase 2I.3f.2 recommendation DB attribution | PASS, bounded checkpoint | pnpm verify:ci passed: secret policy 454 files, no known dependency vulnerabilities, lint/types, 78 files/558 tests, schema/build and isolated recovery after source destruction: 86 tables/154 rows/41 migrations/three R2 objects/524,761 bytes; run a5a31a83-ea45-4c16-a575-47e3dfff425b, 90,562 ms. Focused recommendation suite 13 tests passed, including audit/result mismatch and revoked pre-batch/direct SQL writes; subsequent typecheck passed. Migration 0040 applied only locally; quick_check ok and foreign_key_check empty. Web HTTP 200, STT ready, existing ngrok unchanged. Historical nullable fixtures retained; no UI/audio/provider validation claim. Next 2I.3g.1; full 2I remains open. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1217,9 +1219,11 @@ control, detection, response, and residual acceptance.
   exact assignment, care consent and lifecycle before retry/replay/batch; command
   rows/hashes and audit metadata carry assignment. Legacy unattributed replay is
   rejected without rewriting history. Basket and derivative semantics remain.
-- Exact next checkpoint: 2I.3f.2, derivative/decision row attribution and SQL actor
-  guards. Test revocation between preflight and transaction, direct SQL bypass,
-  audit/result identity and rollback. Full 2I.3f is NOT complete. Continue below;
+- Completed 2I.3f.2: migration 0040 attributes derivative/decision rows and guards
+  attributed inserts, interactive commands, results and audits. Revocation before
+  batch rolls back the operation; immutable historical nullable fixtures remain.
+- Exact next checkpoint: 2I.3g.1, protocol draft/sign/amend repository authorization.
+  Keep protocol-row SQL guards as a separate 2I.3g.2 gate. Continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1423,6 +1427,27 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-07 — Phase 2I.3f.2 recommendation database checkpoint
+
+- Forward-only migration 0040 applied locally; derivatives and decisions now
+  retain assignment. Attributed inserts require current treating clinician,
+  assignment, care consent, active patient and in-progress encounter.
+- Interactive command/result/audit guards require matching actor/assignment and
+  resource. Decision audit metadata identifies the exact immutable decision,
+  including restore. No immutable history was rewritten.
+- Behavioral tests cover revocation immediately before batch with full rollback,
+  direct attributed inserts after revocation, immutable assignment, wrong audit
+  decision/result identifiers and the existing accept/restore/reject chain.
+- Nullable historical/fixture rows are deliberately supported. This is not a
+  claim that every raw unattributed SQL writer is blocked. DB access stays trusted.
+- **Next: 2I.3g.1** protocol draft/sign/amend repository authorization: inventory
+  all entry/replay/retry/batch paths, exact current assignment/user checks and
+  command hash/row/audit attribution. Preserve signed snapshots and amendments.
+  Add revoked-access and cross-assignment replay tests. Then 2I.3g.2 adds durable
+  protocol-row attribution and SQL guards. Exports/read audits/creation remain.
+- See verification ledger for evidence. No visual, microphone or Groq claim;
+  keep web/STT/ngrok running and preserve owner's standalone unstaged `a`.
 
 ### 2026-09-07 — Phase 2I.3f.1 recommendation command repository checkpoint
 
@@ -2240,9 +2265,10 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3f.2: derivative/decision row
-assignment attribution and transactional SQL guards. 2I.3f.1 implements only the
-repository boundary and command/audit attribution; it does not close the SQL race.
+The next bounded engineering slice is Phase 2I.3g.1: protocol draft/sign/amend
+repository authorization and command/audit attribution. 2I.3g.2 must then add
+protocol-row attribution and SQL guards. Recommendation guards (2I.3f.2) are in
+migration 0040; historical nullable fixtures are intentionally retained.
 Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
 commands; 2I.3c covers manual transcript corrections, 2I.3d speech sessions and
 2I.3e recommendation generation.

@@ -147,14 +147,27 @@ hashed audit metadata now retain assignment. Unattributed legacy decision replay
 fails closed: reload current state before a deliberate new action; history remains.
 Existing immutable derivatives and accept/reject/restore behavior are preserved.
 
-## Next bounded checkpoint: 2I.3f.2 — recommendation database guards
+## 2I.3f.2 — recommendation database guards
 
-Do not mark 2I.3f complete yet. Add exact assignment to derivative versions and
-review decision rows, with forward-only schema and transactional actor/consent/
-lifecycle guards. Test revocation between preflight and batch, direct SQL bypass,
-audit/result attribution and rollback. Current repository checks alone do not
-close that race. Historical fixtures must remain immutable. No provider activation.
-Protocols/exports/read audits and independent creation remain later gates.
+Migration 0040 retains the exact assignment on derivative and decision rows.
+Attributed inserts require current assignment, treating clinician, active patient,
+in-progress encounter and care consent. Interactive command, result and audit
+guards bind matching assignment/member/resource; decision audits name the exact
+decision even for restore (whose current-decision head is intentionally null).
+Tests cover pre-batch revocation rollback, direct attributed SQL rejection,
+immutable attribution, mismatched result/audit and accept/restore/reject history.
+Historical nullable attribution is preserved for fixtures, not a blanket ban on
+all raw unattributed SQL. Production DB access remains trusted and restricted.
+
+## Next bounded checkpoint: 2I.3g.1 — protocol repository authorization
+
+Inventory draft/sign/amend commands in the protocol repository. Require exact
+current encounter assignment/user at entry, replay and before batch; bind command
+hashes/rows and audits to that assignment. Preserve section review, consent,
+signed snapshots and amendments. Add revocation and cross-assignment replay tests.
+Plan additive protocol-row/SQL guards separately as 2I.3g.2; do not mark full
+2I.3g complete with repository checks alone. Exports/read audits and independent
+creation remain later gates. No provider activation or real patient data.
 
 ## Remaining 2I.3 acceptance gates
 

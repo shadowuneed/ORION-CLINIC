@@ -587,7 +587,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
           id, organization_id, facility_id, encounter_id, suggestion_id,
           version, title, content, content_hash, evidence_json, provenance_json,
           reason, authored_by_membership_id, supersedes_derivative_version_id,
-          created_at
+          created_at, access_assignment_id
         )
         select ?1, suggestion.organization_id, suggestion.facility_id,
           suggestion.encounter_id, suggestion.id, ?2, ?3, ?4, ?5,
@@ -598,7 +598,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
             'policyVersion', analysis.policy_version,
             'inputHash', analysis.input_hash,
             'sourceRecordIds', json(analysis.source_record_ids_json)
-          ), ?6, ?7, ?8, ?9
+          ), ?6, ?7, ?8, ?9, ?14
         from clinical_suggestions suggestion
         join analysis_runs analysis
           on analysis.organization_id = suggestion.organization_id
@@ -611,7 +611,7 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
         derivativeId, derivativeVersion, title, content, contentHash, reason,
         scope.reviewerMembershipId, current.derivativeId, now,
         scope.organizationId, scope.facilityId, scope.encounterId,
-        input.recommendationId,
+        input.recommendationId, scope.accessAssignmentId!,
       ),
       derivativeHeadStatement,
       this.database.prepare(`
@@ -666,9 +666,10 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
       : input.decision === 'reject' ? 'rejected' : 'proposed';
     const auditSequence = auditHead.lastSequence + 1;
     const metadata = JSON.stringify({
+      decisionId,
       accessAssignmentId: this.scope.accessAssignmentId,
       recommendationId: input.recommendationId,
-      decisionId, decision: input.decision,
+      decision: input.decision,
       reviewedDerivativeVersionId: input.derivativeVersionId,
       previousReviewVersion: input.expectedVersion,
       resultingReviewVersion: input.expectedVersion + 1,
@@ -705,13 +706,14 @@ export class D1SuggestionReviewRepository implements SuggestionReviewRepository 
           id, organization_id, facility_id, encounter_id, suggestion_id,
           reviewer_membership_id, sequence, expected_version, idempotency_key,
           decision, result_state, reviewed_derivative_version_id, decided_at,
-          created_at
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
+          created_at, access_assignment_id
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?13)
       `).bind(
         decisionId, scope.organizationId, scope.facilityId, scope.encounterId,
         input.recommendationId, scope.reviewerMembershipId,
         input.expectedVersion, input.idempotencyKey, input.decision,
         resultState, input.derivativeVersionId, now,
+        scope.accessAssignmentId!,
       ),
       this.database.prepare(`
         update suggestion_review_heads set state = ?1,

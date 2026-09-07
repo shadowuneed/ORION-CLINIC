@@ -143,6 +143,66 @@ afterEach(() => {
 });
 
 describe('suggestion review repository', () => {
+  it('persists immutable assignment attribution on derivatives and decisions', async () => {
+    const { database, repository, scope } = createFixture();
+    const derivative = await repository.createDerivative(editCommand());
+    await repository.recordDecision({ recommendationId: 'rec-1', derivativeVersionId: derivative.currentDerivative!.id,
+      decision: 'reject', expectedVersion: 2, actorId: 'user-a',
+      requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() });
+    for (const table of ['suggestion_derivative_versions', 'review_decisions']) {
+      expect(database.prepare(`select access_assignment_id from ${table} where suggestion_id='rec-1'`).get()?.access_assignment_id)
+        .toBe(scope.accessAssignmentId);
+      expect(() => database.exec(`update ${table} set access_assignment_id=null where suggestion_id='rec-1'`)).toThrow();
+    }
+    const decision = database.prepare("select id from review_decisions where suggestion_id='rec-1'").get();
+    const audit = database.prepare("select metadata_json from audit_events where action='suggestion.reject'").get();
+    expect(JSON.parse(String(audit?.metadata_json)).decisionId).toBe(decision?.id);
+    expect(() => database.exec("update command_idempotency set result_resource_id='missing-decision' where operation='suggestion.decision'"))
+      .toThrow('recommendation result requires matching assignment');
+    const auditRow = database.prepare("select * from audit_events where action='suggestion.reject'").get()!;
+    const columns = Object.keys(auditRow);
+    expect(() => database.prepare(`insert into audit_events (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+      .run(...columns.map((column) => column === 'id' ? crypto.randomUUID()
+        : column === 'metadata_json' ? JSON.stringify({ accessAssignmentId: scope.accessAssignmentId, decisionId: 'wrong-decision' })
+          : auditRow[column]) as SQLInputValue[])).toThrow('recommendation audit requires matching assignment');
+  });
+
+  it.each(['derivative', 'decision'] as const)('rolls back %s when access is revoked immediately before its batch', async (operation) => {
+    const { database, d1, repository } = createFixture();
+    const before = database.prepare("select * from suggestion_review_heads where suggestion_id='rec-1'").get();
+    const batch = d1.batch.bind(d1);
+    d1.batch = async (statements) => {
+      database.exec("update memberships set status='disabled' where id='membership-a'");
+      return batch(statements);
+    };
+    const result = operation === 'derivative' ? repository.createDerivative(editCommand())
+      : repository.recordDecision({ recommendationId: 'rec-1', derivativeVersionId: null,
+        decision: 'reject', expectedVersion: 1, actorId: 'user-a',
+        requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() });
+    await expect(result).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare("select * from suggestion_review_heads where suggestion_id='rec-1'").get()).toEqual(before);
+    for (const table of ['suggestion_derivative_versions', 'review_decisions']) {
+      expect(database.prepare(`select count(*) as count from ${table} where suggestion_id='rec-1'`).get()?.count).toBe(0);
+    }
+    expect(database.prepare("select count(*) as count from command_idempotency where operation like 'suggestion.%'").get()?.count).toBe(0);
+  });
+
+  it('rejects direct attributed row inserts after assignment revocation', async () => {
+    const { database, repository } = createFixture();
+    const derivative = await repository.createDerivative(editCommand());
+    await repository.recordDecision({ recommendationId: 'rec-1', derivativeVersionId: derivative.currentDerivative!.id,
+      decision: 'reject', expectedVersion: 2, actorId: 'user-a',
+      requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() });
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    for (const [table, kind] of [['suggestion_derivative_versions', 'derivative'], ['review_decisions', 'decision']]) {
+      const row = database.prepare(`select * from ${table} where suggestion_id='rec-1'`).get()!;
+      const columns = Object.keys(row);
+      expect(() => database.prepare(`insert into ${table} (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+        .run(...columns.map((column) => column === 'id' ? crypto.randomUUID() : row[column]) as SQLInputValue[]))
+        .toThrow(`recommendation ${kind} requires current assignment`);
+    }
+  });
+
   it('denies derivative replay and decisions after revocation and retains attribution', async () => {
     const { database, repository, scope } = createFixture();
     const command = editCommand();
