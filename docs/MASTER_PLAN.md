@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-07
+- Last updated: 2026-09-08
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -729,6 +729,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | Date | Command | Result | Scope and limitation |
 |---|---|---|---|
+| 2026-09-08 | Phase 2I.3i.2 immutable export publication and download-audit boundary; pnpm verify:ci | PASS for this bounded local slice | Secret policy 472 files, no known dependency vulnerabilities, lint/types, 83 files/617 tests, Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 87 tables/158 rows/45 migrations/three R2 objects/556,449 bytes, 123,986 ms, run a8479b66-407e-483a-9e54-46c4320debc7. Local 0044 applied; quick_check ok, foreign_key_check empty; db:generate has no changes. Pending-manifest reconciliation remains open; no live UI/audio/provider/public deployment claim. |
+| 2026-09-08 | Initial export publication 2I.3i.2 verification | Historical partial result; superseded by later ledger | Three focused files/29 tests passed (12.70 s); types/lint/Drizzle/build and 470-file secret scan passed. Migration 0043 applied locally, integrity passed. Initial pnpm verify exited 1: 607 passed and three 5000-ms timeouts (286.87 s). Four affected rollback cases passed with 20-second timeout; the explicit timeout was saved in the working tree. No aggregate/recovery or commit/push was claimed at that earlier stop. |
 | 2026-08-28 | `pnpm install` | PASS | Scaffold dependencies installed; no product behavior verified |
 | 2026-08-28 | `pnpm db:generate` | PASS | Generated the initial 22-table schema migration; generation alone does not prove runtime application |
 | 2026-08-28 | `pnpm db:migrate:local` | PASS | Five migrations were applied to local D1, including linear clinical-section heads, current-head audit chains, terminal idempotency commands, tenant boundaries, expiry guards, and controlled amendments |
@@ -1245,6 +1247,10 @@ control, detection, response, and residual acceptance.
   checks through preflight/replay/render, attributed commands/audit and selected
   download links. Check the latest ledger for the verified scope and limitations.
 - Exact next checkpoint: 2I.3i.2, export transaction guards and safe R2 publication.
+  IN PROGRESS on 2026-09-08: local migration 0043 and immutable per-attempt
+  publication are implemented; migration 0044 adds download access-audit SQL
+  protection. Latest-source aggregate verification passed; see latest handoff.
+  Pending-manifest reconciliation remains open.
   Complete artifact/access-audit attribution and isolated attempt/replay cleanup; continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
@@ -1449,6 +1455,66 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-08 — download audit transaction boundary, 2I.3i.2 continuation
+
+- Forward-only 0044 is applied to local D1. It adds access_assignment_id to
+  access_audit_events and a current-download authority view/trigger. Every new
+  document.download requires hash schema 2 and the current exact read assignment,
+  matching user/member/tenant, active patient, treating relationship, current
+  signed ready artifact and finalized/amended encounter. Legacy membership.role
+  is no longer authority for download audit; workspace-read audit remains unchanged.
+- Hash schema 1 canonical bytes/history remain unchanged. Schema 2 binds assignment;
+  cross-assignment and unattributed historical download receipt replays fail closed.
+  Repository checks current authority before entry/retry/replay/batch/response.
+  Final SQL head-publication assertion aborts a batch whose head update was skipped.
+- Focused three suites/20 tests passed (5.03 s), covering missing/wrong assignments,
+  actor mismatch, current replay revocation, cross-assignment receipt rejection,
+  pre-batch rollback, non-clinician legacy role with valid doctor assignment,
+  direct SQL attribution/schema denial, unchanged v1 hashes and skipped-head rollback.
+  Local quick_check=ok and foreign_key_check empty. Final verify:ci exited 0:
+  83 files/617 tests, security/dependency checks, lint/types, schema and build passed.
+  Recovery passed: 87 tables/158 rows/45 migrations/three R2 objects/556,449 bytes,
+  123,986 ms, run a8479b66-407e-483a-9e54-46c4320debc7. This supersedes the earlier
+  610-test intermediate run. No schema drift was found by db:generate.
+- Next exact implementation: pending-manifest reconciliation with durable publication
+  fencing. A no-reference query followed by R2 deletion is NOT safe against an
+  in-flight publisher. Keep uncertain objects until a fence prevents later publication;
+  never delete referenced objects. No worker, deletion policy or automatic orphan
+  cleanup was enabled by this checkpoint. Then workspace-read audit and independent
+  encounter creation remain. Full 2I.3i.2 / Phase 2I / production remain OPEN.
+- Keep owner's unstaged `a`; do not modify applied 0000-0044 or historical events.
+  No server/STT/ngrok restart, provider/audio/Word/browser test or public deployment.
+
+### 2026-09-08 — export publication implementation, 2I.3i.2 IN PROGRESS
+
+- Migration 0043 is now applied to local D1. Do not rewrite it. Adds artifact
+  assignment/command attribution, selected current authority guards, immutable
+  attributed artifacts and package/audit/command/result matching in the batch.
+- Generation now checks stable intent replay before rendering/upload. Each attempt
+  owns fresh R2 keys. Waits for all uploads before cleanup; cleans only its own
+  pre-publication or losing-attempt objects. An uncertain database result retains
+  files and a private publication_pending manifest, never deleting possible references.
+- Current listing selects one package; download links carry artifactId and recheck
+  that exact artifact. Legacy links still resolve by kind. Hash schema is now 2;
+  old schema-1 idempotency requests fail closed and require a fresh request key.
+- Targeted checks: types/lint/Drizzle check passed; three focused suites 27 tests
+  passed (11.45 s), including revoked-before-batch rollback, immutable artifacts,
+  intent replay and original artifact download. Latest publication/API suites:
+  12 tests passed (803 ms), including late-upload cleanup and basename validation.
+  Local quick_check=ok, foreign_key_check empty. Standalone build/types passed;
+  secrets policy passed for 470 files. Full pnpm verify reported three failures
+  in protocol recommendation rollback tests. All four affected cases passed with
+  a 20-second limit (21.49 s total); that group now has this explicit timeout.
+  Final initial aggregate: 83 files, 607 passed/three failed out of 610 tests,
+  286.87 s, exit 1; all three errors explicitly Test timed out in 5000ms.
+  Latest focused rerun: three files/29 tests passed (12.70 s).
+  Final aggregate acceptance after timeout adjustment and recovery are still NOT claimed.
+- Next: inspect final aggregate failures, rerun latest focused tests, complete
+  download access-audit assignment/transaction protection and bounded pending-manifest
+  reconciliation. Run final CI/recovery, update this handoff, commit/push excluding
+  owner's unstaged `a`. No live UI/audio/provider/Word/ngrok validation this slice.
+  Full 2I.3i.2 and Phase 2I remain OPEN. Services were not restarted or stopped.
 
 ### 2026-09-08 — export preflight and response boundary, 2I.3i.1
 

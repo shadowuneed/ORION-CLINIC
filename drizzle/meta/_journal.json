@@ -302,6 +302,20 @@
       "when": 1788857975473,
       "tag": "0042_lush_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1788860663112,
+      "tag": "0043_cultured_mandrill",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1788861840577,
+      "tag": "0044_outstanding_madripoor",
+      "breakpoints": true
     }
   ]
 }

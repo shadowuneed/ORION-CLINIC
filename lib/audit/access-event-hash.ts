@@ -21,11 +21,15 @@ export type AccessAuditEventHashInput = {
   requestId: string;
   schemaVersion: number;
   occurredAt: number;
+  accessAssignmentId?: string | null;
 };
 
 export async function hashAccessAuditEvent(input: AccessAuditEventHashInput) {
+  if (input.schemaVersion !== 1 && input.schemaVersion !== 2) throw new Error('Unsupported access audit schema');
+  if (input.schemaVersion === 2 && !input.accessAssignmentId) throw new Error('Access audit assignment required');
   const canonicalEvent = JSON.stringify({
-    hashDomain: 'orion.access-audit.v1',
+    hashDomain: input.schemaVersion === 2 ? 'orion.access-audit.v2' : 'orion.access-audit.v1',
+    ...(input.schemaVersion === 2 ? { accessAssignmentId: input.accessAssignmentId } : {}),
     previousHash: input.previousHash,
     organizationId: input.organizationId,
     facilityId: input.facilityId,

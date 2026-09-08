@@ -4,8 +4,10 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
 import { hashAccessAuditEvent } from '@/lib/audit/access-event-hash';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import {
   AccessAuditUnavailableError,
+  AccessAuditRequestConflictError,
   D1AccessAuditRepository,
 } from './access-audit';
 
@@ -39,7 +41,7 @@ function d1Result<T>(results: T[], changes = 0) {
   return { success: true, results, meta: { changes } } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync): D1Database {
+function createD1Adapter(target: DatabaseSync, beforeBatch?: () => void): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -76,6 +78,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
       return prepareBound(sql) as unknown as D1PreparedStatement;
     },
     async batch<T = unknown>(statements: D1PreparedStatement[]) {
+      beforeBatch?.();
       target.exec('begin immediate');
       try {
         const results: D1Result<T>[] = [];
@@ -113,15 +116,18 @@ function scope(): WorkspaceScope {
     facilityId: 'fac-a',
     encounterId: 'encounter-a',
     reviewerMembershipId: 'membership-a',
+    accessAssignmentId: 'access-assignment-a-general-medicine',
+    accessPermission: 'encounter.read',
   };
 }
 
-function createFixture() {
+function createFixture(beforeBatch?: (database: DatabaseSync) => void) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
   applyMigrations(database);
   database.exec(readFileSync('db/seed.local.sql', 'utf8'));
-  const d1 = createD1Adapter(database);
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
+  const d1 = createD1Adapter(database, () => beforeBatch?.(database));
   return {
     database,
     repository: new D1AccessAuditRepository(d1, scope()),
@@ -170,6 +176,8 @@ function addReadyArtifact(database: DatabaseSync) {
       'membership-a', 1788250000000
     );
   `);
+  database.exec("update encounters set status='review', version=version+1 where id='encounter-a'");
+  database.exec("update encounters set status='finalized', version=version+1, ended_at=1788250001000 where id='encounter-a'");
 }
 
 afterEach(() => {
@@ -177,6 +185,77 @@ afterEach(() => {
 });
 
 describe('access audit repository', () => {
+  const artifact = { id: 'access-document', kind: 'protocol_pdf' as const };
+
+  it('rejects missing/read-denied assignment and wrong actors before creating an audit stream', async () => {
+    const { database } = createFixture();
+    addReadyArtifact(database);
+    for (const selected of [undefined, 'wrong-assignment']) {
+      const repository = new D1AccessAuditRepository(createD1Adapter(database), { ...scope(), accessAssignmentId: selected });
+      await expect(repository.recordDocumentDownload(artifact, { actorId: 'user-a', requestId: crypto.randomUUID() }))
+        .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    }
+    const repository = new D1AccessAuditRepository(createD1Adapter(database), scope());
+    await expect(repository.recordDocumentDownload(artifact, { actorId: 'user-b', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as count from access_audit_stream_heads').get()).toEqual({ count: 0 });
+  });
+
+  it('checks current rights on same-request replay and rejects another selected assignment', async () => {
+    const { database, repository } = createFixture();
+    addReadyArtifact(database);
+    const input = { actorId: 'user-a', requestId: crypto.randomUUID() };
+    const first = await repository.recordDocumentDownload(artifact, input);
+    expect(await repository.recordDocumentDownload(artifact, input)).toEqual(first);
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    const second = new D1AccessAuditRepository(createD1Adapter(database), { ...scope(), accessAssignmentId: 'access-assignment-a-secondary' });
+    await expect(second.recordDocumentDownload(artifact, input)).rejects.toBeInstanceOf(AccessAuditRequestConflictError);
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(repository.recordDocumentDownload(artifact, input)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as count from access_audit_events').get()).toEqual({ count: 1 });
+  });
+
+  it('rolls back the event and leaves the stream at genesis after pre-batch revocation', async () => {
+    const { database, repository } = createFixture(db => db.exec("update memberships set status='disabled' where id='membership-a'"));
+    addReadyArtifact(database);
+    await expect(repository.recordDocumentDownload(artifact, { actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as count from access_audit_events').get()).toEqual({ count: 0 });
+    expect(database.prepare('select last_sequence from access_audit_stream_heads').get()).toEqual({ last_sequence: 0 });
+  });
+
+  it('uses the current doctor assignment rather than the legacy membership role', async () => {
+    const { database, repository } = createFixture();
+    addReadyArtifact(database);
+    database.exec("update memberships set role='registrar' where id='membership-a'");
+    await expect(repository.recordDocumentDownload(artifact, { actorId: 'user-a', requestId: crypto.randomUUID() })).resolves.toMatchObject({ action: 'document.download' });
+  });
+
+  it('rolls back a successfully inserted event when the head update is skipped', async () => {
+    const { database, repository } = createFixture();
+    addReadyArtifact(database);
+    database.exec('create trigger test_skip_access_head before update on access_audit_stream_heads begin select raise(ignore); end');
+    await expect(repository.recordDocumentDownload(artifact, { actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessAuditUnavailableError);
+    expect(database.prepare('select count(*) as count from access_audit_events').get()).toEqual({ count: 0 });
+    expect(database.prepare('select last_sequence from access_audit_stream_heads').get()).toEqual({ last_sequence: 0 });
+  });
+
+  it('SQL rejects missing attribution, legacy download schema and a wrong selected assignment', async () => {
+    const { database, repository } = createFixture();
+    addReadyArtifact(database);
+    await repository.recordDocumentDownload(artifact, { actorId: 'user-a', requestId: crypto.randomUUID() });
+    const row = database.prepare('select * from access_audit_events').get()!;
+    const columns = Object.keys(row);
+    for (const patch of [{ access_assignment_id: null }, { schema_version: 1 }, { access_assignment_id: 'unknown' }]) {
+      const candidate = { ...row, id: crypto.randomUUID(), request_id: crypto.randomUUID(), sequence: 2,
+        previous_hash: row.event_hash, event_hash: 'c'.repeat(64), ...patch };
+      expect(() => database.prepare(`insert into access_audit_events (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+        .run(...columns.map(key => candidate[key as keyof typeof candidate] as SQLInputValue))).toThrow('download audit requires current selected assignment');
+    }
+    expect(database.prepare('select count(*) as count from access_audit_events').get()).toEqual({ count: 1 });
+  });
+
   it('appends a PHI-minimized workspace-read event and advances the actor head', async () => {
     const { database, repository } = createFixture();
 
@@ -299,6 +378,8 @@ describe('access audit repository', () => {
 
     expect(event).toMatchObject({
       action: 'document.download',
+      access_assignment_id: scope().accessAssignmentId,
+      schema_version: 2,
       encounter_id: 'encounter-a',
       document_artifact_id: 'access-document',
       artifact_kind: 'protocol_pdf',

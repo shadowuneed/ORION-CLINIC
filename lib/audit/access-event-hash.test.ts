@@ -26,6 +26,14 @@ const input = {
 };
 
 describe('access audit event hash', () => {
+  it('binds v2 attribution without changing historical v1 canonical hashes', async () => {
+    const historical = await hashAccessAuditEvent(input);
+    expect(await hashAccessAuditEvent({ ...input, accessAssignmentId: 'ignored-v1' })).toBe(historical);
+    const first = await hashAccessAuditEvent({ ...input, schemaVersion: 2, accessAssignmentId: 'assignment-a' });
+    expect(first).not.toBe(historical);
+    expect(await hashAccessAuditEvent({ ...input, schemaVersion: 2, accessAssignmentId: 'assignment-b' })).not.toBe(first);
+    await expect(hashAccessAuditEvent({ ...input, schemaVersion: 2 })).rejects.toThrow('assignment required');
+  });
   it('is deterministic and binds the previous hash and protected resource', async () => {
     const first = await hashAccessAuditEvent(input);
     const same = await hashAccessAuditEvent({ ...input });

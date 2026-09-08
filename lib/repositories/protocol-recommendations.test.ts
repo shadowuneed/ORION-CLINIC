@@ -291,7 +291,7 @@ describe('recommendations in the immutable protocol source', () => {
     expect(database.prepare('select count(*) as count from protocol_versions').get()?.count).toBe(0);
     expect(database.prepare('select * from audit_events order by id').all()).toEqual(before);
     expect(database.prepare("select status from encounters where id='encounter-a'").get()?.status).toBe('in_progress');
-  });
+  }, 20000); // Full migration fixture plus repeated rollback attempts exceed the unit-test default.
   it.each(['draft', 'sign'] as const)('rechecks access after reading the %s snapshot and before saving', async (operation) => {
     let armed = false;
     const { database, sections, review, signing } = createFixture((sql, db) => {

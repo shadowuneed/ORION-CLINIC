@@ -218,19 +218,32 @@ Download rechecks exact artifact identity/key/hash/size/type and current access
 after R2 reading and after access audit, immediately before returning bytes.
 Generated download URLs preserve assignment and facility. No migration in this slice.
 
-## Next bounded checkpoint: 2I.3i.2 — export transactions and R2 publication
+## 2I.3i.2 — export transactions and R2 publication (partial)
 
-Complete transaction-time protections: persist selected assignment on artifact
-rows and download access audit with forward migrations; add exact row/command/
-audit/result SQL guards and revoke-before-batch rollback tests. Repository preflight
-does not close the last transaction race. Preserve current read/manage distinction.
-Fix existing R2 publication semantics: stable per-protocol keys are currently
-overwritten before metadata commits, retries hash the generated artifact set, and
-there is no safe orphan reconciliation. Use isolated immutable attempt keys plus
-intent-bound idempotency/replay before upload, publication ownership and bounded
-cleanup that never removes referenced objects after an uncertain commit. Do not
-claim that R2 overwrite/concurrency/cleanup is solved by the current rechecks.
-Preserve signed source immutability, consent representation and artifact hashes.
+Migration 0043 adds artifact assignment/command attribution and transactional
+package/audit/command/result guards. Published attributed artifacts are immutable.
+Each generation owns isolated attempt keys; stable intent replay occurs before
+render/upload. Pre-publication cleanup waits for every upload; concurrent losers
+clean only their own objects. An uncertain commit retains objects and a private
+publication_pending manifest. Current listing returns one package, and download
+links pin artifactId. Old schema-1 command hashes require a fresh deliberate request.
+
+Migration 0044 attributes new document.download access events to the exact selected
+assignment with canonical hash schema 2. Historical hash schema 1 remains unchanged;
+unattributed historical download events cannot authorize replay. Read permission
+is sufficient, manage permission is not silently required. Entry/retry/replay and
+post-commit checks verify current user, assignment, active patient, treating
+relationship, signed head, ready artifact and finalized/amended lifecycle. SQL
+checks authority within insertion and preserves append-only history. A final SQL
+head-publication assertion rolls back the entire batch if head advancement is skipped.
+Workspace-read audit still uses the legacy boundary and remains a separate gate.
+
+Exact next: bounded pending-manifest reconciliation with a durable publication
+fence. Merely checking that no artifact exists and then deleting is unsafe: an
+in-flight publisher could commit after the check. Do not delete uncertain objects
+until publication is provably fenced; never delete referenced objects. Retention
+of pending objects is deliberate until that protocol is implemented and tested.
+See master-plan ledger for final verification; full 2I.3i.2 is not yet complete.
 Then complete remaining read-audit and independent-creation boundaries. Full 2I
 remains open; no provider activation, model replacement or real patient data.
 

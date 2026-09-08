@@ -346,6 +346,40 @@ describe('signed export repository authorization', () => {
     await expect(repository.recordGenerated(exportCommand())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
   });
 
+  it('rolls back export publication after access is revoked immediately before its batch', async () => {
+    let intercepted = false;
+    const { database, d1, scope } = await createFixture({ beforeBatch: () => {
+      intercepted = true;
+      database.exec("update memberships set status='disabled' where id='membership-a'");
+    } });
+    const repository = new D1DocumentExportRepository(d1, scope, 'user-a');
+    await expect(repository.recordGenerated(exportCommand())).rejects.toThrow();
+    expect(intercepted).toBe(true);
+    for (const table of ['document_artifacts', 'command_idempotency', 'audit_events']) {
+      expect(database.prepare(`select count(*) as count from ${table}`).get()).toEqual({ count: 0 });
+    }
+  });
+
+  it('keeps packages immutable, replays intent and downloads the exact original artifact', async () => {
+    const { database, d1, scope } = await createFixture();
+    const repository = new D1DocumentExportRepository(d1, scope, 'user-a');
+    const input = exportCommand();
+    const first = await repository.recordGenerated(input);
+    const changedFiles = input.artifacts.map(a => ({ ...a, objectKey: `second/${a.filename}` }));
+    expect(await repository.recordGenerated({ ...input, artifacts: changedFiles })).toEqual(first);
+    expect(await repository.findGenerated(input)).toEqual(first);
+    const second = await repository.recordGenerated({ ...exportCommand(), artifacts: changedFiles });
+    const current = await repository.listCurrentArtifacts();
+    expect(current).toHaveLength(5);
+    const ids = current.map(a => a.id).sort();
+    expect([first, second].some(p => JSON.stringify(p.artifacts.map(a => a.id).sort()) === JSON.stringify(ids))).toBe(true);
+    const original = first.artifacts.find(a => a.kind === 'protocol_docx')!;
+    expect(await repository.getDownload('protocol_docx', original.id)).toEqual(original);
+    await repository.assertDownloadAuthorized(original, 'user-a');
+    expect(() => database.prepare('update document_artifacts set sha256=? where id=?').run('b'.repeat(64), original.id)).toThrow();
+    expect(() => database.prepare('delete from document_artifacts where id=?').run(original.id)).toThrow();
+  }, 20000);
+
   it.each(['missing', 'wrong-user', 'revoked'] as const)('denies %s source/list/download access', async kind => {
     const { database, d1, scope } = await createFixture();
     if (kind === 'missing') scope.accessAssignmentId = undefined;

@@ -3678,6 +3678,8 @@ export const documentArtifacts = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references(() => departmentAccessAssignments.id),
+    exportCommandId: text('export_command_id'),
     encounterId: text('encounter_id')
       .notNull()
       .references(() => encounters.id),
@@ -3910,6 +3912,7 @@ export const accessAuditEvents = sqliteTable(
   {
     id: text('id').primaryKey(),
     ...tenantScope(),
+    accessAssignmentId: text('access_assignment_id').references(() => departmentAccessAssignments.id),
     streamKey: text('stream_key').notNull(),
     sequence: integer('sequence').notNull(),
     actorUserId: text('actor_user_id').notNull(),

@@ -37,6 +37,7 @@ export const dynamic = 'force-dynamic';
 const querySchema = z.object({
   encounterId: z.string().min(1).max(100),
   kind: z.enum(exportArtifactKinds),
+  artifactId: z.string().min(1).max(100).optional(),
 });
 
 export async function GET(request: Request) {
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
   const parsed = querySchema.safeParse({
     encounterId: url.searchParams.get('encounterId'),
     kind: url.searchParams.get('kind'),
+    artifactId: url.searchParams.get('artifactId') ?? undefined,
   });
   if (!parsed.success) {
     return apiFailure(
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
       parsed.data.encounterId,
     );
     const repository = new D1DocumentExportRepository(env.DB, access.scope, access.user.id);
-    const artifact = await repository.getDownload(parsed.data.kind);
+    const artifact = await repository.getDownload(parsed.data.kind, parsed.data.artifactId);
     if (!artifact) {
       return apiFailure(
         context,

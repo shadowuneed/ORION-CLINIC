@@ -3,6 +3,7 @@ import {
   type AccessAuditEventHashInput,
 } from '@/lib/audit/access-event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
 import type {
   ExportArtifactKind,
 } from '@/lib/documents/protocol-artifacts';
@@ -14,6 +15,10 @@ type AccessAuditHeadRow = {
 };
 
 type StoredAccessAuditRow = {
+  organizationId: string;
+  facilityId: string;
+  accessAssignmentId: string | null;
+  schemaVersion: number;
   action: AccessAuditEventHashInput['action'];
   actorUserId: string;
   actorMembershipId: string;
@@ -106,12 +111,17 @@ export class D1AccessAuditRepository {
     details: AccessAuditDetails,
     input: RecordAccessInput,
   ): Promise<AccessAuditReceipt> {
+    await this.assertDownloadAccess(details, input);
     const existing = await this.findExisting(input.requestId);
-    if (existing) return this.receiptForExisting(existing, details, input);
+    if (existing) {
+      await this.assertDownloadAccess(details, input);
+      return this.receiptForExisting(existing, details, input);
+    }
 
-    await this.ensureHead(input.actorId);
+    await this.ensureHead(input.actorId, details.action);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertDownloadAccess(details, input);
       const head = await this.getHead();
       if (!head) throw new AccessAuditUnavailableError();
 
@@ -137,12 +147,14 @@ export class D1AccessAuditRepository {
         documentArtifactId: details.documentArtifactId,
         artifactKind: details.artifactKind,
         requestId: input.requestId,
-        schemaVersion: 1,
+        schemaVersion: details.action === 'document.download' ? 2 : 1,
+        accessAssignmentId: details.action === 'document.download' ? this.scope.accessAssignmentId : null,
         occurredAt,
       };
       const eventHash = await hashAccessAuditEvent(hashInput);
 
       try {
+        await this.assertDownloadAccess(details, input);
         const results = await this.database.batch([
           this.eventInsert(details, input, hashInput, eventId, eventHash),
           this.database
@@ -169,19 +181,50 @@ export class D1AccessAuditRepository {
               head.lockVersion,
               eventId,
             ),
+          // A skipped head update must abort the entire batch, not leave an orphan event.
+          this.database.prepare(`
+            select case when exists (
+              select 1 from access_audit_stream_heads
+              where organization_id=?1 and facility_id=?2 and stream_key=?3
+                and actor_membership_id=?4 and last_sequence=?5 and last_event_hash=?6
+                and lock_version=?7
+            ) then 1 else json('access_audit_head_not_published') end as verified
+          `).bind(this.scope.organizationId, this.scope.facilityId, this.streamKey,
+            this.scope.reviewerMembershipId, sequence, eventHash, head.lockVersion + 1),
         ]);
-        if (results.every((result) => result.meta.changes === 1)) {
+        if (results.slice(0, 2).every((result) => result.meta.changes === 1)) {
+          await this.assertDownloadAccess(details, input);
           return { action: details.action, recordedAt: occurredAt };
         }
       } catch {
+        await this.assertDownloadAccess(details, input);
         const committed = await this.findExisting(input.requestId);
         if (committed) {
+          await this.assertDownloadAccess(details, input);
           return this.receiptForExisting(committed, details, input);
         }
       }
     }
 
     throw new AccessAuditUnavailableError();
+  }
+
+  private async assertDownloadAccess(details: AccessAuditDetails, input: RecordAccessInput) {
+    if (details.action !== 'document.download') return;
+    await assertCurrentEncounterReadAccess(this.database, this.scope, input.actorId);
+    const artifact = await this.database.prepare(`
+      select artifact.id from document_artifacts artifact
+      join protocol_heads head on head.organization_id=artifact.organization_id and head.facility_id=artifact.facility_id
+        and head.encounter_id=artifact.encounter_id and head.current_signed_protocol_version_id=artifact.protocol_version_id
+      join protocol_versions version on version.id=artifact.protocol_version_id and version.status='signed'
+      join encounters encounter on encounter.id=artifact.encounter_id and encounter.organization_id=artifact.organization_id
+        and encounter.facility_id=artifact.facility_id and encounter.status in ('finalized','amended')
+      where artifact.organization_id=?1 and artifact.facility_id=?2 and artifact.encounter_id=?3
+        and artifact.id=?4 and artifact.kind=?5 and artifact.status='ready'
+    `).bind(this.scope.organizationId, this.scope.facilityId, this.scope.encounterId,
+      details.documentArtifactId, details.artifactKind).first();
+    if (!artifact) throw new AccessAuditUnavailableError();
+    await assertCurrentEncounterReadAccess(this.database, this.scope, input.actorId);
   }
 
   private eventInsert(
@@ -213,11 +256,11 @@ export class D1AccessAuditRepository {
           actor_user_id, actor_membership_id, actor_role, action, outcome,
           purpose_code, route_code, decision_code, response_status,
           encounter_id, document_artifact_id, artifact_kind, request_id,
-          schema_version, previous_hash, event_hash, occurred_at
+          schema_version, previous_hash, event_hash, occurred_at, access_assignment_id
         )
         select ?1, ?2, ?3, ?4, ?5, ?6, ?7, 'clinician', ?9, 'succeeded',
           ?10, ?11, 'authorized_response_prepared', 200, ?8, ?14, ?15, ?12,
-          1, ?13, ?16, ?17
+          ?18, ?13, ?16, ?17, ?19
         where exists (
           select 1
           from memberships membership
@@ -229,7 +272,7 @@ export class D1AccessAuditRepository {
             and membership.facility_id = ?3
             and membership.id = ?7
             and membership.user_id = ?6
-            and membership.role = 'clinician'
+            and (?9 = 'document.download' or membership.role = 'clinician')
             and membership.status = 'active'
             and encounter.id = ?8
         )
@@ -253,10 +296,12 @@ export class D1AccessAuditRepository {
         details.artifactKind,
         eventHash,
         hashInput.occurredAt,
+        hashInput.schemaVersion,
+        hashInput.accessAssignmentId ?? null,
       );
   }
 
-  private async ensureHead(actorId: string) {
+  private async ensureHead(actorId: string, action: AccessAuditDetails['action']) {
     await this.database
       .prepare(`
         insert or ignore into access_audit_stream_heads (
@@ -269,7 +314,12 @@ export class D1AccessAuditRepository {
           and membership.facility_id = ?3
           and membership.id = ?5
           and membership.user_id = ?6
-          and membership.role = 'clinician'
+          and (membership.role = 'clinician' or (?7='document.download' and exists (
+            select 1 from encounter_access_assignment_permissions access where access.assignment_id=?8
+              and access.organization_id=membership.organization_id and access.facility_id=membership.facility_id
+              and access.membership_id=membership.id and access.can_read=1
+              and access.effective_from<=?9 and (access.effective_until is null or access.effective_until>?9)
+          )))
           and membership.status = 'active'
       `)
       .bind(
@@ -279,6 +329,9 @@ export class D1AccessAuditRepository {
         this.streamKey,
         this.scope.reviewerMembershipId,
         actorId,
+        action,
+        this.scope.accessAssignmentId ?? null,
+        Date.now(),
       )
       .run();
   }
@@ -305,7 +358,9 @@ export class D1AccessAuditRepository {
   private findExisting(requestId: string) {
     return this.database
       .prepare(`
-        select action, actor_user_id as actorUserId,
+        select organization_id as organizationId, facility_id as facilityId,
+          access_assignment_id as accessAssignmentId, schema_version as schemaVersion,
+          action, actor_user_id as actorUserId,
           actor_membership_id as actorMembershipId,
           encounter_id as encounterId,
           document_artifact_id as documentArtifactId,
@@ -324,6 +379,8 @@ export class D1AccessAuditRepository {
     input: RecordAccessInput,
   ): AccessAuditReceipt {
     if (
+      existing.organizationId !== this.scope.organizationId || existing.facilityId !== this.scope.facilityId ||
+      (details.action === 'document.download' && (existing.schemaVersion !== 2 || existing.accessAssignmentId !== this.scope.accessAssignmentId)) ||
       existing.action !== details.action ||
       existing.actorUserId !== input.actorId ||
       existing.actorMembershipId !== this.scope.reviewerMembershipId ||

@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 
 const state = vi.hoisted(() => ({ revoked: false, put: vi.fn(), get: vi.fn(), render: vi.fn(),
-  audit: vi.fn(), record: vi.fn(), source: vi.fn(), download: vi.fn() }));
-vi.mock('cloudflare:workers', () => ({ env: { DB: {}, FILES: { put: state.put, get: state.get } } }));
+  audit: vi.fn(), record: vi.fn(), source: vi.fn(), download: vi.fn(), replay: vi.fn(), remove: vi.fn() }));
+vi.mock('cloudflare:workers', () => ({ env: { DB: {}, FILES: { put: state.put, get: state.get, delete: state.remove } } }));
 vi.mock('@/lib/config/runtime', () => ({ parseRuntimeConfig: vi.fn() }));
 vi.mock('@/lib/auth/site-identity', () => ({ getSiteIdentity: () => ({ id: 'identity' }), toSiteIdentityPrincipal: () => ({}) }));
 vi.mock('@/lib/auth/workspace-access', async original => ({ ...await original<object>(),
@@ -17,6 +17,7 @@ vi.mock('@/lib/repositories/document-export', async original => ({ ...await orig
     getSignedSource = state.source;
     getDownload = state.download;
     recordGenerated = state.record;
+    findGenerated = state.replay;
     async assertGenerationAuthorized() { if (state.revoked) throw new AccessPermissionRequiredError('encounter.manage'); }
     async assertDownloadAuthorized() { if (state.revoked) throw new AccessPermissionRequiredError('encounter.read'); }
   } }));
@@ -37,6 +38,8 @@ const get = () => GET(new Request('https://orion.test/api/workspace/exports/down
 
 beforeEach(() => {
   vi.clearAllMocks(); state.revoked = false;
+  state.replay.mockResolvedValue(null);
+  state.remove.mockResolvedValue(undefined);
   state.source.mockResolvedValue({ protocol: { id: 'protocol-a', version: 2, sourceHash: 'source-hash' } });
   state.render.mockResolvedValue(generated);
   state.put.mockResolvedValue(undefined);
@@ -47,6 +50,15 @@ beforeEach(() => {
 });
 
 describe('export API revalidation around asynchronous work', () => {
+  it('replays a completed intent without rendering or uploading another package', async () => {
+    state.replay.mockResolvedValue({ artifacts: [artifact] });
+    const response = await post();
+    expect(response.status).toBe(201);
+    expect(state.render).not.toHaveBeenCalled();
+    expect(state.put).not.toHaveBeenCalled();
+    expect(state.record).not.toHaveBeenCalled();
+    expect(JSON.stringify(await response.json())).toContain('artifactId=artifact-a');
+  });
   it('does not upload or publish when access is revoked during rendering', async () => {
     state.render.mockImplementation(async () => { state.revoked = true; return generated; });
     expect((await post()).status).toBe(403);

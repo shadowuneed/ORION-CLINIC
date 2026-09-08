@@ -13,6 +13,7 @@ import {
 } from '@/lib/auth/workspace-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { generateProtocolArtifacts } from '@/lib/documents/protocol-artifacts';
+import { publishGeneratedExport } from '@/lib/documents/export-publication';
 import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import {
   apiFailure,
@@ -81,6 +82,10 @@ export async function POST(request: Request) {
       payload.encounterId,
     );
     const repository = new D1DocumentExportRepository(env.DB, access.scope, access.user.id);
+    const intent = { protocolId: payload.protocolId, protocolVersion: payload.expectedProtocolVersion,
+      idempotencyKey: payload.idempotencyKey, actorId: access.user.id };
+    let result = await repository.findGenerated(intent);
+    if (!result) {
     await repository.assertGenerationAuthorized(payload.protocolId, payload.expectedProtocolVersion, access.user.id);
     const source = await repository.getSignedSource();
     if (
@@ -99,43 +104,19 @@ export async function POST(request: Request) {
       safeKeyPart(source.protocol.id),
       `v${source.protocol.version}`,
     ].join('/');
-    await Promise.all(
-      generated.map((artifact) =>
-        env.FILES.put(`${prefix}/${artifact.filename}`, artifact.bytes, {
-          httpMetadata: { contentType: artifact.mimeType },
-          customMetadata: {
-            sha256: artifact.sha256,
-            sourceHash: source.protocol.sourceHash,
-            kind: artifact.kind,
-            dataMode: 'synthetic-only',
-          },
-        }),
-      ),
-    );
-    const result = await repository.recordGenerated({
-      protocolId: source.protocol.id,
-      protocolVersion: source.protocol.version,
-      artifacts: generated.map((artifact) => ({
-        kind: artifact.kind,
-        filename: artifact.filename,
-        objectKey: `${prefix}/${artifact.filename}`,
-        mimeType: artifact.mimeType,
-        sha256: artifact.sha256,
-        byteSize: artifact.bytes.byteLength,
-      })),
-      idempotencyKey: payload.idempotencyKey,
-      actorId: access.user.id,
-      requestId: context.requestId,
+    result = await publishGeneratedExport({ bucket: env.FILES, repository, intent,
+      prefix, sourceHash: source.protocol.sourceHash, artifacts: generated, requestId: context.requestId,
     });
+    }
     const encounterId = encodeURIComponent(access.scope.encounterId);
-    await repository.assertGenerationAuthorized(source.protocol.id, source.protocol.version, access.user.id);
+    await repository.assertGenerationAuthorized(intent.protocolId, intent.protocolVersion, access.user.id);
     return apiSuccess(
       context,
       {
         ...result,
         artifacts: result.artifacts.map((artifact) => ({
           ...artifact,
-          downloadUrl: scopedWorkspaceUrl(`/api/workspace/exports/download?encounterId=${encounterId}&kind=${artifact.kind}`, {
+          downloadUrl: scopedWorkspaceUrl(`/api/workspace/exports/download?encounterId=${encounterId}&kind=${artifact.kind}&artifactId=${encodeURIComponent(artifact.id)}`, {
             accessAssignmentId: access.scope.accessAssignmentId!, facilityId: access.scope.facilityId,
           }),
         })),
