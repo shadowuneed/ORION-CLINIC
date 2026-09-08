@@ -441,11 +441,11 @@ export class D1ProtocolAmendmentRepository {
             id, organization_id, facility_id, encounter_id, version, status,
             content_json, source_hash, created_by_membership_id,
             signed_by_membership_id, signed_at, supersedes_protocol_version_id,
-            created_at
+            created_at, access_assignment_id
           )
           select ?1, parent.organization_id, parent.facility_id,
             parent.encounter_id, parent.version + 1, 'signed', ?2, ?3, ?4,
-            ?4, ?5, parent.id, ?5
+            ?4, ?5, parent.id, ?5, ?15
           from protocol_versions parent
           join protocol_heads head
             on head.organization_id = parent.organization_id
@@ -495,15 +495,16 @@ export class D1ProtocolAmendmentRepository {
           current.protocolHeadVersion,
           current.encounterVersion,
           careConsent.eventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
           insert into protocol_amendments (
             id, organization_id, facility_id, encounter_id,
             base_protocol_version_id, amended_protocol_version_id,
-            reason, amendment_text, created_by_membership_id, created_at
+            reason, amendment_text, created_by_membership_id, created_at, access_assignment_id
           )
-          select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+          select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11
           where exists (
             select 1 from protocol_versions version
             where version.organization_id = ?2 and version.facility_id = ?3
@@ -523,6 +524,7 @@ export class D1ProtocolAmendmentRepository {
           text,
           this.scope.reviewerMembershipId,
           now,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -802,6 +804,7 @@ export class D1ProtocolAmendmentRepository {
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'protocol_amendment' ||
       !replay.resultResourceId ||
+      result?.transition.encounterId !== this.scope.encounterId ||
       result?.amendment.id !== replay.resultResourceId
     ) {
       throw new ProtocolAmendmentConflictError(

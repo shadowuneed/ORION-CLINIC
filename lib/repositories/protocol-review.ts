@@ -680,6 +680,7 @@ export class D1ProtocolReviewRepository {
       sourceHash,
       this.scope.reviewerMembershipId,
       now,
+      this.scope.accessAssignmentId!,
       this.scope.organizationId,
       this.scope.facilityId,
       this.scope.encounterId,
@@ -712,10 +713,10 @@ export class D1ProtocolReviewRepository {
         .prepare(`
           insert into protocol_versions (
             id, organization_id, facility_id, encounter_id, version, status,
-            content_json, source_hash, created_by_membership_id, created_at
+            content_json, source_hash, created_by_membership_id, created_at, access_assignment_id
           )
           select ?, encounter.organization_id, encounter.facility_id,
-            encounter.id, 1, 'draft', ?, ?, ?, ?
+            encounter.id, 1, 'draft', ?, ?, ?, ?, ?
           from encounters encounter
           where encounter.organization_id = ? and encounter.facility_id = ?
             and encounter.id = ? and encounter.clinician_membership_id = ?
@@ -1145,6 +1146,7 @@ export class D1ProtocolReviewRepository {
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'protocol_draft' ||
       !replay.resultResourceId ||
+      result?.transition.encounterId !== this.scope.encounterId ||
       result?.protocol.id !== replay.resultResourceId
     ) {
       throw new ProtocolReviewConflictError(

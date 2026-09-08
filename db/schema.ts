@@ -3382,6 +3382,7 @@ export const protocolVersions = sqliteTable(
   'protocol_versions',
   {
     id: text('id').primaryKey(),
+    accessAssignmentId: text('access_assignment_id').references(() => departmentAccessAssignments.id),
     ...tenantScope(),
     encounterId: text('encounter_id')
       .notNull()
@@ -3554,6 +3555,7 @@ export const protocolAmendments = sqliteTable(
   'protocol_amendments',
   {
     id: text('id').primaryKey(),
+    accessAssignmentId: text('access_assignment_id').references(() => departmentAccessAssignments.id),
     ...tenantScope(),
     encounterId: text('encounter_id')
       .notNull()

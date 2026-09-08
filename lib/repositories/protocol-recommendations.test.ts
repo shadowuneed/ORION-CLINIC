@@ -79,7 +79,9 @@ function d1Result<T>(results: T[], changes = 0) {
   } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void): D1Database {
+type WriteHooks = { beforeBatch?: () => void; beforeStatement?: (statement: TestBoundStatement) => void };
+
+function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void, hooks?: WriteHooks): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -122,10 +124,12 @@ function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, databas
       return prepareBound(sql) as unknown as D1PreparedStatement;
     },
     async batch<T = unknown>(statements: D1PreparedStatement[]) {
+      hooks?.beforeBatch?.();
       target.exec('begin immediate');
       try {
         const results: D1Result<T>[] = [];
         for (const statement of statements) {
+          hooks?.beforeStatement?.(statement as unknown as TestBoundStatement);
           results.push(
             await (statement as unknown as TestBoundStatement).run<T>(),
           );
@@ -150,7 +154,7 @@ function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, databas
   } as unknown as D1Database;
 }
 
-function createFixture(afterRead?: (sql: string, database: DatabaseSync) => void) {
+function createFixture(afterRead?: (sql: string, database: DatabaseSync) => void, hooks?: WriteHooks) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
   applyMigrations(database);
@@ -164,7 +168,7 @@ function createFixture(afterRead?: (sql: string, database: DatabaseSync) => void
     accessAssignmentId: 'access-assignment-a-general-medicine',
     accessPermission: 'encounter.manage',
   };
-  const d1 = createD1Adapter(database, afterRead);
+  const d1 = createD1Adapter(database, afterRead, hooks);
   return {
     database,
     d1,
@@ -216,6 +220,78 @@ afterEach(() => {
 });
 
 describe('recommendations in the immutable protocol source', () => {
+  it.each(['draft', 'sign'] as const)('rolls back %s when access is revoked after final preflight', async (operation) => {
+    let armed = false;
+    const { database, sections, review, signing } = createFixture(undefined, { beforeBatch: () => {
+      if (armed) {
+        armed = false;
+        database.exec(`insert into department_access_assignment_versions
+          (id,organization_id,facility_id,assignment_id,department_id,membership_id,version,supersedes_version_id,
+           status,source_type,roles_json,allow_permissions_json,deny_permissions_json,effective_from,effective_until,
+           change_reason,changed_by_membership_id,changed_at,created_at)
+          select 'revoked-protocol-test',v.organization_id,v.facility_id,v.assignment_id,v.department_id,v.membership_id,
+            v.version+1,v.id,'revoked','bootstrap',v.roles_json,v.allow_permissions_json,v.deny_permissions_json,
+            v.effective_from,v.effective_until,'synthetic revocation test',v.changed_by_membership_id,v.changed_at+1,v.created_at+1
+          from department_access_assignment_versions v join department_access_assignment_heads h on h.current_version_id=v.id
+          where h.assignment_id='access-assignment-a-general-medicine';
+          update department_access_assignment_heads set current_version_id='revoked-protocol-test',
+            lock_version=lock_version+1,updated_at=updated_at+1 where assignment_id='access-assignment-a-general-medicine';`);
+      }
+    } });
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    await resolveMandatorySections(sections);
+    const input = { expectedEncounterVersion: 1, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() };
+    const draft = operation === 'sign' ? await review.beginReview(input) : null;
+    const snapshot = () => ['protocol_versions', 'protocol_heads', 'audit_events', 'audit_stream_heads', 'command_idempotency', 'encounters']
+      .map((table) => database.prepare(`select * from ${table} order by id`).all());
+    const before = snapshot();
+    armed = true;
+    await expect(operation === 'draft' ? review.beginReview(input) : signing.sign({
+      protocolId: draft!.protocol.id, expectedProtocolVersion: draft!.protocol.version,
+      expectedProtocolHeadVersion: draft!.protocol.headVersion, expectedEncounterVersion: draft!.transition.version,
+      idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID(),
+    })).rejects.toThrow();
+    expect(armed).toBe(false);
+    expect(snapshot()).toEqual(before);
+    expect(database.prepare("select assignment_id from encounter_access_assignment_permissions where assignment_id='access-assignment-a-secondary'").get()).toBeTruthy();
+    expect(database.prepare("select assignment_id from encounter_access_assignment_permissions where assignment_id='access-assignment-a-general-medicine'").get()).toBeUndefined();
+  });
+
+  it.each(['audit', 'result', 'encounter', 'hash'] as const)('rejects mismatched draft %s and rolls back every clinical write', async (target) => {
+    let armed = false;
+    let intercepted = 0;
+    const { database, sections, review } = createFixture(undefined, { beforeStatement: (statement) => {
+      if (!armed) return;
+      if (target === 'audit' && statement.sql.includes('insert into audit_events')) {
+        intercepted++;
+        const changed = statement.bindings.map((value) => {
+          if (typeof value !== 'string' || !value.startsWith('{') || !value.includes('accessAssignmentId')) return value;
+          return JSON.stringify({ ...JSON.parse(value), accessAssignmentId: 'wrong-assignment' });
+        });
+        statement.bindings.splice(0, statement.bindings.length, ...changed);
+      }
+      if (target === 'result' && statement.sql.includes('update command_idempotency')) {
+        intercepted++;
+        statement.bindings[0] = 'wrong-protocol';
+      }
+      if ((target === 'encounter' || target === 'hash') && statement.sql.includes('update command_idempotency')) {
+        intercepted++;
+        const response = JSON.parse(String(statement.bindings[1]));
+        if (target === 'encounter') response.transition.encounterId = 'another-encounter';
+        else response.protocol.sourceHash = 'wrong-source';
+        statement.bindings[1] = JSON.stringify(response);
+      }
+    } });
+    await resolveMandatorySections(sections);
+    const before = database.prepare('select * from audit_events order by id').all();
+    armed = true;
+    await expect(review.beginReview({ expectedEncounterVersion: 1, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toThrow();
+    expect(intercepted).toBeGreaterThan(0);
+    expect(database.prepare('select count(*) as count from protocol_versions').get()?.count).toBe(0);
+    expect(database.prepare('select * from audit_events order by id').all()).toEqual(before);
+    expect(database.prepare("select status from encounters where id='encounter-a'").get()?.status).toBe('in_progress');
+  });
   it.each(['draft', 'sign'] as const)('rechecks access after reading the %s snapshot and before saving', async (operation) => {
     let armed = false;
     const { database, sections, review, signing } = createFixture((sql, db) => {
@@ -258,6 +334,13 @@ describe('recommendations in the immutable protocol source', () => {
     expect(await invoke()).toEqual(result);
     const op = operation === 'draft' ? 'protocol.begin_review' : 'protocol.sign';
     expect(database.prepare('select access_assignment_id from command_idempotency where operation=?').get(op)?.access_assignment_id).toBe(scope.accessAssignmentId);
+    expect(database.prepare('select access_assignment_id from protocol_versions where id=?').get(result.protocol.id)?.access_assignment_id).toBe(scope.accessAssignmentId);
+    expect(() => database.prepare(`insert into command_idempotency
+      (id,organization_id,facility_id,actor_membership_id,operation,idempotency_key,request_hash,status,
+       access_assignment_id,result_resource_type,result_resource_id,response_json,created_at)
+      select 'bad-command',organization_id,facility_id,actor_membership_id,operation,'bad-key',request_hash,'succeeded',
+        access_assignment_id,result_resource_type,'wrong-result',response_json,created_at
+      from command_idempotency where operation=?`).run(op)).toThrow('protocol command requires current assignment');
     database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
     await expect(invoke({ ...scope, accessAssignmentId: 'access-assignment-a-secondary' })).rejects.toThrow('Idempotency key');
     database.exec("update memberships set status='disabled' where id='membership-a'");

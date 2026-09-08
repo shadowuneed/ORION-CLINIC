@@ -558,6 +558,7 @@ export class D1ProtocolSigningRepository {
       this.scope.reviewerMembershipId,
       now,
       now,
+      this.scope.accessAssignmentId!,
       this.scope.organizationId,
       this.scope.facilityId,
       this.scope.encounterId,
@@ -595,11 +596,11 @@ export class D1ProtocolSigningRepository {
             id, organization_id, facility_id, encounter_id, version, status,
             content_json, source_hash, created_by_membership_id,
             signed_by_membership_id, signed_at, supersedes_protocol_version_id,
-            created_at
+            created_at, access_assignment_id
           )
           select ?, parent.organization_id, parent.facility_id,
             parent.encounter_id, parent.version + 1, 'signed',
-            parent.content_json, parent.source_hash, ?, ?, ?, parent.id, ?
+            parent.content_json, parent.source_hash, ?, ?, ?, parent.id, ?, ?
           from protocol_versions parent
           join protocol_heads head
             on head.organization_id = parent.organization_id
@@ -1014,6 +1015,7 @@ export class D1ProtocolSigningRepository {
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'signed_protocol' ||
       !replay.resultResourceId ||
+      result?.transition.encounterId !== this.scope.encounterId ||
       result?.protocol.id !== replay.resultResourceId
     ) {
       throw new ProtocolSigningConflictError(

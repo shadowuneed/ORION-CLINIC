@@ -47,7 +47,7 @@ function d1Result<T>(results: T[], changes = 0) {
   } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void): D1Database {
+function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, database: DatabaseSync) => void, beforeBatch?: () => void): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -83,6 +83,7 @@ function createD1Adapter(target: DatabaseSync, afterRead?: (sql: string, databas
       return prepareBound(sql) as unknown as D1PreparedStatement;
     },
     async batch<T = unknown>(statements: D1PreparedStatement[]) {
+      beforeBatch?.();
       target.exec('begin immediate');
       try {
         const results: D1Result<T>[] = [];
@@ -172,6 +173,7 @@ async function createFixture(options?: {
   careDecision?: 'granted' | 'denied';
   invalidSourceHash?: boolean;
   afterRead?: (sql: string, database: DatabaseSync) => void;
+  beforeBatch?: () => void;
 }) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
@@ -298,7 +300,7 @@ async function createFixture(options?: {
     accessAssignmentId: 'access-assignment-a-general-medicine',
     accessPermission: 'encounter.manage',
   };
-  const d1 = createD1Adapter(database, options?.afterRead);
+  const d1 = createD1Adapter(database, options?.afterRead, options?.beforeBatch);
   return {
     database,
     d1,
@@ -330,6 +332,26 @@ afterEach(() => {
 });
 
 describe('signed protocol amendment repository', () => {
+  it('rolls back amendment after final-preflight revocation and retains signed history', async () => {
+    let intercepted = false;
+    const { database, repository } = await createFixture({ beforeBatch: () => {
+      intercepted = true;
+      database.exec("update memberships set status='disabled' where id='membership-a'");
+    } });
+    const snapshot = () => ['protocol_versions', 'protocol_amendments', 'protocol_heads', 'encounters', 'command_idempotency', 'audit_events', 'audit_stream_heads']
+      .map((table) => database.prepare(`select * from ${table} order by id`).all());
+    const before = snapshot();
+    await expect(repository.amend(command())).rejects.toThrow();
+    expect(intercepted).toBe(true);
+    expect(snapshot()).toEqual(before);
+    expect(() => database.prepare(`insert into protocol_versions
+      (id,organization_id,facility_id,encounter_id,version,status,content_json,source_hash,created_by_membership_id,
+       signed_by_membership_id,signed_at,supersedes_protocol_version_id,created_at,access_assignment_id)
+      select 'unauthorized-successor',organization_id,facility_id,encounter_id,version+1,'signed',content_json,source_hash,
+        created_by_membership_id,signed_by_membership_id,signed_at,id,created_at,'access-assignment-a-general-medicine'
+      from protocol_versions where id='protocol-v2'`).run()).toThrow('protocol version requires current assignment');
+    expect(snapshot()).toEqual(before);
+  });
   it('rechecks amendment access after the source snapshot without changing signed history', async () => {
     const { database, repository } = await createFixture({ afterRead: (sql, db) => {
       if (sql.includes('from audit_stream_heads')) db.exec("update memberships set status='disabled' where id='membership-a'");
@@ -361,6 +383,11 @@ describe('signed protocol amendment repository', () => {
     const input = command();
     const result = await repository.amend(input);
     const replay = await repository.amend(input);
+
+    expect(database.prepare('select access_assignment_id from protocol_versions where id=?').get(result.protocol.id)?.access_assignment_id).toBe(scope.accessAssignmentId);
+    expect(database.prepare('select access_assignment_id from protocol_amendments where id=?').get(result.amendment.id)?.access_assignment_id).toBe(scope.accessAssignmentId);
+    expect(() => database.prepare('update protocol_versions set access_assignment_id=null where id=?').run(result.protocol.id)).toThrow();
+    expect(() => database.prepare('update protocol_amendments set access_assignment_id=null where id=?').run(result.amendment.id)).toThrow();
 
     expect(replay).toEqual(result);
     expect(result.protocol).toMatchObject({ version: 3, status: 'signed', headVersion: 3 });

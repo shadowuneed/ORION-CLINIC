@@ -829,6 +829,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-07 | Protocol repository authorization, dashboard and logout | PASS for bounded local checkpoint | Full pnpm verify:ci passed security/dependency checks, lint/types, 80 files/568 tests, Drizzle, build and isolated recovery: 86 tables/154 rows/41 migrations/three R2 objects/524,761 bytes; run 30bb7adc-a230-4602-b013-020cacc54651, 119,931 ms. Browser checks before runtime restart covered dashboard search/filter/navigation and logout/reload/explicit login. Final restart returned web HTTP 200. Groq configuration missing; no provider/audio validation claim. Ngrok restart blocked by execution policy; external URL offline. Next 2I.3g.2, not full 2I completion. |
 
+| 2026-09-08 | Protocol transaction boundary 2I.3g.2 | PASS for bounded local checkpoint | Fresh pnpm verify:ci exited 0: secret/dependency checks, lint/types, 80 files/575 tests (203.72 s), Drizzle and build passed. Isolated recovery passed: 86 tables/155 rows/42 migrations/three R2 objects/537,562 bytes; source destroyed before restore; run f58418fc-97fd-4225-a7da-0d98679232d6, 120,581 ms. Forward migration 0041 and local D1 quick_check/foreign-key checks were verified in the preceding continuation. Final read-only subagent review found no blocking authorization defect. On September 8 ports 3200/3101 were not listening; no services stopped, browser/provider/audio or external availability claim. Next 2I.3h; full 2I remains open. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1227,8 +1229,13 @@ control, detection, response, and residual acceptance.
 - Completed 2I.3g.1: protocol draft/sign/amend entry/retry/replay/pre-batch checks
   require exact current assignment/user, care and compatible lifecycle; command
   hashes/rows/audits retain assignment. No signed history or schema rewritten.
-- Exact next checkpoint: 2I.3g.2, protocol-row attribution and SQL guards.
-  Repository preflight does not close the transaction race. Continue below;
+- Implemented 2I.3g.2: migration 0041 adds protocol/amendment attribution and
+  transaction-time row/head/command/audit/result guards. Current selected access,
+  care consent and lifecycle are checked inside writes; results bind to exact
+  stored protocol/encounter identities, versions and signature fields. Nullable
+  historical fixtures remain unchanged. See latest verification ledger.
+- Exact next checkpoint: 2I.3h, encounter lifecycle command authorization.
+  Migrate recordTransition with repository and transaction-time guards; continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1432,6 +1439,41 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-08 — protocol transaction boundary, 2I.3g.2
+
+- Forward-only 0041 adds nullable historical assignment columns to protocol
+  versions/amendments and protects attributed writes, head publication and
+  interactive command/audit/result persistence with current exact assignment,
+  treating clinician, active patient, care consent and lifecycle checks.
+- Normal draft -> review -> signed/finalized -> amended statement order is
+  preserved. Commands must start processing; direct succeeded insertion fails.
+  Result fields must match stored rows, and replay verifies the scope encounter.
+  No old signed version, schema migration or historical nullable row was rewritten.
+- Two requested read-only subagents audited SQL and test coverage. Their findings
+  led to processing-only command insertion, response identity/summary checks,
+  null draft-signature validation and current-access guards on head publication.
+- Tests include final-preflight selected-assignment revocation with another active
+  assignment still available, amendment membership revocation, complete rollback,
+  mismatched audit/result/encounter/hash, direct SQL insertion denial, attribution,
+  immutable signed history and normal replay/second amendment. See ledger for
+  final aggregate results; focused suite before the last null guard passed 19 tests.
+- Migration 0041 was applied only to local D1. Web/STT were not stopped; no patient
+  command, live microphone, provider request, model change or external deployment.
+  Groq remains unconfigured and ngrok offline from the preceding checkpoint.
+- Continuation on September 8: the previous CI process result was unavailable,
+  so verification was restarted and passed in full (575 tests, build and isolated
+  recovery; exact results in the ledger). Neither port 3200 nor 3101 was listening at
+  inspection; this continuation did not stop or restart any application service.
+- Final read-only subagent review found no blocking authorization defect.
+  Deferred result-summary hardening: bind amendment sequence/display name and
+  transition timestamps to stored values, with tampering tests in a future
+  forward migration. Normal writers already construct these values; this is not
+  an assignment-authority bypass. Do not modify the already-applied 0041.
+- Next is **2I.3h encounter-lifecycle repository and SQL authorization**, followed
+  by export/read audit and independent creation. Keep protocol-driven transitions
+  compatible. Full Phase 2I and production readiness remain open. Preserve the
+  owner's standalone unstaged `a`; no secrets or local data belong in Git.
 
 ### 2026-09-07 — protocol commands, dashboard and logout checkpoint
 
@@ -2308,10 +2350,10 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3g.2: protocol-row attribution
-and SQL guards. 2I.3g.1 implements repository and command/audit boundaries but
-does not close the SQL transaction race. Recommendation guards (2I.3f.2) are in
-migration 0040; historical nullable fixtures are intentionally retained.
+The next bounded engineering slice is Phase 2I.3h: encounter lifecycle commands.
+2I.3g.2 adds protocol-row/head and command/audit/result SQL guards in migration
+0041; recommendation guards (2I.3f.2) are in migration 0040. Historical nullable
+fixtures are intentionally retained. Use the latest verification ledger above.
 Phase 2I.3a covers clinical section commands; 2I.3b covers interactive consent
 commands; 2I.3c covers manual transcript corrections, 2I.3d speech sessions and
 2I.3e recommendation generation.

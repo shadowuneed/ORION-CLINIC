@@ -170,19 +170,29 @@ transition. Source snapshot, section review and transcript consent checks remain
 Tests cover missing/read-only/wrong actor, cross-assignment replay, revocation
 after source reads before saving, immutable signing/amendments and replay denial.
 
-## Next bounded checkpoint: 2I.3g.2 — protocol database guards
+## 2I.3g.2 — protocol database guards
 
-Add forward-only assignment attribution to protocol versions and amendments.
-Guard attributed row writes and interactive commands/audits/results for current
-assignment, exact treating clinician, care consent and appropriate lifecycle.
+Implemented in forward-only migration 0041: assignment attribution on protocol
+versions/amendments, current authority and care consent at row/head writes,
+processing-only command insertion, exact final-state audit and result guards.
 Draft changes in_progress -> review; signing review -> finalized; amendments
-finalized/amended -> amended. Account for statement order and final-state audits.
-Test revocation between final preflight and batch, direct SQL bypass, wrong
-result/audit attribution, full rollback and immutable historical snapshots.
-Retain legacy nullable fixtures explicitly; do not rewrite signed data or claim
-that repository preflight closes the transaction race. Full 2I.3g is not complete.
-Exports/read audits and independent creation remain later gates. No provider
-activation or real patient data.
+finalized/amended -> amended. Guards respect the repository statement order.
+Response protocol/encounter identifiers, versions, hashes and signature fields
+must match stored rows. Replay additionally verifies the scope encounter.
+Historical nullable rows remain unchanged; direct unattributed fixture writers
+are explicitly not covered. Normal interactive commands cannot adopt those rows.
+See the master-plan verification ledger for the final test/migration evidence.
+
+## Next bounded checkpoint: 2I.3h — encounter lifecycle commands
+
+Migrate `D1EncounterLifecycleRepository.recordTransition`: current exact assignment
+at entry/retry/replay/pre-batch, durable command/hash/audit attribution and SQL
+guards for draft/ready/in_progress/cancelled transitions. Preserve care consent,
+expected versions and command-time replay. Test selected-assignment revocation
+between preflight and batch, mismatched audit/result and complete rollback.
+Do not weaken protocol-driven review/finalized/amended transitions while adding
+lifecycle guards. Exports/read audits and independent creation follow this slice;
+full 2I remains open. No provider activation or real patient data.
 
 ## Remaining 2I.3 acceptance gates
 
