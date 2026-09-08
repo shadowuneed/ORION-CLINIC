@@ -7,6 +7,7 @@ import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import type { SignedProtocolContent } from '@/lib/documents/protocol-artifacts';
 import { D1DocumentExportRepository, DocumentExportConflictError } from './document-export';
 import { exportArtifactKinds } from '@/lib/documents/protocol-artifacts';
+import { exportPrefix } from '@/lib/documents/export-reconciliation';
 import {
   D1ProtocolAmendmentRepository,
   ProtocolAmendmentConflictError,
@@ -344,6 +345,71 @@ describe('signed export repository authorization', () => {
     const repository = new D1DocumentExportRepository(d1, { ...scope, accessPermission: 'encounter.read' }, 'user-a');
     expect((await repository.getSignedSource()).protocol.id).toBe('protocol-v2');
     await expect(repository.recordGenerated(exportCommand())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  const cleanupCommand = (scope: WorkspaceScope) => {
+    const input = exportCommand();
+    const prefix = `${exportPrefix(scope, input.protocolId, input.protocolVersion)}/attempt-${crypto.randomUUID()}`;
+    return { ...input, manifestKey: `${prefix}/manifest.json`,
+      artifacts: input.artifacts.map(a => ({ ...a, objectKey: `${prefix}/${a.filename}` })) };
+  };
+
+  it('permanently fences all five keys before a delayed publication can commit', async () => {
+    const { database, d1, scope } = await createFixture();
+    const repository = new D1DocumentExportRepository(d1, scope, 'user-a');
+    const input = cleanupCommand(scope);
+    expect(await repository.fenceUnpublishedAttempt(input)).toBe(true);
+    expect(await repository.fenceUnpublishedAttempt(input)).toBe(true);
+    await expect(repository.recordGenerated(input)).rejects.toThrow('fenced');
+    expect(database.prepare('select count(*) as n from document_artifacts').get()?.n).toBe(0);
+    expect(database.prepare('select count(*) as n from export_cleanup_fences').get()?.n).toBe(5);
+    expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(0);
+    expect(() => database.exec('delete from export_cleanup_fences')).toThrow('permanent');
+    expect(() => database.exec("update export_cleanup_fences set request_id='changed'")).toThrow('permanent');
+  });
+
+  it('retains a committed package instead of fencing any of its files', async () => {
+    const { database, d1, scope } = await createFixture();
+    const repository = new D1DocumentExportRepository(d1, scope, 'user-a');
+    const input = cleanupCommand(scope);
+    await repository.recordGenerated(input);
+    expect(await repository.fenceUnpublishedAttempt(input)).toBe(false);
+    expect(database.prepare('select count(*) as n from export_cleanup_fences').get()?.n).toBe(0);
+    expect((await repository.listCurrentArtifacts())).toHaveLength(5);
+  });
+
+  it('rolls back every fence when a publisher commits after the preflight reference check', async () => {
+    const { database, scope } = await createFixture();
+    const input = cleanupCommand(scope);
+    // A committed legacy artifact represents the competing publisher at the batch boundary.
+    let fired = false;
+    const d1 = createD1Adapter(database, undefined, () => {
+      if (fired) return; fired = true;
+      const a = input.artifacts[4];
+      database.prepare(`insert into document_artifacts (id,organization_id,facility_id,encounter_id,
+        protocol_version_id,kind,object_key,mime_type,sha256,byte_size,status,created_by_membership_id)
+        values ('raced','org-a','fac-a','encounter-a','protocol-v2',?,?,?,?,?,'ready','membership-a')`)
+        .run(a.kind, a.objectKey, a.mimeType, a.sha256, a.byteSize);
+    });
+    await expect(new D1DocumentExportRepository(d1, scope, 'user-a').fenceUnpublishedAttempt(input)).rejects.toThrow('referenced');
+    expect(database.prepare('select count(*) as n from export_cleanup_fences').get()?.n).toBe(0);
+    expect(database.prepare('select count(*) as n from document_artifacts').get()?.n).toBe(1);
+  });
+
+  it('rolls back cleanup after revocation between authorization and batch', async () => {
+    const { database, scope } = await createFixture();
+    const d1 = createD1Adapter(database, undefined, () => database.exec("update memberships set status='disabled' where id='membership-a'"));
+    await expect(new D1DocumentExportRepository(d1, scope, 'user-a').fenceUnpublishedAttempt(cleanupCommand(scope))).rejects.toThrow('current assignment');
+    expect(database.prepare('select count(*) as n from export_cleanup_fences').get()?.n).toBe(0);
+  });
+
+  it('fails atomically if a fence insert was silently skipped', async () => {
+    const { database, d1, scope } = await createFixture();
+    const input = cleanupCommand(scope);
+    database.exec(`create trigger test_skip_cleanup before insert on export_cleanup_fences
+      when NEW.object_key like '%bundle_zip.fixture' begin select raise(ignore); end`);
+    await expect(new D1DocumentExportRepository(d1, scope, 'user-a').fenceUnpublishedAttempt(input)).rejects.toThrow();
+    expect(database.prepare('select count(*) as n from export_cleanup_fences').get()?.n).toBe(0);
   });
 
   it('rolls back export publication after access is revoked immediately before its batch', async () => {

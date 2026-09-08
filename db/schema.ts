@@ -20,6 +20,21 @@ const updatedAt = () =>
     .notNull()
     .default(sql`(unixepoch() * 1000)`);
 
+// Permanent tombstones: a cleaned key can never become a published artifact.
+export const exportCleanupFences = sqliteTable('export_cleanup_fences', {
+  objectKey: text('object_key').primaryKey(),
+  manifestKey: text('manifest_key').notNull(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  facilityId: text('facility_id').notNull().references(() => facilities.id),
+  encounterId: text('encounter_id').notNull().references(() => encounters.id),
+  protocolId: text('protocol_id').notNull().references(() => protocolVersions.id),
+  accessAssignmentId: text('access_assignment_id').notNull().references(() => departmentAccessAssignments.id),
+  actorMembershipId: text('actor_membership_id').notNull().references(() => memberships.id),
+  actorId: text('actor_id').notNull().references(() => users.id),
+  requestId: text('request_id').notNull(),
+  createdAt: createdAt(),
+});
+
 const enumCheck = (
   name: string,
   column: AnySQLiteColumn,

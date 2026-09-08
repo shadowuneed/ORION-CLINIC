@@ -14,6 +14,7 @@ import {
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { generateProtocolArtifacts } from '@/lib/documents/protocol-artifacts';
 import { publishGeneratedExport } from '@/lib/documents/export-publication';
+import { exportPrefix } from '@/lib/documents/export-reconciliation';
 import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import {
   apiFailure,
@@ -39,10 +40,6 @@ const commandSchema = z.object({
   acknowledgeSyntheticExport: z.literal(true),
   idempotencyKey: z.string().uuid(),
 });
-
-function safeKeyPart(value: string) {
-  return encodeURIComponent(value).replaceAll('%', '_');
-}
 
 export async function POST(request: Request) {
   const context = createApiRequestContext(
@@ -96,15 +93,9 @@ export async function POST(request: Request) {
     }
     const generated = await generateProtocolArtifacts(source);
     await repository.assertGenerationAuthorized(source.protocol.id, source.protocol.version, access.user.id);
-    const prefix = [
-      'synthetic-exports',
-      safeKeyPart(access.scope.organizationId),
-      safeKeyPart(access.scope.facilityId),
-      safeKeyPart(access.scope.encounterId),
-      safeKeyPart(source.protocol.id),
-      `v${source.protocol.version}`,
-    ].join('/');
+    const prefix = exportPrefix(access.scope, source.protocol.id, source.protocol.version);
     result = await publishGeneratedExport({ bucket: env.FILES, repository, intent,
+      accessAssignmentId: access.scope.accessAssignmentId!,
       prefix, sourceHash: source.protocol.sourceHash, artifacts: generated, requestId: context.requestId,
     });
     }

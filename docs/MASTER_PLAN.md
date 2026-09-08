@@ -729,6 +729,7 @@ rendering, authorization, backup, or external integration behavior.
 
 | Date | Command | Result | Scope and limitation |
 |---|---|---|---|
+| 2026-09-08 | Explicit fenced export reconciliation; pnpm verify:ci | PASS for this bounded synthetic local slice | Security policy 477 files (478 after operator documentation), no known dependency vulnerabilities, lint/types, 84 files/639 tests (280.79 s), Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 88 tables/159 rows/46 migrations/three R2 objects/559,351 bytes; run d67c9f91-5135-4464-9134-c6ef48bf74ba, 119,489 ms. Local 0045 applied, quick_check ok, foreign_key_check empty, db:generate no drift. Explicit pending schema-2 cleanup only; no automatic retention, existing-user-file deletion, live UI/audio/provider or deployment claim. |
 | 2026-09-08 | Phase 2I.3i.2 immutable export publication and download-audit boundary; pnpm verify:ci | PASS for this bounded local slice | Secret policy 472 files, no known dependency vulnerabilities, lint/types, 83 files/617 tests, Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 87 tables/158 rows/45 migrations/three R2 objects/556,449 bytes, 123,986 ms, run a8479b66-407e-483a-9e54-46c4320debc7. Local 0044 applied; quick_check ok, foreign_key_check empty; db:generate has no changes. Pending-manifest reconciliation remains open; no live UI/audio/provider/public deployment claim. |
 | 2026-09-08 | Initial export publication 2I.3i.2 verification | Historical partial result; superseded by later ledger | Three focused files/29 tests passed (12.70 s); types/lint/Drizzle/build and 470-file secret scan passed. Migration 0043 applied locally, integrity passed. Initial pnpm verify exited 1: 607 passed and three 5000-ms timeouts (286.87 s). Four affected rollback cases passed with 20-second timeout; the explicit timeout was saved in the working tree. No aggregate/recovery or commit/push was claimed at that earlier stop. |
 | 2026-08-28 | `pnpm install` | PASS | Scaffold dependencies installed; no product behavior verified |
@@ -1250,8 +1251,10 @@ control, detection, response, and residual acceptance.
   IN PROGRESS on 2026-09-08: local migration 0043 and immutable per-attempt
   publication are implemented; migration 0044 adds download access-audit SQL
   protection. Latest-source aggregate verification passed; see latest handoff.
-  Pending-manifest reconciliation remains open.
-  Complete artifact/access-audit attribution and isolated attempt/replay cleanup; continue below;
+  Explicit schema-2 pending-manifest reconciliation is implemented in 0045 and
+  its bounded verification passed (639 tests, build/recovery). Legacy/active-upload cleanup
+  and a general retention worker remain deliberately deferred. Next: workspace-read audit.
+  Continue with workspace-read audit attribution; export publication/download and explicit pending-attempt cleanup are verified;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1455,6 +1458,37 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-08 — explicit fenced export reconciliation
+
+- 0045 is applied locally and immutable. Permanent export_cleanup_fences bind exact
+  object keys, manifest, actor, assignment, request and signed encounter/protocol.
+  SQL serializes reference publication against fencing; all five rows must commit
+  atomically before deletion. INSERT/UPDATE of a fenced artifact key is rejected;
+  fencing an already referenced key is rejected, including a preflight-to-batch race.
+- New manifests have schema 2 and explicit assignment. The same-origin authenticated
+  POST /api/workspace/exports/reconcile derives exact paths from selected scope,
+  requires current manage authority and current signed head, and processes only one
+  deliberately selected pending attempt. Malformed/legacy/uploading/published or
+  mismatched manifests are retained. Partial deletion keeps the manifest for retry;
+  uncertain fence commit never starts deletion. No production retention policy inferred.
+- Operator contract: docs/operations/export-reconciliation.md. No automatic worker,
+  general listing/deletion endpoint, cleanup UI or stale-protocol/legacy adoption.
+  No existing user export was deleted during verification; tests use isolated fixtures.
+- Focused initial repository/reconciliation/API run: 3 files/41 tests PASS (13.98 s).
+  Subsequent publication/reconciliation/API run: 3 files/28 tests PASS (780 ms).
+  Final verify:ci exited 0 with 84 files/639 tests (280.79 s), security/dependency
+  checks, lint/types, schema and production build. Isolated recovery passed after
+  disposable source destruction: 88 tables/159 rows/46 migrations/three R2 objects/
+  559,351 bytes, 119,489 ms, run d67c9f91-5135-4464-9134-c6ef48bf74ba.
+  The general drill covers schema/data restore; it does not claim a non-empty fence
+  recovery fixture. Fence behavior is covered by the isolated SQLite tests.
+  0045 local migration, quick_check=ok, empty foreign_key_check and no drift confirmed.
+- Next: migrate workspace.read access audit to exact current
+  assignment with schema-2 attribution, SQL guards and negative/replay/rollback tests.
+  Then independent encounter creation/selection. Full Phase 2I remains open.
+  Preserve owner's unstaged `a`, applied 0000-0045 and all historical records.
+  No ports stopped/restarted, browser/audio/provider/Word or public deployment claim.
 
 ### 2026-09-08 — download audit transaction boundary, 2I.3i.2 continuation
 
@@ -2486,9 +2520,12 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3i.2: export SQL guards and R2 publication.
-2I.3i.1 implements repository/response rechecks only; it does not close transaction
-or shared-object-key overwrite races. See its latest handoff and requirements.
+The latest reconciliation verification passed. The next bounded engineering slice
+is workspace-read access-audit migration. Exports now have repository/response
+checks (2I.3i.1), SQL publication guards (0043), download audit (0044) and explicit
+schema-2 pending-attempt fencing/reconciliation (0045). Legacy/active-upload cleanup
+and a general retention worker remain deferred; do not enable deletion by age.
+Use the latest handoff and verification ledger, not older export next-step text.
 2I.3h adds lifecycle repository checks and immutable transition events/guards in
 0042. Validate its latest ledger before proceeding to export source/render/download.
 2I.3g.2 adds protocol-row/head and command/audit/result SQL guards in migration

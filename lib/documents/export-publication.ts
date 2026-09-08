@@ -6,6 +6,7 @@ export async function publishGeneratedExport(args: {
   bucket: Pick<R2Bucket, 'put' | 'delete'>;
   repository: Pick<D1DocumentExportRepository, 'recordGenerated' | 'assertGenerationAuthorized'>;
   intent: ExportIntent; requestId: string; prefix: string; sourceHash: string;
+  accessAssignmentId: string;
   artifacts: GeneratedArtifact[];
 }) {
   const { bucket, repository, intent, artifacts } = args;
@@ -19,7 +20,8 @@ export async function publishGeneratedExport(args: {
     objectKey: `${prefix}/${artifact.filename}`, mimeType: artifact.mimeType,
     sha256: artifact.sha256, byteSize: artifact.bytes.byteLength }));
   const keys = metadata.map(artifact => artifact.objectKey);
-  const manifest = { schemaVersion: 1, createdAt: Date.now(), intent, requestId: args.requestId, artifacts: metadata };
+  const manifest = { schemaVersion: 2, accessAssignmentId: args.accessAssignmentId,
+    createdAt: Date.now(), intent, requestId: args.requestId, artifacts: metadata };
   const mark = (status: string) => bucket.put(manifestKey, JSON.stringify({ ...manifest, status }),
     { httpMetadata: { contentType: 'application/json' } });
   const cleanup = async (ownedKeys: string[]) => {

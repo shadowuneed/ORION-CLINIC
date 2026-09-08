@@ -1,4 +1,5 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
+import { exportPrefix } from '@/lib/documents/export-reconciliation';
 import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
 import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
@@ -265,6 +266,48 @@ export class D1DocumentExportRepository {
     await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
     const replay = await this.findIdempotency(input.idempotencyKey);
     return replay ? this.resolveReplay(replay, await this.intentHash(input), input) : null;
+  }
+
+  /** SQL serializes this tombstone batch against publication. Never delete on a failed/unknown result. */
+  async fenceUnpublishedAttempt(input: ExportIntent & {
+    manifestKey: string; artifacts: ExportArtifactMetadata[]; requestId: string;
+  }) {
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
+    this.validateArtifacts(input.artifacts);
+    const keys = input.artifacts.map(artifact => artifact.objectKey);
+    const root = `${exportPrefix(this.scope, input.protocolId, input.protocolVersion)}/attempt-`;
+    const suffix = input.manifestKey.slice(root.length);
+    if (!input.manifestKey.startsWith(root) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/manifest\.json$/i.test(suffix) ||
+      input.artifacts.some(a => /[/\\]/.test(a.filename) || ['.', '..', 'manifest.json'].includes(a.filename) ||
+        a.objectKey !== `${input.manifestKey.slice(0, -'manifest.json'.length)}${a.filename}`)) {
+      throw new DocumentExportConflictError('Invalid manifest key');
+    }
+    const keyJson = JSON.stringify(keys);
+    const referenced = await this.database.prepare(`select count(*) as count from document_artifacts
+      where object_key in (select value from json_each(?1))`).bind(keyJson).first<{ count: number }>();
+    if (!referenced || referenced.count > 0) return false;
+    const { organizationId, facilityId, encounterId, reviewerMembershipId, accessAssignmentId } = this.scope;
+    const now = Date.now();
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
+    await this.database.batch([
+      ...keys.map(key => this.database.prepare(`insert into export_cleanup_fences
+        (object_key, manifest_key, organization_id, facility_id, encounter_id, protocol_id,
+         access_assignment_id, actor_membership_id, actor_id, request_id, created_at)
+        values (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11) on conflict(object_key) do nothing`)
+        .bind(key, input.manifestKey, organizationId, facilityId, encounterId, input.protocolId,
+          accessAssignmentId!, reviewerMembershipId, input.actorId, input.requestId, now)),
+      // Even skipped INSERTs or a replay with another scope must fail the whole batch.
+      this.database.prepare(`select case when (
+        select count(*) from export_cleanup_fences where object_key in (select value from json_each(?1))
+          and manifest_key=?2 and organization_id=?3 and facility_id=?4 and encounter_id=?5
+          and protocol_id=?6 and access_assignment_id=?7 and actor_membership_id=?8 and actor_id=?9
+        )=5 and not exists (select 1 from document_artifacts where object_key in (select value from json_each(?1)))
+        then 1 else json('export_cleanup_fence_incomplete') end`)
+        .bind(keyJson, input.manifestKey, organizationId, facilityId, encounterId, input.protocolId,
+          accessAssignmentId!, reviewerMembershipId, input.actorId),
+    ]);
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
+    return true;
   }
 
   private intentHash(input: ExportIntent) {

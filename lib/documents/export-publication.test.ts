@@ -14,6 +14,7 @@ function fixture() {
   };
   const args = { bucket, repository, intent: { protocolId: 'protocol-a', protocolVersion: 1,
     actorId: 'user-a', idempotencyKey: 'intent-a' }, requestId: 'request-a', prefix: 'synthetic-test', sourceHash: 'source',
+    accessAssignmentId: 'assignment-a',
     artifacts: [{ kind: 'transcript_txt', filename: 'transcript.txt', mimeType: 'text/plain', sha256: 'a'.repeat(64),
       bytes: new Uint8Array([1, 2]) }] as GeneratedArtifact[] };
   return { objects, bucket, repository, args: args as unknown as Parameters<typeof publishGeneratedExport>[0] };

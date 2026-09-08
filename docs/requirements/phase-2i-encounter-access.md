@@ -78,7 +78,7 @@ records, consents, audio, provider settings or speech model were changed.
 | `/api/workspace/transcript/speech/health`, `/session`, `/transcribe` | exact assignment, encounter, ownership, lifecycle and consent; session attribution |
 | `/api/workspace/recommendations/generate`, `/edit`, `/decision` | encounter.manage; exact acknowledged transcript, durable analysis, pending drafts, human decisions |
 | `/api/workspace/protocols/draft`, `/sign`, `/amend` | encounter.manage; immutable signed snapshots and amendments |
-| `/api/workspace/exports/generate`, `/download` | appropriate read/manage permission; immutable artifact, exact source and read audit |
+| `/api/workspace/exports/generate`, `/download`, `/reconcile` | appropriate read/manage permission; immutable artifact, exact source, read audit and explicit scoped cleanup fence |
 | `app/authenticated-clinic-page.tsx` | remove legacy clinician capability lookup; shell visibility never substitutes for API authorization |
 | dashboard, `/live`, patient-to-encounter links, compatibility clients | selection/URL propagation, no stale-response context replacement, no stream reuse across assignments |
 
@@ -238,13 +238,18 @@ checks authority within insertion and preserves append-only history. A final SQL
 head-publication assertion rolls back the entire batch if head advancement is skipped.
 Workspace-read audit still uses the legacy boundary and remains a separate gate.
 
-Exact next: bounded pending-manifest reconciliation with a durable publication
-fence. Merely checking that no artifact exists and then deleting is unsafe: an
-in-flight publisher could commit after the check. Do not delete uncertain objects
-until publication is provably fenced; never delete referenced objects. Retention
-of pending objects is deliberate until that protocol is implemented and tested.
-See master-plan ledger for final verification; full 2I.3i.2 is not yet complete.
-Then complete remaining read-audit and independent-creation boundaries. Full 2I
+Migration 0045 adds permanent per-object cleanup fences and SQL mutual exclusion
+between publication and cleanup. The explicit same-origin, assigned-doctor POST
+`/api/workspace/exports/reconcile` handles exactly one schema-2 publication_pending
+manifest with a matching current protocol, actor, assignment and intent. It derives
+paths from authorized scope, retains any referenced package, atomically fences all
+five keys before deletion and retains the manifest after partial deletion for retry.
+Unknown fence outcomes never authorize deletion. See
+`docs/operations/export-reconciliation.md` for the operator contract and limitations.
+Old schema-1/uploading/published manifests and stale protocols remain retained;
+no age policy, automatic worker or general bucket deletion is enabled.
+See master-plan ledger for final verification before accepting this bounded slice.
+Next complete workspace-read audit and independent-creation boundaries. Full 2I
 remains open; no provider activation, model replacement or real patient data.
 
 ## Remaining 2I.3 acceptance gates
