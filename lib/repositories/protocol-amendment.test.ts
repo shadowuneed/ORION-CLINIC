@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
 import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import type { SignedProtocolContent } from '@/lib/documents/protocol-artifacts';
-import { D1DocumentExportRepository } from './document-export';
+import { D1DocumentExportRepository, DocumentExportConflictError } from './document-export';
+import { exportArtifactKinds } from '@/lib/documents/protocol-artifacts';
 import {
   D1ProtocolAmendmentRepository,
   ProtocolAmendmentConflictError,
@@ -329,6 +330,76 @@ function command(overrides?: Partial<Parameters<D1ProtocolAmendmentRepository['a
 
 afterEach(() => {
   while (databases.length > 0) databases.pop()?.close();
+});
+
+describe('signed export repository authorization', () => {
+  const exportCommand = () => ({ protocolId: 'protocol-v2', protocolVersion: 2,
+    idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID(),
+    artifacts: exportArtifactKinds.map(kind => ({ kind, filename: `${kind}.fixture`,
+      objectKey: `synthetic-export-test/${kind}.fixture`, mimeType: 'application/octet-stream',
+      sha256: 'a'.repeat(64), byteSize: 10 })) });
+
+  it('allows a read scope to read signed source but not generate exports', async () => {
+    const { d1, scope } = await createFixture();
+    const repository = new D1DocumentExportRepository(d1, { ...scope, accessPermission: 'encounter.read' }, 'user-a');
+    expect((await repository.getSignedSource()).protocol.id).toBe('protocol-v2');
+    await expect(repository.recordGenerated(exportCommand())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  it.each(['missing', 'wrong-user', 'revoked'] as const)('denies %s source/list/download access', async kind => {
+    const { database, d1, scope } = await createFixture();
+    if (kind === 'missing') scope.accessAssignmentId = undefined;
+    if (kind === 'revoked') database.exec("update memberships set status='disabled' where id='membership-a'");
+    const repository = new D1DocumentExportRepository(d1, scope, kind === 'wrong-user' ? 'user-b' : 'user-a');
+    await expect(repository.getSignedSource()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(repository.listCurrentArtifacts()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(repository.getDownload('protocol_docx')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  it('denies returning source when access is revoked during its read', async () => {
+    let revoked = false;
+    const { d1, scope } = await createFixture({ afterRead: (sql, db) => {
+      if (sql.includes('version.content_json as contentJson')) {
+        db.exec("update memberships set status='disabled' where id='membership-a'"); revoked = true;
+      }
+    } });
+    await expect(new D1DocumentExportRepository(d1, scope, 'user-a').getSignedSource()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(revoked).toBe(true);
+  });
+
+  it('attributes generation and rejects cross-assignment and revoked command replay', async () => {
+    const { database, d1, scope } = await createFixture();
+    const repository = new D1DocumentExportRepository(d1, scope, 'user-a');
+    const input = exportCommand();
+    const generated = await repository.recordGenerated(input);
+    expect(await repository.recordGenerated(input)).toEqual(generated);
+    expect(database.prepare("select access_assignment_id from command_idempotency where operation='document.export.generate'").get())
+      .toEqual({ access_assignment_id: scope.accessAssignmentId });
+    const artifact = await repository.getDownload('protocol_docx');
+    expect(artifact).toBeTruthy();
+    await repository.assertDownloadAuthorized(artifact!, 'user-a');
+    await expect(repository.assertDownloadAuthorized({ ...artifact!, sha256: 'b'.repeat(64) }, 'user-a')).rejects.toBeInstanceOf(DocumentExportConflictError);
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    await expect(new D1DocumentExportRepository(d1, { ...scope, accessAssignmentId: 'access-assignment-a-secondary' }, 'user-a').recordGenerated(input))
+      .rejects.toBeInstanceOf(DocumentExportConflictError);
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(repository.recordGenerated(input)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(repository.assertDownloadAuthorized(artifact!, 'user-a')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  }, 20000);
+
+  it('rejects revoked generation at final repository preflight without writes', async () => {
+    let revoked = false;
+    const { database, d1, scope } = await createFixture({ afterRead: (sql, db) => {
+      if (sql.includes('from audit_stream_heads')) {
+        db.exec("update memberships set status='disabled' where id='membership-a'"); revoked = true;
+      }
+    } });
+    await expect(new D1DocumentExportRepository(d1, scope, 'user-a').recordGenerated(exportCommand())).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(revoked).toBe(true);
+    for (const table of ['document_artifacts', 'command_idempotency', 'audit_events']) {
+      expect(database.prepare(`select count(*) as count from ${table}`).get()).toEqual({ count: 0 });
+    }
+  });
 });
 
 describe('signed protocol amendment repository', () => {

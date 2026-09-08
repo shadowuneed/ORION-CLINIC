@@ -28,6 +28,7 @@ import {
 } from '@/lib/repositories/access-audit';
 import {
   D1DocumentExportRepository,
+  DocumentExportConflictError,
 } from '@/lib/repositories/document-export';
 import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
 
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
       toSiteIdentityPrincipal(identity),
       parsed.data.encounterId,
     );
-    const repository = new D1DocumentExportRepository(env.DB, access.scope);
+    const repository = new D1DocumentExportRepository(env.DB, access.scope, access.user.id);
     const artifact = await repository.getDownload(parsed.data.kind);
     if (!artifact) {
       return apiFailure(
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
         'Проверка целостности файла не пройдена.',
       );
     }
+    await repository.assertDownloadAuthorized(artifact, access.user.id);
     await new D1AccessAuditRepository(
       env.DB,
       access.scope,
@@ -111,6 +113,7 @@ export async function GET(request: Request) {
       actorId: access.user.id,
       requestId: context.requestId,
     });
+    await repository.assertDownloadAuthorized(artifact, access.user.id);
     return apiBinarySuccess(
       context,
       Uint8Array.from(bytes).buffer,
@@ -125,6 +128,9 @@ export async function GET(request: Request) {
   } catch (error) {
     const assignmentFailure = workspaceAssignmentFailure(context, error);
     if (assignmentFailure) return assignmentFailure;
+    if (error instanceof DocumentExportConflictError) {
+      return apiFailure(context, 409, 'EXPORT_SOURCE_CHANGED', 'Документ изменился. Обновите приём и повторите скачивание.');
+    }
     if (error instanceof MembershipRequiredError) {
       return apiFailure(
         context,

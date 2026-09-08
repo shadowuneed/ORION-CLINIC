@@ -204,13 +204,33 @@ trusted; no rewrite of existing encounter/history rows or migrations.
 See the master-plan ledger for verification, including an actual start -> section
 review -> protocol draft -> sign -> amendment integration test.
 
-## Next bounded checkpoint: 2I.3i — signed export authorization
+## 2I.3i.1 — signed export repository and response authorization
 
-Migrate `D1DocumentExportRepository` and the generate/download path to exact current
-assignment at source reads, retries, replay and artifact publication/download.
-Persist selected assignment in export requests/events and access audit with forward
-migrations; protect cross-assignment replay and access revoked during rendering.
-Preserve signed source immutability, consent, artifact hashes and R2 cleanup rules.
+Added exact current read checks (read permission is not manage permission) before
+and after source/list/download reads, including active patient, treating member,
+selected assignment time window and optional explicit actor identity. Generation
+checks exact manage access, actor and current signed head at entry/retry/replay,
+after rendering, before metadata batch and before returning the package. Existing
+signed snapshot/consent representation is unchanged; this is not a new retention
+or consent-withdrawal policy. Commands and generation audit retain assignment.
+Cross-assignment, unattributed legacy and cross-encounter replay fail closed.
+Download rechecks exact artifact identity/key/hash/size/type and current access
+after R2 reading and after access audit, immediately before returning bytes.
+Generated download URLs preserve assignment and facility. No migration in this slice.
+
+## Next bounded checkpoint: 2I.3i.2 — export transactions and R2 publication
+
+Complete transaction-time protections: persist selected assignment on artifact
+rows and download access audit with forward migrations; add exact row/command/
+audit/result SQL guards and revoke-before-batch rollback tests. Repository preflight
+does not close the last transaction race. Preserve current read/manage distinction.
+Fix existing R2 publication semantics: stable per-protocol keys are currently
+overwritten before metadata commits, retries hash the generated artifact set, and
+there is no safe orphan reconciliation. Use isolated immutable attempt keys plus
+intent-bound idempotency/replay before upload, publication ownership and bounded
+cleanup that never removes referenced objects after an uncertain commit. Do not
+claim that R2 overwrite/concurrency/cleanup is solved by the current rechecks.
+Preserve signed source immutability, consent representation and artifact hashes.
 Then complete remaining read-audit and independent-creation boundaries. Full 2I
 remains open; no provider activation, model replacement or real patient data.
 

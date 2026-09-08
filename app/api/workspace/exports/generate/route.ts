@@ -13,6 +13,7 @@ import {
 } from '@/lib/auth/workspace-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { generateProtocolArtifacts } from '@/lib/documents/protocol-artifacts';
+import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import {
   apiFailure,
   apiSuccess,
@@ -79,7 +80,8 @@ export async function POST(request: Request) {
       toSiteIdentityPrincipal(identity),
       payload.encounterId,
     );
-    const repository = new D1DocumentExportRepository(env.DB, access.scope);
+    const repository = new D1DocumentExportRepository(env.DB, access.scope, access.user.id);
+    await repository.assertGenerationAuthorized(payload.protocolId, payload.expectedProtocolVersion, access.user.id);
     const source = await repository.getSignedSource();
     if (
       source.protocol.id !== payload.protocolId ||
@@ -88,6 +90,7 @@ export async function POST(request: Request) {
       throw new DocumentExportConflictError('Signed protocol changed');
     }
     const generated = await generateProtocolArtifacts(source);
+    await repository.assertGenerationAuthorized(source.protocol.id, source.protocol.version, access.user.id);
     const prefix = [
       'synthetic-exports',
       safeKeyPart(access.scope.organizationId),
@@ -125,13 +128,16 @@ export async function POST(request: Request) {
       requestId: context.requestId,
     });
     const encounterId = encodeURIComponent(access.scope.encounterId);
+    await repository.assertGenerationAuthorized(source.protocol.id, source.protocol.version, access.user.id);
     return apiSuccess(
       context,
       {
         ...result,
         artifacts: result.artifacts.map((artifact) => ({
           ...artifact,
-          downloadUrl: `/api/workspace/exports/download?encounterId=${encounterId}&kind=${artifact.kind}`,
+          downloadUrl: scopedWorkspaceUrl(`/api/workspace/exports/download?encounterId=${encounterId}&kind=${artifact.kind}`, {
+            accessAssignmentId: access.scope.accessAssignmentId!, facilityId: access.scope.facilityId,
+          }),
         })),
         persistence: 'local-d1-r2',
       },

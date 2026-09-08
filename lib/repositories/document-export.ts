@@ -1,4 +1,6 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
+import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
 import {
   exportArtifactKinds,
@@ -30,6 +32,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -135,9 +138,11 @@ export class D1DocumentExportRepository {
   constructor(
     private readonly database: D1Database,
     private readonly scope: WorkspaceScope,
+    private readonly actorId?: string,
   ) {}
 
   async getSignedSource(): Promise<SignedProtocolExportSource> {
+    await this.assertReadAccess();
     const row = await this.getSignedProtocolRow();
     if (!row) {
       throw new DocumentExportNotFoundError('Signed protocol was not found');
@@ -163,6 +168,7 @@ export class D1DocumentExportRepository {
     }
 
     const auditRows = await this.getEncounterAuditEvents();
+    await this.assertReadAccess();
     return {
       protocol: {
         id: row.protocolId,
@@ -181,6 +187,7 @@ export class D1DocumentExportRepository {
   }
 
   async listCurrentArtifacts(): Promise<ExportArtifactSummary[]> {
+    await this.assertReadAccess();
     const result = await this.database
       .prepare(`
         select artifact.id, artifact.kind, artifact.object_key as objectKey,
@@ -205,6 +212,7 @@ export class D1DocumentExportRepository {
         this.scope.encounterId,
       )
       .all<ArtifactRow>();
+    await this.assertReadAccess();
     return result.results.map((row) => ({
       ...row,
       filename: filenameFromKey(row.objectKey),
@@ -212,9 +220,11 @@ export class D1DocumentExportRepository {
   }
 
   async recordGenerated(input: RecordExportCommand) {
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
     this.validateArtifacts(input.artifacts);
     const requestHash = await sha256Text(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         protocolId: input.protocolId,
         protocolVersion: input.protocolVersion,
@@ -227,9 +237,10 @@ export class D1DocumentExportRepository {
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
       const [protocol, auditHead] = await Promise.all([
         this.getSignedProtocolRow(),
         this.getAuditHead(),
@@ -253,8 +264,9 @@ export class D1DocumentExportRepository {
           auditHead,
         });
       } catch (error) {
+        await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input);
         if (attempt === 2) throw error;
       }
     }
@@ -262,6 +274,7 @@ export class D1DocumentExportRepository {
   }
 
   async getDownload(kind: ExportArtifactKind) {
+    await this.assertReadAccess();
     const row = await this.database
       .prepare(`
         select artifact.id, artifact.kind, artifact.object_key as objectKey,
@@ -292,20 +305,48 @@ export class D1DocumentExportRepository {
         this.scope.reviewerMembershipId,
       )
       .first<ArtifactRow>();
+    await this.assertReadAccess();
     return row ? { ...row, filename: filenameFromKey(row.objectKey) } : null;
+  }
+
+  private assertReadAccess(actorId = this.actorId) {
+    return assertCurrentEncounterReadAccess(this.database, this.scope, actorId);
+  }
+
+  async assertGenerationAuthorized(protocolId: string, protocolVersion: number, actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    const current = await this.getSignedProtocolRow();
+    if (!current || current.protocolId !== protocolId || current.protocolVersion !== protocolVersion ||
+      !['finalized', 'amended'].includes(current.encounterStatus)) {
+      throw new DocumentExportConflictError('Signed protocol changed or is unavailable');
+    }
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+  }
+
+  async assertDownloadAuthorized(artifact: ExportArtifactSummary, actorId: string) {
+    await this.assertReadAccess(actorId);
+    const current = await this.getDownload(artifact.kind);
+    if (!current || current.id !== artifact.id || current.objectKey !== artifact.objectKey ||
+      current.sha256 !== artifact.sha256 || current.byteSize !== artifact.byteSize || current.mimeType !== artifact.mimeType) {
+      throw new DocumentExportConflictError('Download artifact changed');
+    }
+    await this.assertReadAccess(actorId);
   }
 
   async auditDownload(
     artifact: ExportArtifactSummary,
     input: { actorId: string; requestId: string },
   ) {
+    await this.assertDownloadAuthorized(artifact, input.actorId);
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertDownloadAuthorized(artifact, input.actorId);
       const auditHead = await this.getAuditHead();
       if (!auditHead) throw new Error('Audit stream is unavailable');
       const now = Date.now();
       const auditEventId = `audit-${crypto.randomUUID()}`;
       const auditSequence = auditHead.lastSequence + 1;
       const metadataJson = JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         artifactId: artifact.id,
         kind: artifact.kind,
         sha256: artifact.sha256,
@@ -330,6 +371,7 @@ export class D1DocumentExportRepository {
         occurredAt: now,
       });
       try {
+        await this.assertDownloadAuthorized(artifact, input.actorId);
         const results = await this.database.batch([
           this.database
             .prepare(`
@@ -392,6 +434,7 @@ export class D1DocumentExportRepository {
         ]);
         if (results.every((result) => result.meta.changes === 1)) return;
       } catch (error) {
+        await this.assertDownloadAuthorized(artifact, input.actorId);
         if (attempt === 2) throw error;
       }
     }
@@ -443,6 +486,7 @@ export class D1DocumentExportRepository {
     const commandId = `command-${crypto.randomUUID()}`;
     const auditSequence = auditHead.lastSequence + 1;
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       protocolId: protocol.protocolId,
       protocolVersion: protocol.protocolVersion,
       artifacts: artifactSummaries.map((artifact) => ({
@@ -518,6 +562,7 @@ export class D1DocumentExportRepository {
           protocol.protocolVersion,
         ),
     );
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
     const batchResults = await this.database.batch([
       ...statements,
       this.database
@@ -583,9 +628,9 @@ export class D1DocumentExportRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'document.export.generate',
-            ?5, ?6, 'processing', ?7
+            ?5, ?6, 'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -597,6 +642,7 @@ export class D1DocumentExportRepository {
           requestHash,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -721,7 +767,7 @@ export class D1DocumentExportRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId,
           response_json as responseJson
@@ -740,13 +786,18 @@ export class D1DocumentExportRepository {
       .first<IdempotencyRow>();
   }
 
-  private resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, input: RecordExportCommand) {
+    await this.assertGenerationAuthorized(input.protocolId, input.protocolVersion, input.actorId);
     const result = parseStoredResult(replay.responseJson);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'export_bundle' ||
       !replay.resultResourceId ||
+      result?.encounterId !== this.scope.encounterId ||
+      result?.protocolId !== input.protocolId ||
+      result?.protocolVersion !== input.protocolVersion ||
       result?.protocolId !== replay.resultResourceId
     ) {
       throw new DocumentExportConflictError(

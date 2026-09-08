@@ -833,6 +833,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-08 | Lifecycle transaction boundary 2I.3h | PASS for bounded local checkpoint | Final pnpm verify:ci exited 0: secret policy 464 files, no known dependency vulnerabilities, lint/types, 81 files/589 tests (235.20 s), Drizzle and build. Isolated recovery passed after disposable source destruction: 87 tables/156 rows/43 migrations/three R2 objects/545,915 bytes; run 7968d0c5-8821-4a99-8564-70cac7a19a93, 121,222 ms. Focused lifecycle/protocol suite 33 tests passed with explicit 20 s integration-test budget; first aggregate timeout and narrow fix documented in handoff. Local 0042 applied; quick_check ok, foreign_key_check empty; db:generate reports no schema changes. Subagent design research completed partially before workspace spend cap; no final independent-review claim. No browser/audio/provider/deployment test or service restart. Next 2I.3i signed exports; full Phase 2I remains open. |
 
+| 2026-09-08 | Export repository and response boundary 2I.3i.1 | PASS, partial export phase | pnpm verify:ci exited 0: secret policy 466 files, no known dependency vulnerabilities, lint/types, 82 files/601 tests (239.67 s), Drizzle/build and isolated recovery: 87 tables/156 rows/43 migrations/three R2 objects/545,915 bytes; run ce68d35b-9992-483d-8d87-c56385b999cc, 121,321 ms, source destroyed before restore. Targeted signed-protocol/export SQLite suite 15 tests and async export API suite five tests passed. No schema change or service restart; no live browser/R2/provider/Word validation. Remaining 2I.3i.2: SQL transaction guards, artifact/download audit attribution, shared-key overwrite and uncertainty-safe R2 publication/cleanup. Full 2I.3i and Phase 2I are not complete. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1239,8 +1241,11 @@ control, detection, response, and residual acceptance.
 - Implemented 2I.3h: current lifecycle assignment checks and immutable transition
   events in migration 0042; transaction-time event/update/audit/result guards.
   See latest verification ledger before treating the checkpoint as validated.
-- Exact next checkpoint: 2I.3i, signed export authorization and artifact access.
-  Migrate export source/render/replay/download boundaries; continue below;
+- Implemented 2I.3i.1: export source/list/download revalidation, generation manage
+  checks through preflight/replay/render, attributed commands/audit and selected
+  download links. Check the latest ledger for the verified scope and limitations.
+- Exact next checkpoint: 2I.3i.2, export transaction guards and safe R2 publication.
+  Complete artifact/access-audit attribution and isolated attempt/replay cleanup; continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1444,6 +1449,33 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-08 — export preflight and response boundary, 2I.3i.1
+
+- Split 2I.3i explicitly: repository/response revalidation first, transaction and
+  object-store publication second. Do not mark full export authorization complete.
+- New assertCurrentEncounterReadAccess revalidates an already resolved selected
+  scope without implicitly finding another assignment. Read and manage remain
+  distinct. Source/list/download check before and after reads; generation checks
+  current signed identity/version/lifecycle and actor at entry/retry/replay/final
+  preflight. Command hash/row and clinical generation audit now retain assignment.
+- API rechecks manage after artifact rendering and before returning metadata.
+  Download checks current artifact identity/key/hash/size/type after object read
+  and after access-audit write, before returning bytes. Download links retain
+  explicit assignment and facility. No schema or prior signed snapshot rewritten.
+- Targeted tests: real SQLite signed-source/generation/replay/revocation checks
+  reuse protocol-amendment fixtures; API tests simulate revocation during render,
+  R2 reading and access audit and verify no response bytes/relevant writes, plus
+  authorized download and selected URLs. These are tests, not a live browser or
+  real R2/provider/Word rendering verification. See ledger for final aggregate.
+- Exact next 2I.3i.2: artifact/download-access-audit attribution and SQL guards;
+  close revoked-before-batch race. Existing generation still uses shared per-protocol
+  object keys before DB publication: add isolated immutable attempt objects,
+  intent-bound replay before upload, and uncertainty-safe cleanup/reconciliation.
+  Do not delete an object that a concurrent or uncertain commit may reference.
+- No new consent retention/withdrawal policy inferred; existing signed source
+  representation remains. No model, UI, hosting, service or legacy-project changes.
+  Preserve owner's unstaged `a`; full 2I and production readiness remain open.
 
 ### 2026-09-08 — lifecycle transaction boundary, 2I.3h
 
@@ -2388,7 +2420,9 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3i: signed export authorization.
+The next bounded engineering slice is Phase 2I.3i.2: export SQL guards and R2 publication.
+2I.3i.1 implements repository/response rechecks only; it does not close transaction
+or shared-object-key overwrite races. See its latest handoff and requirements.
 2I.3h adds lifecycle repository checks and immutable transition events/guards in
 0042. Validate its latest ledger before proceeding to export source/render/download.
 2I.3g.2 adds protocol-row/head and command/audit/result SQL guards in migration
