@@ -1,4 +1,5 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
+import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
 import {
   assertEncounterTransition,
@@ -33,6 +34,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -93,17 +95,23 @@ export class D1EncounterLifecycleRepository {
   ) {}
 
   async recordTransition(input: TransitionEncounterCommand) {
+    await this.assertAuthorized(input.actorId);
+    if (!['ready', 'in_progress', 'cancelled'].includes(input.nextStatus)) {
+      throw new EncounterTransitionValidationError('Protocol transitions require protocol commands');
+    }
     const requestHash = await sha256(
       JSON.stringify({
+        accessAssignmentId: this.scope.accessAssignmentId,
         encounterId: this.scope.encounterId,
         nextStatus: input.nextStatus,
         expectedVersion: input.expectedVersion,
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertAuthorized(input.actorId);
       const [encounter, auditHead, hasCareConsent] = await Promise.all([
         this.getCurrent(),
         this.getAuditHead(),
@@ -141,8 +149,9 @@ export class D1EncounterLifecycleRepository {
           auditHead,
         });
       } catch (error) {
+        await this.assertAuthorized(input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
 
         const [latest, stillConsented] = await Promise.all([
           this.getCurrent(),
@@ -193,6 +202,8 @@ export class D1EncounterLifecycleRepository {
     };
     const responseJson = JSON.stringify(result);
     const auditMetadata = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
+      commandId,
       previousStatus: encounter.currentStatus,
       resultingStatus: input.nextStatus,
       previousVersion: encounter.version,
@@ -218,7 +229,18 @@ export class D1EncounterLifecycleRepository {
       occurredAt: now,
     });
 
+    await this.assertAuthorized(input.actorId);
     const results = await this.database.batch([
+      this.database.prepare(`
+        insert into encounter_transition_events (
+          id, organization_id, facility_id, encounter_id, access_assignment_id,
+          actor_membership_id, actor_id, previous_status, previous_version,
+          resulting_status, resulting_version, started_at, occurred_at
+        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+      `).bind(commandId, this.scope.organizationId, this.scope.facilityId,
+        this.scope.encounterId, this.scope.accessAssignmentId!, this.scope.reviewerMembershipId,
+        input.actorId, encounter.currentStatus, encounter.version, input.nextStatus,
+        nextVersion, startedAt, now),
       this.database
         .prepare(`
           update encounters
@@ -271,11 +293,6 @@ export class D1EncounterLifecycleRepository {
           select ?1, ?2, ?3, ?4, 'user', ?5, ?6, ?7, 'succeeded',
             'synthetic_encounter_lifecycle', 1, 'encounter', ?8, ?9,
             ?10, ?11, ?12, ?13
-          where exists (
-            select 1 from encounters
-            where organization_id = ?2 and facility_id = ?3 and id = ?8
-              and status = ?14 and version = ?15 and updated_at = ?13
-          )
         `)
         .bind(
           auditEventId,
@@ -291,8 +308,6 @@ export class D1EncounterLifecycleRepository {
           auditHead.lastEventHash,
           eventHash,
           now,
-          input.nextStatus,
-          nextVersion,
         ),
       this.database
         .prepare(`
@@ -317,9 +332,9 @@ export class D1EncounterLifecycleRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'encounter.transition', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -331,6 +346,7 @@ export class D1EncounterLifecycleRepository {
           requestHash,
           now,
           auditEventId,
+          this.scope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -421,7 +437,7 @@ export class D1EncounterLifecycleRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId,
           response_json as responseJson
@@ -439,14 +455,23 @@ export class D1EncounterLifecycleRepository {
       .first<IdempotencyRow>();
   }
 
-  private resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async assertAuthorized(actorId: string) {
+    await assertCurrentEncounterWriteAccess(this.database, this.scope, actorId);
+    if (!(await this.hasEffectiveCareConsent())) {
+      throw new EncounterCareConsentRequiredError('Effective care consent is required');
+    }
+  }
+
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await this.assertAuthorized(actorId);
     const storedResult = parseStoredResult(replay.responseJson);
     if (
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.requestHash !== requestHash ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'encounter_transition' ||
       replay.resultResourceId !== this.scope.encounterId ||
-      !storedResult
+      storedResult?.encounterId !== this.scope.encounterId
     ) {
       throw new EncounterTransitionConflictError(
         'Idempotency key was already used for another encounter transition',

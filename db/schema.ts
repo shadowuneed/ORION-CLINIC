@@ -1076,6 +1076,21 @@ export const patientPhotoHeads = sqliteTable(
   ],
 );
 
+export const encounterTransitionEvents = sqliteTable('encounter_transition_events', {
+  id: text('id').primaryKey(),
+  ...tenantScope(),
+  encounterId: text('encounter_id').notNull().references(() => encounters.id),
+  accessAssignmentId: text('access_assignment_id').notNull().references(() => departmentAccessAssignments.id),
+  actorMembershipId: text('actor_membership_id').notNull().references(() => memberships.id),
+  actorId: text('actor_id').notNull().references(() => users.id),
+  previousStatus: text('previous_status').notNull(),
+  previousVersion: integer('previous_version').notNull(),
+  resultingStatus: text('resulting_status').notNull(),
+  resultingVersion: integer('resulting_version').notNull(),
+  startedAt: integer('started_at', { mode: 'timestamp_ms' }),
+  occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => [uniqueIndex('encounter_transition_version_uidx').on(table.encounterId, table.resultingVersion)]);
+
 export const encounters = sqliteTable(
   'encounters',
   {

@@ -183,16 +183,36 @@ Historical nullable rows remain unchanged; direct unattributed fixture writers
 are explicitly not covered. Normal interactive commands cannot adopt those rows.
 See the master-plan verification ledger for the final test/migration evidence.
 
-## Next bounded checkpoint: 2I.3h — encounter lifecycle commands
+## 2I.3h — encounter lifecycle commands
 
-Migrate `D1EncounterLifecycleRepository.recordTransition`: current exact assignment
-at entry/retry/replay/pre-batch, durable command/hash/audit attribution and SQL
-guards for draft/ready/in_progress/cancelled transitions. Preserve care consent,
-expected versions and command-time replay. Test selected-assignment revocation
-between preflight and batch, mismatched audit/result and complete rollback.
-Do not weaken protocol-driven review/finalized/amended transitions while adding
-lifecycle guards. Exports/read audits and independent creation follow this slice;
-full 2I remains open. No provider activation or real patient data.
+`D1EncounterLifecycleRepository.recordTransition` now checks current exact assignment
+at entry/retry/replay/pre-batch and preserves current care consent and expected
+versions. Assignment is bound to command hashes, command rows and hashed audit
+metadata. Replay checks both selected assignment and response encounter identity,
+while retaining the original command-time result after subsequent valid transitions.
+Migration 0042 adds append-only `encounter_transition_events` as the first batch
+write, with exact assignment/actor/scope/current-version/consent checks. Matching
+encounter writes, successful audit and command results are transaction-guarded.
+Audit insertion is unconditional: its trigger aborts a skipped encounter update,
+instead of committing an orphan event and detecting a zero-row write afterwards.
+Only ready/in_progress/cancelled are allowed in this repository. The public route
+continues to expose ready/in_progress only; no cancellation UI/API expansion.
+Protocol-driven review/finalized/amended remain owned by protocol repositories.
+Raw historical fixture writers without a new transition event are not globally
+reclassified as interactive lifecycle commands. Database administration remains
+trusted; no rewrite of existing encounter/history rows or migrations.
+See the master-plan ledger for verification, including an actual start -> section
+review -> protocol draft -> sign -> amendment integration test.
+
+## Next bounded checkpoint: 2I.3i — signed export authorization
+
+Migrate `D1DocumentExportRepository` and the generate/download path to exact current
+assignment at source reads, retries, replay and artifact publication/download.
+Persist selected assignment in export requests/events and access audit with forward
+migrations; protect cross-assignment replay and access revoked during rendering.
+Preserve signed source immutability, consent, artifact hashes and R2 cleanup rules.
+Then complete remaining read-audit and independent-creation boundaries. Full 2I
+remains open; no provider activation, model replacement or real patient data.
 
 ## Remaining 2I.3 acceptance gates
 

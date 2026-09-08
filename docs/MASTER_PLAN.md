@@ -831,6 +831,8 @@ rendering, authorization, backup, or external integration behavior.
 
 | 2026-09-08 | Protocol transaction boundary 2I.3g.2 | PASS for bounded local checkpoint | Fresh pnpm verify:ci exited 0: secret/dependency checks, lint/types, 80 files/575 tests (203.72 s), Drizzle and build passed. Isolated recovery passed: 86 tables/155 rows/42 migrations/three R2 objects/537,562 bytes; source destroyed before restore; run f58418fc-97fd-4225-a7da-0d98679232d6, 120,581 ms. Forward migration 0041 and local D1 quick_check/foreign-key checks were verified in the preceding continuation. Final read-only subagent review found no blocking authorization defect. On September 8 ports 3200/3101 were not listening; no services stopped, browser/provider/audio or external availability claim. Next 2I.3h; full 2I remains open. |
 
+| 2026-09-08 | Lifecycle transaction boundary 2I.3h | PASS for bounded local checkpoint | Final pnpm verify:ci exited 0: secret policy 464 files, no known dependency vulnerabilities, lint/types, 81 files/589 tests (235.20 s), Drizzle and build. Isolated recovery passed after disposable source destruction: 87 tables/156 rows/43 migrations/three R2 objects/545,915 bytes; run 7968d0c5-8821-4a99-8564-70cac7a19a93, 121,222 ms. Focused lifecycle/protocol suite 33 tests passed with explicit 20 s integration-test budget; first aggregate timeout and narrow fix documented in handoff. Local 0042 applied; quick_check ok, foreign_key_check empty; db:generate reports no schema changes. Subagent design research completed partially before workspace spend cap; no final independent-review claim. No browser/audio/provider/deployment test or service restart. Next 2I.3i signed exports; full Phase 2I remains open. |
+
 ## 14. Risk register
 
 Initial risks to maintain:
@@ -1234,8 +1236,11 @@ control, detection, response, and residual acceptance.
   care consent and lifecycle are checked inside writes; results bind to exact
   stored protocol/encounter identities, versions and signature fields. Nullable
   historical fixtures remain unchanged. See latest verification ledger.
-- Exact next checkpoint: 2I.3h, encounter lifecycle command authorization.
-  Migrate recordTransition with repository and transaction-time guards; continue below;
+- Implemented 2I.3h: current lifecycle assignment checks and immutable transition
+  events in migration 0042; transaction-time event/update/audit/result guards.
+  See latest verification ledger before treating the checkpoint as validated.
+- Exact next checkpoint: 2I.3i, signed export authorization and artifact access.
+  Migrate export source/render/replay/download boundaries; continue below;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1439,6 +1444,39 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-08 — lifecycle transaction boundary, 2I.3h
+
+- Added current exact-assignment and actor checks at lifecycle entry/retry/replay
+  and final preflight, assignment-bound hashes/commands/audit, and scope-safe replay.
+- Forward-only 0042 creates append-only encounter_transition_events. Its first
+  batch insert verifies current access, treating clinician, active patient, care
+  consent, legal non-protocol transition, prior version and resulting timestamps.
+  Scoped update/audit/result guards bind the event; a skipped update aborts audit
+  insertion and rolls back all writes. No old signed rows or applied migrations changed.
+- Public transition route still accepts ready/in_progress only. Repository retains
+  cancellation but rejects review/finalized/amended: protocol commands own these.
+  Earlier lifecycle events do not authorize or block later protocol transitions.
+  Raw no-event fixture/admin writes are explicitly outside this interactive boundary.
+- Tests cover normal start/cancel/command-time replay, missing/read-only/wrong-user
+  access, cross-assignment replay, selected-assignment revocation before batch while
+  another remains active, immutable events, event/update/audit/result tampering,
+  zero-row update rollback and actual start -> reviewed sections -> signed/amended
+  protocol integration. See final ledger for commands and aggregate evidence.
+- First aggregate run: 588/589 passed; one existing full derivative/signing test
+  exceeded the default 5-second test timeout (5.268 s). Its assertions passed in
+  the focused 33-test run with 20 seconds. Set 20 seconds only for that heavy
+  integration test and the new full lifecycle/sign/amend test, not for production
+  requests or STT. Final repeat verify:ci passed all 589 tests, build and recovery;
+  exact commands and recovery evidence are in the verification ledger.
+- Migration 0042 applied to local D1; quick_check=ok and foreign_key_check empty.
+  It is now immutable: any further schema/trigger correction must be forward-only.
+- Subagents provided read-only SQL/test design findings, then hit the workspace
+  spend cap before final review. Parent implementation and tests are authoritative;
+  do not describe this as a completed independent review of the final diff.
+- Next: 2I.3i signed exports, then remaining access-read audit and independent
+  creation. Full Phase 2I is still open. Keep synthetic-only boundaries and the
+  owner's unstaged standalone `a`. No STT/model, UI, provider or public deployment changes.
 
 ### 2026-09-08 — protocol transaction boundary, 2I.3g.2
 
@@ -2350,7 +2388,9 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The next bounded engineering slice is Phase 2I.3h: encounter lifecycle commands.
+The next bounded engineering slice is Phase 2I.3i: signed export authorization.
+2I.3h adds lifecycle repository checks and immutable transition events/guards in
+0042. Validate its latest ledger before proceeding to export source/render/download.
 2I.3g.2 adds protocol-row/head and command/audit/result SQL guards in migration
 0041; recommendation guards (2I.3f.2) are in migration 0040. Historical nullable
 fixtures are intentionally retained. Use the latest verification ledger above.

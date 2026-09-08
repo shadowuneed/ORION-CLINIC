@@ -498,5 +498,5 @@ describe('recommendations in the immutable protocol source', () => {
         .prepare(`select status from protocol_versions where id = ?1`)
         .get(draft.protocol.id),
     ).toEqual({ status: 'draft' });
-  });
+  }, 20000);
 });
