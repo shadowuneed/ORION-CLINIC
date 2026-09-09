@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import { D1ClinicalSectionRepository } from './clinical-sections';
 import { D1EncounterRecoveryRepository } from './encounter-recovery';
 
@@ -36,7 +37,7 @@ function d1Result<T>(results: T[], changes = 0) {
   return { success: true, results, meta: { changes } } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync): D1Database {
+function createD1Adapter(target: DatabaseSync, afterBatch?: () => void): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -85,6 +86,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
           );
         }
         target.exec('commit');
+        afterBatch?.();
         return results;
       } catch (error) {
         target.exec('rollback');
@@ -211,6 +213,27 @@ describe('encounter recovery repository', () => {
       .prepare(`update memberships set status = 'disabled' where id = ?`)
       .run('membership-a');
 
-    await expect(repository.getServerSnapshot()).resolves.toBeNull();
+    await expect(repository.getServerSnapshot()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  it('uses the current doctor assignment rather than the legacy membership role', async () => {
+    const { database, repository } = createFixture();
+    database.exec("update memberships set role='registrar' where id='membership-a'");
+    await expect(repository.getServerSnapshot()).resolves.toMatchObject({ encounterId: 'encounter-a' });
+  });
+
+  it.each([undefined, 'wrong-assignment'])('rejects an unselected or incorrect assignment: %s', async (accessAssignmentId) => {
+    const { d1, scope } = createFixture();
+    await expect(new D1EncounterRecoveryRepository(d1, { ...scope, accessAssignmentId }).getServerSnapshot())
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+  });
+
+  it('withholds a snapshot when access disappears during the batch', async () => {
+    const { database, scope } = createFixture();
+    const d1 = createD1Adapter(database, () => {
+      database.exec("update memberships set status='disabled' where id='membership-a'");
+    });
+    await expect(new D1EncounterRecoveryRepository(d1, scope).getServerSnapshot())
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
   });
 });

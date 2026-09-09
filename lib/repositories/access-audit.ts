@@ -111,17 +111,17 @@ export class D1AccessAuditRepository {
     details: AccessAuditDetails,
     input: RecordAccessInput,
   ): Promise<AccessAuditReceipt> {
-    await this.assertDownloadAccess(details, input);
+    await this.assertCurrentAccess(details, input);
     const existing = await this.findExisting(input.requestId);
     if (existing) {
-      await this.assertDownloadAccess(details, input);
+      await this.assertCurrentAccess(details, input);
       return this.receiptForExisting(existing, details, input);
     }
 
-    await this.ensureHead(input.actorId, details.action);
+    await this.ensureHead(input.actorId);
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      await this.assertDownloadAccess(details, input);
+      await this.assertCurrentAccess(details, input);
       const head = await this.getHead();
       if (!head) throw new AccessAuditUnavailableError();
 
@@ -147,14 +147,14 @@ export class D1AccessAuditRepository {
         documentArtifactId: details.documentArtifactId,
         artifactKind: details.artifactKind,
         requestId: input.requestId,
-        schemaVersion: details.action === 'document.download' ? 2 : 1,
-        accessAssignmentId: details.action === 'document.download' ? this.scope.accessAssignmentId : null,
+        schemaVersion: 2,
+        accessAssignmentId: this.scope.accessAssignmentId,
         occurredAt,
       };
       const eventHash = await hashAccessAuditEvent(hashInput);
 
       try {
-        await this.assertDownloadAccess(details, input);
+        await this.assertCurrentAccess(details, input);
         const results = await this.database.batch([
           this.eventInsert(details, input, hashInput, eventId, eventHash),
           this.database
@@ -193,14 +193,14 @@ export class D1AccessAuditRepository {
             this.scope.reviewerMembershipId, sequence, eventHash, head.lockVersion + 1),
         ]);
         if (results.slice(0, 2).every((result) => result.meta.changes === 1)) {
-          await this.assertDownloadAccess(details, input);
+          await this.assertCurrentAccess(details, input);
           return { action: details.action, recordedAt: occurredAt };
         }
       } catch {
-        await this.assertDownloadAccess(details, input);
+        await this.assertCurrentAccess(details, input);
         const committed = await this.findExisting(input.requestId);
         if (committed) {
-          await this.assertDownloadAccess(details, input);
+          await this.assertCurrentAccess(details, input);
           return this.receiptForExisting(committed, details, input);
         }
       }
@@ -209,9 +209,9 @@ export class D1AccessAuditRepository {
     throw new AccessAuditUnavailableError();
   }
 
-  private async assertDownloadAccess(details: AccessAuditDetails, input: RecordAccessInput) {
-    if (details.action !== 'document.download') return;
+  private async assertCurrentAccess(details: AccessAuditDetails, input: RecordAccessInput) {
     await assertCurrentEncounterReadAccess(this.database, this.scope, input.actorId);
+    if (details.action !== 'document.download') return;
     const artifact = await this.database.prepare(`
       select artifact.id from document_artifacts artifact
       join protocol_heads head on head.organization_id=artifact.organization_id and head.facility_id=artifact.facility_id
@@ -272,7 +272,6 @@ export class D1AccessAuditRepository {
             and membership.facility_id = ?3
             and membership.id = ?7
             and membership.user_id = ?6
-            and (?9 = 'document.download' or membership.role = 'clinician')
             and membership.status = 'active'
             and encounter.id = ?8
         )
@@ -301,7 +300,7 @@ export class D1AccessAuditRepository {
       );
   }
 
-  private async ensureHead(actorId: string, action: AccessAuditDetails['action']) {
+  private async ensureHead(actorId: string) {
     await this.database
       .prepare(`
         insert or ignore into access_audit_stream_heads (
@@ -314,12 +313,12 @@ export class D1AccessAuditRepository {
           and membership.facility_id = ?3
           and membership.id = ?5
           and membership.user_id = ?6
-          and (membership.role = 'clinician' or (?7='document.download' and exists (
-            select 1 from encounter_access_assignment_permissions access where access.assignment_id=?8
+          and exists (
+            select 1 from encounter_access_assignment_permissions access where access.assignment_id=?7
               and access.organization_id=membership.organization_id and access.facility_id=membership.facility_id
               and access.membership_id=membership.id and access.can_read=1
-              and access.effective_from<=?9 and (access.effective_until is null or access.effective_until>?9)
-          )))
+              and access.effective_from<=?8 and (access.effective_until is null or access.effective_until>?8)
+          )
           and membership.status = 'active'
       `)
       .bind(
@@ -329,7 +328,6 @@ export class D1AccessAuditRepository {
         this.streamKey,
         this.scope.reviewerMembershipId,
         actorId,
-        action,
         this.scope.accessAssignmentId ?? null,
         Date.now(),
       )
@@ -380,7 +378,7 @@ export class D1AccessAuditRepository {
   ): AccessAuditReceipt {
     if (
       existing.organizationId !== this.scope.organizationId || existing.facilityId !== this.scope.facilityId ||
-      (details.action === 'document.download' && (existing.schemaVersion !== 2 || existing.accessAssignmentId !== this.scope.accessAssignmentId)) ||
+      existing.schemaVersion !== 2 || existing.accessAssignmentId !== this.scope.accessAssignmentId ||
       existing.action !== details.action ||
       existing.actorUserId !== input.actorId ||
       existing.actorMembershipId !== this.scope.reviewerMembershipId ||

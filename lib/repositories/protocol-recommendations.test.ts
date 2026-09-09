@@ -346,7 +346,7 @@ describe('recommendations in the immutable protocol source', () => {
     database.exec("update memberships set status='disabled' where id='membership-a'");
     await expect(invoke()).rejects.toBeInstanceOf(AccessPermissionRequiredError);
     expect(readProtocolContent(database, result.protocol.id).raw).toBeTruthy();
-  });
+  }, 20000); // Full migration fixture, section review and protocol/replay checks are integration work.
   it('snapshots only the exact clinician-accepted derivative and signs that same source', async () => {
     const { database, sections, suggestions, review, signing } = createFixture();
     await resolveMandatorySections(sections);

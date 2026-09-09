@@ -1,4 +1,5 @@
 import { workspaceRequestSelection, workspaceAssignmentFailure } from '@/lib/auth/workspace-request-access';
+import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
 import { env } from 'cloudflare:workers';
 import {
   getSiteIdentity,
@@ -181,6 +182,8 @@ export async function GET(request: Request) {
       actorId: access.user.id,
       requestId: context.requestId,
     });
+
+    await assertCurrentEncounterReadAccess(env.DB, access.scope, access.user.id);
 
     return apiSuccess(
       context,

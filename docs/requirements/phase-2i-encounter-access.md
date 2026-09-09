@@ -236,7 +236,7 @@ post-commit checks verify current user, assignment, active patient, treating
 relationship, signed head, ready artifact and finalized/amended lifecycle. SQL
 checks authority within insertion and preserves append-only history. A final SQL
 head-publication assertion rolls back the entire batch if head advancement is skipped.
-Workspace-read audit still uses the legacy boundary and remains a separate gate.
+Workspace-read audit was a separate gate; its migration is described below.
 
 Migration 0045 adds permanent per-object cleanup fences and SQL mutual exclusion
 between publication and cleanup. The explicit same-origin, assigned-doctor POST
@@ -249,8 +249,33 @@ Unknown fence outcomes never authorize deletion. See
 Old schema-1/uploading/published manifests and stale protocols remain retained;
 no age policy, automatic worker or general bucket deletion is enabled.
 See master-plan ledger for final verification before accepting this bounded slice.
-Next complete workspace-read audit and independent-creation boundaries. Full 2I
+Next complete independent-creation boundaries. Full 2I
 remains open; no provider activation, model replacement or real patient data.
+
+## Workspace-read audit and recovery authorization
+
+Migration 0046 requires every new workspace.read event to carry hash schema 2
+and the exact current read assignment, user, treating membership and encounter.
+The SQL guard permits only a successful authorized-response event (HTTP 200).
+The download guard remains separate and retains its current signed-artifact checks.
+Historical schema-1 rows and hashes are not rewritten. Their old request IDs
+cannot authorize replay; a fresh request appends a schema-2 event to the same chain.
+
+The repository checks exact current read access at entry, retry, replay, before
+the batch and after commit. Missing assignment, explicit deny, expiry, revocation
+and another selected assignment never fall back to membership.role. Event/head
+publication remains atomic, including rollback when a head update is skipped.
+The recovery reader uses the same current assignment before loading and before
+returning its snapshot. An active doctor assignment works even if the old
+membership role is registrar. The workspace route rechecks actor and assignment
+after access audit immediately before returning clinical resources.
+
+These read controls do not grant manage permission or change consent, protocol,
+clinical recommendations, STT or UI. A successful access event means an authorized
+response was prepared, not proof that bytes reached a browser. If a subsequent
+check denies access, no clinical response is returned; immutable audit is retained.
+See the latest master-plan ledger for aggregate verification. Independent encounter
+creation/selection is the next bounded audit; full Phase 2I is not complete.
 
 ## Remaining 2I.3 acceptance gates
 

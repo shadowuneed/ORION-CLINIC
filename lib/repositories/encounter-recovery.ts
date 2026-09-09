@@ -1,4 +1,5 @@
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
 import {
   encounterStatusSchema,
   isEncounterResumable,
@@ -122,6 +123,7 @@ export class D1EncounterRecoveryRepository {
   ) {}
 
   async getServerSnapshot(): Promise<ServerEncounterRecoverySnapshot | null> {
+    await assertCurrentEncounterReadAccess(this.database, this.scope);
     const results = await this.database.batch([
       this.database
         .prepare(`
@@ -134,7 +136,6 @@ export class D1EncounterRecoveryRepository {
             and membership.facility_id = encounter.facility_id
             and membership.id = encounter.clinician_membership_id
             and membership.status = 'active'
-            and membership.role = 'clinician'
           where encounter.organization_id = ?1
             and encounter.facility_id = ?2
             and encounter.id = ?3
@@ -329,6 +330,7 @@ export class D1EncounterRecoveryRepository {
       }),
     );
 
+    await assertCurrentEncounterReadAccess(this.database, this.scope);
     return {
       encounterId: encounter.encounterId,
       status,

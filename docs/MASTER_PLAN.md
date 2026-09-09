@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-08
+- Last updated: 2026-09-09
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -729,6 +729,7 @@ rendering, authorization, backup, or external integration behavior.
 
 | Date | Command | Result | Scope and limitation |
 |---|---|---|---|
+| 2026-09-09 | Workspace-read audit/recovery assignment boundary; pnpm verify:ci | PASS for this bounded local slice | Final exit 0: secret policy 481 files, no known dependency vulnerabilities, lint/types, 85 files/658 tests (298.46 s), Drizzle and production build. Isolated recovery passed after disposable source destruction: 88 tables/160 rows/47 migrations/three R2 objects/560,469 bytes, 127,136 ms; run 0f76163c-d6f3-4d62-8d13-b7a42f1d5956. Local 0046 confirmed; quick_check ok and foreign_key_check empty. Earlier run had three 5-second integration timeouts; only those cases now have 20-second limits and all assertions remain. Narrow miniflare>sharp 0.35.4 override removes the reported dependency advisory. Independent creation/selection and full Phase 2I remain open; no browser/audio/provider or deployment claim. |
 | 2026-09-08 | Explicit fenced export reconciliation; pnpm verify:ci | PASS for this bounded synthetic local slice | Security policy 477 files (478 after operator documentation), no known dependency vulnerabilities, lint/types, 84 files/639 tests (280.79 s), Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 88 tables/159 rows/46 migrations/three R2 objects/559,351 bytes; run d67c9f91-5135-4464-9134-c6ef48bf74ba, 119,489 ms. Local 0045 applied, quick_check ok, foreign_key_check empty, db:generate no drift. Explicit pending schema-2 cleanup only; no automatic retention, existing-user-file deletion, live UI/audio/provider or deployment claim. |
 | 2026-09-08 | Phase 2I.3i.2 immutable export publication and download-audit boundary; pnpm verify:ci | PASS for this bounded local slice | Secret policy 472 files, no known dependency vulnerabilities, lint/types, 83 files/617 tests, Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 87 tables/158 rows/45 migrations/three R2 objects/556,449 bytes, 123,986 ms, run a8479b66-407e-483a-9e54-46c4320debc7. Local 0044 applied; quick_check ok, foreign_key_check empty; db:generate has no changes. Pending-manifest reconciliation remains open; no live UI/audio/provider/public deployment claim. |
 | 2026-09-08 | Initial export publication 2I.3i.2 verification | Historical partial result; superseded by later ledger | Three focused files/29 tests passed (12.70 s); types/lint/Drizzle/build and 470-file secret scan passed. Migration 0043 applied locally, integrity passed. Initial pnpm verify exited 1: 607 passed and three 5000-ms timeouts (286.87 s). Four affected rollback cases passed with 20-second timeout; the explicit timeout was saved in the working tree. No aggregate/recovery or commit/push was claimed at that earlier stop. |
@@ -1247,14 +1248,12 @@ control, detection, response, and residual acceptance.
 - Implemented 2I.3i.1: export source/list/download revalidation, generation manage
   checks through preflight/replay/render, attributed commands/audit and selected
   download links. Check the latest ledger for the verified scope and limitations.
-- Exact next checkpoint: 2I.3i.2, export transaction guards and safe R2 publication.
-  IN PROGRESS on 2026-09-08: local migration 0043 and immutable per-attempt
-  publication are implemented; migration 0044 adds download access-audit SQL
-  protection. Latest-source aggregate verification passed; see latest handoff.
-  Explicit schema-2 pending-manifest reconciliation is implemented in 0045 and
-  its bounded verification passed (639 tests, build/recovery). Legacy/active-upload cleanup
-  and a general retention worker remain deliberately deferred. Next: workspace-read audit.
-  Continue with workspace-read audit attribution; export publication/download and explicit pending-attempt cleanup are verified;
+- Exact next checkpoint: independent encounter creation/selection authorization.
+  Export publication (0043), download audit (0044) and explicit pending-attempt
+  reconciliation (0045) have passed bounded verification. Workspace-read audit
+  attribution and recovery-reader authorization are implemented with local 0046;
+  consult the latest ledger/handoff for final verification. Legacy/active-upload
+  cleanup and a general retention worker remain deliberately deferred;
   full 2I.3 and Phase 2I are NOT complete. Inventory every
   WorkspaceScope writer and add exact assignment attribution to command keys,
   hashes, commands/events, access audits and speech sessions using forward-only
@@ -1458,6 +1457,59 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-09 — workspace-read audit and recovery assignment boundary
+
+- Local migration 0046 is applied and immutable. New workspace.read events require
+  schema 2 and exact current assignment/user/treating-member/encounter attribution
+  inside SQLite. The existing download guard is kept separately; no signed-artifact
+  restrictions are removed. Historical v1 events/hashes remain byte-for-byte intact;
+  their request IDs cannot authorize replay, but fresh v2 events extend their chain.
+- Access audit revalidates at entry/retry/replay/pre-batch/post-commit. Missing,
+  expired, denied or revoked assignment fails closed without alternate-scope fallback.
+  Head-publication failure rolls back the event. Recovery snapshots revalidate before
+  loading and before return, replacing their legacy membership.role guard. The route
+  rechecks the exact actor/assignment after auditing, before returning clinical data.
+  An audit receipt records response preparation, not proof of browser delivery.
+- Focused audit/recovery/workspace-response verification: 3 files/35 tests PASS
+  (12.35 s). Local 0046 applied; quick_check=ok, foreign_key_check empty and
+  db:generate reports no drift. The previous long-running aggregate result was not
+  retained across the resumed session and is not claimed as passing.
+- On 2026-09-09 the fresh aggregate stopped at the dependency gate: Miniflare's
+  sharp 0.35.2 was reported vulnerable by GHSA-rgj7-g3m4-5g8c. Added a narrow
+  miniflare>sharp override to patched 0.35.4 and regenerated the lockfile. No
+  framework/STT/provider version change. pnpm why sharp confirms only 0.35.4;
+  the repeated dependency audit reports no known vulnerabilities. Advisory:
+  https://github.com/advisories/GHSA-rgj7-g3m4-5g8c
+  The next aggregate completed 655 tests and hit three 5000-ms timeouts (85 files,
+  658 tests, 341.83 s); it did not reach build/recovery. The affected draft/sign
+  assignment-replay cases and complete scheduling lifecycle now have explicit
+  20000-ms integration limits, consistent with existing long protocol cases.
+  No assertions or application deadlines changed. Focused retry passed all three
+  selected tests (2 files, 14 unrelated skipped, 16.17 s).
+- Final pnpm verify:ci exited 0: security policy 481 files, no known dependency
+  vulnerabilities, lint/types, 85 files/658 tests (298.46 s), Drizzle and production
+  build. Isolated recovery passed after disposable source destruction: 88 tables,
+  160 rows, 47 migrations, three R2 objects, 560,469 bytes, 127,136 ms;
+  run 0f76163c-d6f3-4d62-8d13-b7a42f1d5956. Local integrity/migration presence
+  was rechecked after dependency installation. This closes only the read-audit/
+  recovery checkpoint, not independent creation, all Phase 2I or production readiness.
+- Exact next bounded task: independent encounter creation/selection. Inspect
+  lib/repositories/encounter-creation.ts, app/api/workspace/encounters/create/route.ts,
+  lib/repositories/workspace-access.ts and app/clinical-workspace.tsx. Creation still
+  requires sourceEncounterId and its request hash/replay lack exact-assignment
+  attribution. Resolve facility/member/current encounter.manage independently of
+  existing encounters; do not reuse an arbitrary patient/encounter to obtain authority.
+  Add transactional actor/assignment/command/audit/result guards and negative/replay
+  tests. Verify empty-clinic creation, selected scope and patient-to-encounter links.
+- Remaining selection reader: listAssignedEncounters still filters the legacy
+  membership.role. The recovery/audit tests prove registrar-legacy + doctor-assignment
+  at their own boundaries, NOT an end-to-end browser flow for that mixed-role user.
+  Replace this filter only with verified exact current assignment SQL, not removal
+  alone. Keep physician ownership and explicit denial; no role broadening.
+- Preserve owner's unstaged `a`, applied 0000-0046 and all historical rows. No ports
+  stopped/restarted; no UI, microphone, provider, public deployment or real-data claim.
+  Full Phase 2I and production gates remain open.
 
 ### 2026-09-08 — explicit fenced export reconciliation
 
@@ -2520,8 +2572,9 @@ pnpm db:seed:observations:local
 pnpm verify:ci
 ```
 
-The latest reconciliation verification passed. The next bounded engineering slice
-is workspace-read access-audit migration. Exports now have repository/response
+The next bounded engineering slice is independent encounter creation/selection
+authorization. Workspace-read audit and recovery-reader checks are in 0046 and
+the current source; consult the latest handoff for verification. Exports have repository/response
 checks (2I.3i.1), SQL publication guards (0043), download audit (0044) and explicit
 schema-2 pending-attempt fencing/reconciliation (0045). Legacy/active-upload cleanup
 and a general retention worker remain deferred; do not enable deletion by age.

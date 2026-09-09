@@ -23,10 +23,10 @@ type TestBoundStatement = {
 
 const databases: DatabaseSync[] = [];
 
-function applyMigrations(target: DatabaseSync) {
+function applyMigrations(target: DatabaseSync, includeWorkspaceAudit = true) {
   target.exec('pragma foreign_keys = on');
   for (const fileName of readdirSync('drizzle')
-    .filter((name) => name.endsWith('.sql'))
+    .filter((name) => name.endsWith('.sql') && (includeWorkspaceAudit || !name.startsWith('0046_')))
     .sort()) {
     target.exec(
       readFileSync(join('drizzle', fileName), 'utf8').replaceAll(
@@ -121,10 +121,10 @@ function scope(): WorkspaceScope {
   };
 }
 
-function createFixture(beforeBatch?: (database: DatabaseSync) => void) {
+function createFixture(beforeBatch?: (database: DatabaseSync) => void, includeWorkspaceAudit = true) {
   const database = new DatabaseSync(':memory:');
   databases.push(database);
-  applyMigrations(database);
+  applyMigrations(database, includeWorkspaceAudit);
   database.exec(readFileSync('db/seed.local.sql', 'utf8'));
   database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const d1 = createD1Adapter(database, () => beforeBatch?.(database));
@@ -180,12 +180,131 @@ function addReadyArtifact(database: DatabaseSync) {
   database.exec("update encounters set status='finalized', version=version+1, ended_at=1788250001000 where id='encounter-a'");
 }
 
+function changeSelectedAccess(database: DatabaseSync, patch: Record<string, SQLInputValue>) {
+  const current = database.prepare(`select version.* from department_access_assignment_versions version
+    join department_access_assignment_heads head on head.current_version_id=version.id
+    where head.assignment_id=?`).get(scope().accessAssignmentId!)!;
+  const now = Date.now();
+  const successor = { ...current, id: crypto.randomUUID(), version: Number(current.version) + 1,
+    supersedes_version_id: current.id, changed_at: now, created_at: now, ...patch };
+  const columns = Object.keys(successor);
+  database.prepare(`insert into department_access_assignment_versions (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+    .run(...columns.map(key => successor[key as keyof typeof successor] as SQLInputValue));
+  database.prepare(`update department_access_assignment_heads set current_version_id=?, lock_version=lock_version+1,
+    updated_at=? where assignment_id=?`).run(successor.id, now, scope().accessAssignmentId!);
+}
+
 afterEach(() => {
   while (databases.length > 0) databases.pop()?.close();
 });
 
 describe('access audit repository', () => {
   const artifact = { id: 'access-document', kind: 'protocol_pdf' as const };
+
+  it('requires the selected read assignment and the exact user for workspace reads', async () => {
+    const { database } = createFixture();
+    for (const selected of [undefined, 'wrong-assignment']) {
+      const repository = new D1AccessAuditRepository(createD1Adapter(database), { ...scope(), accessAssignmentId: selected });
+      await expect(repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() }))
+        .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    }
+    await expect(new D1AccessAuditRepository(createD1Adapter(database), scope())
+      .recordWorkspaceRead({ actorId: 'user-b', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from access_audit_stream_heads').get()?.n).toBe(0);
+  });
+
+  it('does not replay workspace receipts under another valid assignment or after revocation', async () => {
+    const { database, repository } = createFixture();
+    const input = { actorId: 'user-a', requestId: crypto.randomUUID() };
+    const first = await repository.recordWorkspaceRead(input);
+    expect(await repository.recordWorkspaceRead(input)).toEqual(first);
+    database.exec(readFileSync('db/bootstrap.local.sql', 'utf8').replaceAll('general-medicine', 'secondary').replaceAll('general_medicine', 'secondary'));
+    const other = new D1AccessAuditRepository(createD1Adapter(database), { ...scope(), accessAssignmentId: 'access-assignment-a-secondary' });
+    await expect(other.recordWorkspaceRead(input)).rejects.toBeInstanceOf(AccessAuditRequestConflictError);
+    changeSelectedAccess(database, { status: 'revoked' });
+    await expect(repository.recordWorkspaceRead(input)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(other.recordWorkspaceRead({ ...input, requestId: crypto.randomUUID() })).resolves.toMatchObject({ action: 'workspace.read' });
+  });
+
+  it.each([
+    { deny_permissions_json: '["encounter.read"]' },
+    { effective_until: Date.now() - 10000 },
+    { roles_json: '["nurse"]' },
+  ] as Record<string, SQLInputValue>[])('denies current workspace access with %j', async patch => {
+    const { database, repository } = createFixture();
+    changeSelectedAccess(database, patch);
+    await expect(repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from access_audit_events').get()?.n).toBe(0);
+  });
+
+  it('allows a doctor read assignment even when the legacy role is registrar and manage is denied', async () => {
+    const { database, repository } = createFixture();
+    database.exec("update memberships set role='registrar' where id='membership-a'");
+    changeSelectedAccess(database, { deny_permissions_json: '["encounter.manage"]' });
+    await expect(repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .resolves.toMatchObject({ action: 'workspace.read' });
+  });
+
+  it('rolls back workspace audit on selected-assignment revocation immediately before the batch', async () => {
+    const { database, repository } = createFixture(db => changeSelectedAccess(db, { status: 'revoked' }));
+    await expect(repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from access_audit_events').get()?.n).toBe(0);
+    expect(database.prepare('select last_sequence from access_audit_stream_heads').get()?.last_sequence).toBe(0);
+  });
+
+  it('rolls back workspace events if stream-head publication was skipped', async () => {
+    const { database, repository } = createFixture();
+    database.exec('create trigger skip_workspace_head before update on access_audit_stream_heads begin select raise(ignore); end');
+    await expect(repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessAuditUnavailableError);
+    expect(database.prepare('select count(*) as n from access_audit_events').get()?.n).toBe(0);
+  });
+
+  it('SQL refuses new legacy, unattributed and incorrectly attributed workspace events', async () => {
+    const { database, repository } = createFixture();
+    await repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() });
+    const row = database.prepare('select * from access_audit_events').get()!;
+    const columns = Object.keys(row);
+    for (const patch of [{ access_assignment_id: null }, { schema_version: 1 }, { access_assignment_id: 'unknown' },
+      { outcome: 'denied' }, { response_status: 403 }, { decision_code: 'unverified' }]) {
+      const candidate = { ...row, id: crypto.randomUUID(), request_id: crypto.randomUUID(), sequence: 2,
+        previous_hash: row.event_hash, event_hash: 'c'.repeat(64), ...patch };
+      expect(() => database.prepare(`insert into access_audit_events (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+        .run(...columns.map(key => candidate[key as keyof typeof candidate] as SQLInputValue)))
+        .toThrow('workspace audit requires current selected assignment');
+    }
+    expect(database.prepare('select count(*) as n from access_audit_events').get()?.n).toBe(1);
+  });
+
+  it('preserves historical v1 bytes and chains a v2 event without allowing legacy receipt replay', async () => {
+    const source = createFixture();
+    const requestId = crypto.randomUUID();
+    await source.repository.recordWorkspaceRead({ actorId: 'user-a', requestId });
+    const row = source.database.prepare('select * from access_audit_events').get()!;
+    const legacyHash = await hashAccessAuditEvent({ previousHash: null, organizationId: 'org-a', facilityId: 'fac-a',
+      streamKey: 'membership:membership-a', sequence: 1, actorUserId: 'user-a', actorMembershipId: 'membership-a',
+      actorRole: 'clinician', action: 'workspace.read', outcome: 'succeeded', purposeCode: 'synthetic_direct_patient_care',
+      routeCode: 'workspace', decisionCode: 'authorized_response_prepared', responseStatus: 200, encounterId: 'encounter-a',
+      documentArtifactId: null, artifactKind: null, requestId, schemaVersion: 1, occurredAt: Number(row.occurred_at) });
+    const old = createFixture(undefined, false);
+    old.database.exec(`insert into access_audit_stream_heads (id,organization_id,facility_id,stream_key,actor_membership_id)
+      values ('legacy-head','org-a','fac-a','membership:membership-a','membership-a')`);
+    const legacy = { ...row, schema_version: 1, access_assignment_id: null, event_hash: legacyHash };
+    const columns = Object.keys(legacy);
+    old.database.prepare(`insert into access_audit_events (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+      .run(...columns.map(key => legacy[key as keyof typeof legacy] as SQLInputValue));
+    old.database.prepare(`update access_audit_stream_heads set last_sequence=1,last_event_hash=?,lock_version=2 where id='legacy-head'`)
+      .run(legacyHash);
+    old.database.exec(readFileSync('drizzle/0046_workspace_read_assignment.sql', 'utf8').replaceAll('--> statement-breakpoint', ''));
+    expect(old.database.prepare('select * from access_audit_events where id=?').get(row.id)).toEqual(legacy);
+    await expect(old.repository.recordWorkspaceRead({ actorId: 'user-a', requestId })).rejects.toBeInstanceOf(AccessAuditRequestConflictError);
+    await old.repository.recordWorkspaceRead({ actorId: 'user-a', requestId: crypto.randomUUID() });
+    expect(old.database.prepare('select schema_version,previous_hash from access_audit_events where sequence=2').get())
+      .toEqual({ schema_version: 2, previous_hash: legacyHash });
+  });
 
   it('rejects missing/read-denied assignment and wrong actors before creating an audit stream', async () => {
     const { database } = createFixture();
@@ -284,6 +403,8 @@ describe('access audit repository', () => {
       actor_role: 'clinician',
       action: 'workspace.read',
       outcome: 'succeeded',
+      schema_version: 2,
+      access_assignment_id: scope().accessAssignmentId,
       purpose_code: 'synthetic_direct_patient_care',
       route_code: 'workspace',
       decision_code: 'authorized_response_prepared',
@@ -320,7 +441,8 @@ describe('access audit repository', () => {
         documentArtifactId: null,
         artifactKind: null,
         requestId: 'request-workspace-a',
-        schemaVersion: 1,
+        schemaVersion: 2,
+        accessAssignmentId: scope().accessAssignmentId,
         occurredAt: Number(event.occurred_at),
       }),
     );
@@ -358,7 +480,7 @@ describe('access audit repository', () => {
         actorId: 'user-a',
         requestId: 'request-disabled',
       }),
-    ).rejects.toBeInstanceOf(AccessAuditUnavailableError);
+    ).rejects.toBeInstanceOf(AccessPermissionRequiredError);
     expect(
       database.prepare('select count(*) as count from access_audit_events').get(),
     ).toEqual({ count: 0 });

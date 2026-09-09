@@ -833,7 +833,7 @@ describe('D1 scheduling workflow', () => {
       invalidCommands: 0,
       invalidAuditEvents: 0,
     });
-  });
+  }, 20000); // Full migration fixture and eight audited queue transitions exceed the unit-test budget.
 
   it('returns the exact committed response on replay and rejects a changed payload', async () => {
     const { database, d1, repository, scope, primaryReferral, firstSlotStartsAt } =

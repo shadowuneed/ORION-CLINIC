@@ -378,12 +378,13 @@ function buildCrossStoreFixtureSql(fixtures) {
     documentArtifactId: null,
     artifactKind: null,
     requestId: 'backup-access-workspace-read-a',
-    schemaVersion: 1,
+    schemaVersion: 2,
     occurredAt: 1787917000000,
   };
   const accessEventHash = sha256(
     JSON.stringify({
-      hashDomain: 'orion.access-audit.v1',
+      hashDomain: 'orion.access-audit.v2',
+      accessAssignmentId: 'access-assignment-a-general-medicine',
       ...accessAuditFixture,
     }),
   );
@@ -441,14 +442,14 @@ function buildCrossStoreFixtureSql(fixtures) {
       actor_user_id, actor_membership_id, actor_role, action, outcome,
       purpose_code, route_code, decision_code, response_status, encounter_id,
       document_artifact_id, artifact_kind, request_id, schema_version,
-      previous_hash, event_hash, occurred_at
+      previous_hash, event_hash, occurred_at, access_assignment_id
     ) VALUES (
       'backup-access-event-a', 'org-a', 'fac-a',
       'membership:membership-a', 1, 'user-a', 'membership-a', 'clinician',
       'workspace.read', 'succeeded', 'synthetic_direct_patient_care',
       'workspace', 'authorized_response_prepared', 200, 'encounter-a',
-      NULL, NULL, 'backup-access-workspace-read-a', 1, NULL,
-      ${sqlLiteral(accessEventHash)}, 1787917000000
+      NULL, NULL, 'backup-access-workspace-read-a', 2, NULL,
+      ${sqlLiteral(accessEventHash)}, 1787917000000, 'access-assignment-a-general-medicine'
     );
     UPDATE access_audit_stream_heads
     SET last_sequence = 1, last_event_hash = ${sqlLiteral(accessEventHash)},
