@@ -28,6 +28,15 @@ function fixture() {
 }
 
 describe('D1 assigned workspace request authorization', () => {
+  it('does not merge memberships and does not expose records after the selected membership is disabled', async () => {
+    const { db, d1 } = fixture();
+    const repo = new D1WorkspaceAccessRepository(d1);
+    const memberships = await repo.listActiveMemberships(principal);
+    expect(memberships).toHaveLength(1);
+    await expect(repo.listAssignedEncounters([...memberships, ...memberships])).rejects.toThrow();
+    db.exec("update memberships set status='disabled' where id='membership-a'");
+    expect(await repo.listAssignedEncounters(memberships)).toEqual([]);
+  });
   it('resolves one exact department assignment before listing assigned encounters', async () => {
     const { d1 } = fixture();
     const access = await resolveClinicianWorkspaceAccess(new D1WorkspaceAccessRepository(d1, {

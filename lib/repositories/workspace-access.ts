@@ -1,4 +1,5 @@
 import { resolveEncounterAssignmentAccess } from '@/lib/auth/encounter-assignment-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import type { WorkspaceAccessSelection } from '@/lib/auth/workspace-request-access';
 import { D1AccessGovernanceRepository } from './access-governance';
 import type {
@@ -57,7 +58,14 @@ export class D1WorkspaceAccessRepository
   async listAssignedEncounters(memberships: readonly ActiveMembership[]) {
     if (memberships.length === 0) return [];
 
-    const placeholders = memberships.map((_, index) => `?${index + 1}`);
+    // Never merge memberships or substitute another assignment after selection.
+    const selected = memberships[0];
+    if (memberships.length !== 1 || !selected.accessAssignmentId ||
+      selected.accessPermission !== this.selection.permission ||
+      (this.selection.accessAssignmentId && selected.accessAssignmentId !== this.selection.accessAssignmentId) ||
+      (this.selection.facilityId && selected.facilityId !== this.selection.facilityId)) {
+      throw new AccessPermissionRequiredError(this.selection.permission);
+    }
     const result = await this.database
       .prepare(`
         select
@@ -95,14 +103,21 @@ export class D1WorkspaceAccessRepository
           and membership.facility_id = encounter.facility_id
           and membership.id = encounter.clinician_membership_id
           and membership.status = 'active'
-          and membership.role = 'clinician'
-        where encounter.clinician_membership_id in (${placeholders.join(', ')})
+          and membership.user_id = ?5
+        join encounter_access_assignment_permissions access
+          on access.membership_id=membership.id and access.organization_id=membership.organization_id
+          and access.facility_id=membership.facility_id and access.assignment_id=?1
+          and access.can_read=1 and (?6='encounter.read' or access.can_manage=1)
+          and access.effective_from<=?7 and (access.effective_until is null or access.effective_until>?7)
+        where encounter.organization_id=?2 and encounter.facility_id=?3
+          and encounter.clinician_membership_id=?4
         order by case when encounter.status in ('in_progress', 'review')
           then 0 else 1 end,
           encounter.updated_at desc,
           encounter.id
       `)
-      .bind(...memberships.map((membership) => membership.membershipId))
+      .bind(selected.accessAssignmentId, selected.organizationId, selected.facilityId,
+        selected.membershipId, selected.userId, this.selection.permission, Date.now())
       .all<EncounterRow>();
 
     return result.results.map(

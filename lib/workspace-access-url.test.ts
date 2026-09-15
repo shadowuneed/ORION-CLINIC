@@ -10,11 +10,12 @@ describe('exact workspace scope transport', () => {
     expect(workspaceNavigationUrl('/', '/live', query)).toBe('/?encounterId=enc-a&accessAssignmentId=a&facilityId=f');
     expect(workspaceNavigationUrl('/orders', '/live', query)).toBe('/orders');
     expect(workspaceNavigationUrl('/live', '/orders', query)).toBe('/live');
+    expect(workspaceNavigationUrl('/', '/encounters/new', 'accessAssignmentId=a&facilityId=f')).toBe('/?accessAssignmentId=a&facilityId=f');
   });
   it('does not erase a malformed explicit selector in shell navigation', () => {
     expect(workspaceNavigationUrl('/live', '/', 'accessAssignmentId=a&accessAssignmentId=b')).toBe('/live?accessAssignmentId=a&accessAssignmentId=b');
   });
-  it.each(['/', '/live', '/api/workspace', '/api/workspace/exports/download?encounterId=enc-a&kind=pdf',
+  it.each(['/', '/live', '/encounters/new', '/api/workspace', '/api/workspace/exports/download?encounterId=enc-a&kind=pdf',
     '/api/workspace/transcript/speech/session', '/api/clinical/research', '/api/local-speech/transcribe'])(
     'propagates selection without dropping resource parameters: %s', (path) => {
       const url = new URL(scopedWorkspaceUrl(path, selection), 'https://orion.test');

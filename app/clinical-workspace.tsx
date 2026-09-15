@@ -1612,9 +1612,8 @@ export function ClinicalWorkspace() {
   async function createSyntheticEncounter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (
-      !selectedEncounterId ||
+      !canManageWorkspace ||
       encounterCreationPending ||
-      !serverStateConfirmed ||
       !syntheticDataAcknowledged
     ) {
       setEncounterCreationMessage(
@@ -1624,7 +1623,6 @@ export function ClinicalWorkspace() {
     }
 
     const commandPayload = {
-      sourceEncounterId: selectedEncounterId,
       patient: {
         displayName: newPatientName.trim(),
         birthDate: newPatientBirthDate || null,
@@ -2681,8 +2679,9 @@ export function ClinicalWorkspace() {
                 <div className={styles.exportAudioNotice}>
                   <Mic size={15} />
                   <span>
-                    Аудиофайл не включён: захват аудио и STT в этом production
-                    контуре ещё не подключены.
+                    Аудиофайл не входит в серверный комплект. Если вы включали
+                    отдельную запись в LIVE, скачайте её через «Локальные файлы»
+                    в том же браузере, где проходил приём.
                   </span>
                 </div>
                 {exportMessage && (

@@ -20,6 +20,22 @@ const updatedAt = () =>
     .notNull()
     .default(sql`(unixepoch() * 1000)`);
 
+export const encounterCreationEvents = sqliteTable('encounter_creation_events', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  facilityId: text('facility_id').notNull().references(() => facilities.id),
+  accessAssignmentId: text('access_assignment_id').notNull().references(() => departmentAccessAssignments.id),
+  actorMembershipId: text('actor_membership_id').notNull().references(() => memberships.id),
+  actorId: text('actor_id').notNull().references(() => users.id),
+  // IDs reserved before the atomic creation batch inserts the resources.
+  patientId: text('patient_id').notNull().unique(),
+  encounterId: text('encounter_id').notNull().unique(),
+  requestId: text('request_id').notNull(),
+  requestHash: text('request_hash').notNull(),
+  responseJson: text('response_json').notNull(),
+  occurredAt: integer('occurred_at').notNull(),
+}, table => [check('encounter_creation_json_valid', sql`json_valid(${table.responseJson})`)]);
+
 // Permanent tombstones: a cleaned key can never become a published artifact.
 export const exportCleanupFences = sqliteTable('export_cleanup_fences', {
   objectKey: text('object_key').primaryKey(),
@@ -722,6 +738,7 @@ const tenantScope = () => ({
 export const patients = sqliteTable(
   'patients',
   {
+    creationCommandId: text('creation_command_id').references(() => encounterCreationEvents.id),
     id: text('id').primaryKey(),
     ...tenantScope(),
     medicalRecordNumber: text('medical_record_number').notNull(),
@@ -1109,6 +1126,7 @@ export const encounterTransitionEvents = sqliteTable('encounter_transition_event
 export const encounters = sqliteTable(
   'encounters',
   {
+    creationCommandId: text('creation_command_id').references(() => encounterCreationEvents.id),
     id: text('id').primaryKey(),
     ...tenantScope(),
     patientId: text('patient_id')

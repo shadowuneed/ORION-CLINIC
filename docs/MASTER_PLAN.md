@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-09
+- Last updated: 2026-09-15
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -729,6 +729,7 @@ rendering, authorization, backup, or external integration behavior.
 
 | Date | Command | Result | Scope and limitation |
 |---|---|---|---|
+| 2026-09-15 | Independent new-patient creation/selection; pnpm verify:ci; illustrated handbook | PASS for bounded synthetic slice | Final aggregate exit 0: secrets/dependency audit, lint/types, 86 files/673 tests, Drizzle, build and isolated recovery of 89 tables/161 rows/48 migrations/3 R2 objects/572689 bytes; run 83a4116a-d659-4af8-b4d1-cbc588d77960. Handbook: 17 current screenshots, 67 SVG markers, embedded images/font, zero broken anchors or external images; zoom opened/closed and desktop rendering verified. Post-edit focused ESLint, typecheck, URL 26/26 tests and diff checks pass. No real microphone, live Groq, external delivery, print/PDF rendering or production acceptance claim. |
 | 2026-09-09 | Workspace-read audit/recovery assignment boundary; pnpm verify:ci | PASS for this bounded local slice | Final exit 0: secret policy 481 files, no known dependency vulnerabilities, lint/types, 85 files/658 tests (298.46 s), Drizzle and production build. Isolated recovery passed after disposable source destruction: 88 tables/160 rows/47 migrations/three R2 objects/560,469 bytes, 127,136 ms; run 0f76163c-d6f3-4d62-8d13-b7a42f1d5956. Local 0046 confirmed; quick_check ok and foreign_key_check empty. Earlier run had three 5-second integration timeouts; only those cases now have 20-second limits and all assertions remain. Narrow miniflare>sharp 0.35.4 override removes the reported dependency advisory. Independent creation/selection and full Phase 2I remain open; no browser/audio/provider or deployment claim. |
 | 2026-09-08 | Explicit fenced export reconciliation; pnpm verify:ci | PASS for this bounded synthetic local slice | Security policy 477 files (478 after operator documentation), no known dependency vulnerabilities, lint/types, 84 files/639 tests (280.79 s), Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 88 tables/159 rows/46 migrations/three R2 objects/559,351 bytes; run d67c9f91-5135-4464-9134-c6ef48bf74ba, 119,489 ms. Local 0045 applied, quick_check ok, foreign_key_check empty, db:generate no drift. Explicit pending schema-2 cleanup only; no automatic retention, existing-user-file deletion, live UI/audio/provider or deployment claim. |
 | 2026-09-08 | Phase 2I.3i.2 immutable export publication and download-audit boundary; pnpm verify:ci | PASS for this bounded local slice | Secret policy 472 files, no known dependency vulnerabilities, lint/types, 83 files/617 tests, Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 87 tables/158 rows/45 migrations/three R2 objects/556,449 bytes, 123,986 ms, run a8479b66-407e-483a-9e54-46c4320debc7. Local 0044 applied; quick_check ok, foreign_key_check empty; db:generate has no changes. Pending-manifest reconciliation remains open; no live UI/audio/provider/public deployment claim. |
@@ -842,6 +843,7 @@ rendering, authorization, backup, or external integration behavior.
 ## 14. Risk register
 
 Initial risks to maintain:
+
 - incorrect patient identity or duplicate merge;
 - inaccurate RU/KK STT, mixed-language loss, or wrong speaker attribution;
 - negation, medicine, unit, and dosage transcription errors;
@@ -863,6 +865,18 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+- 2026-09-15 completed bounded checkpoint: independent **new patient + encounter**
+  creation and exact assigned-encounter selection. Migration 0047 is applied locally
+  and immutable. API no longer requires a source encounter; the dashboard links to
+  `/encounters/new`. Creation publishes the patient, editable initial profile,
+  encounter, eight empty sections, audit and command result atomically under current
+  selected encounter.manage. See the newest handoff/ledger for final verification.
+  The separate existing-patient writer `D1PatientRegistryRepository.createEncounter`
+  is explicitly the next slice; the standalone illustrated handbook is now
+  `docs/user-guide/ORION-CLINIC-GUIDE.html` (17 screens / 67 markers).
+  Do not mistake this checkpoint for all creation or
+  all Phase 2I completion. This entry supersedes older next-task entries below.
 
 - Active phases: `PHASE_0_IN_PROGRESS` for clinic review/discovery,
   `PHASE_2_IN_PROGRESS` for production identity/consent decisions,
@@ -1457,6 +1471,85 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+### 2026-09-15 — new-patient checkpoint verified; illustrated user handbook
+
+- Continue only with the **existing-patient encounter writer**:
+  `D1PatientRegistryRepository.createEncounter`, `commitEncounterCreate`,
+  `/api/patients/[patientId]/encounters`. Require exact current assignment inside
+  the publication transaction and replay hash; preserve existing patient/profile.
+  Migration 0047 covers only the new-patient writer. Do not edit applied 0047.
+- Current checkpoint full `pnpm verify:ci` exited 0. Evidence is in the newest
+  ledger and ignored `.orion-runtime/logs/verify-handbook-2026-09-15.log`.
+  An earlier same-day run reached 673/673 but its session disappeared before final
+  collection; it was rerun with persisted logs, not counted as aggregate proof.
+- Fresh preparation benchmark did not reproduce the prior severe slowdown:
+  0046 update/audit ~557/676 ms vs 0047 ~619/727 ms. Cause of earlier variability
+  remains unproven; no experimental view materialization or 0048 was applied.
+  Existing unit/integration timeout split is retained; STT timing is unchanged.
+- Browser QA found and fixed lost assignment/facility in patient-history links and
+  post-create navigation. Document export grid now wraps instead of overlapping
+  the right assistant; access-management layout stacks at <=1500px to avoid
+  horizontal overflow. Updated misleading export audio notice: local LIVE audio
+  exists separately and is not part of the server ZIP.
+- Deliverable: `docs/user-guide/ORION-CLINIC-GUIDE.html`, standalone Russian guide
+  with embedded screenshots/font, roles, workflows, disabled-button troubleshooting,
+  clinical/external limits, zoom and print stylesheet. Rebuild using
+  `node scripts/build-user-handbook.mjs`; content is in `handbook-content.mjs`.
+  `node scripts/preview-user-handbook.mjs` serves only the guide on loopback 3212.
+  Screenshot sources are synthetic; no keys or real clinical data are embedded.
+- Visual checks: actual current desktop pages; screenshot overlays validated within
+  image bounds; handbook DOM has 17 images/67 markers/no broken anchors or external
+  images/no horizontal overflow. Zoom, close and Escape verified. Printing has
+  stylesheet support but printed/PDF output was not rendered and is not claimed.
+- Web was restarted on otherwise free 127.0.0.1:3200 after execution-session reset.
+  Guide preview is 127.0.0.1:3212. STT and ngrok were not started or reconfigured;
+  no real microphone or provider calls performed. No medical/consent mutations
+  were made for the screenshots. The Sep 9 synthetic creation fixture is retained.
+- Keep the owner's standalone unstaged `a` below Initial risks to maintain.
+  Do not claim the overall roadmap is complete: clinic approvals, real identity,
+  external registries/messaging, risk policy and other recorded gates remain open.
+
+### 2026-09-09 — independent new-patient encounter creation (verification in progress)
+
+- New `lib/auth/encounter-creation-access.ts` resolves current selected manage
+  authority independently of an existing encounter. API accepts optional legacy
+  sourceEncounterId only for compatibility and ignores it for authority/hash.
+- Migration 0047 records immutable creation events and root attribution; guards
+  actor/assignment/patient/encounter/audit/command/result inside the transaction.
+  A final SQL assertion rolls back skipped publication. Initial profile head/version
+  is included so a newly created patient has an editable registry profile.
+- Selection SQL uses the exact assignment/user/member/scope/current permission,
+  not legacy membership.role; it rejects merged memberships and cannot fall back.
+- New `/encounters/new` form is accessible from the dashboard even with zero
+  encounters, retains the exact command during ambiguous failures, preserves
+  assignment/facility through navigation, and opens the created encounter.
+- Focused initial run: 3 files/42 tests passed (14.94 s), then selection/URL coverage
+  expanded. First full test run: 669 passed, four 5000-ms integration timeouts
+  in protocol-recommendations and patient-communications. A retry exposed more
+  complete-schema repository cases exceeding 5000 ms and was stopped. Rather than
+  patching each test, vitest.config.ts now separates unit tests (5000 ms) from
+  repository/database integration (20000 ms). Per-case changes from this turn were
+  removed; all assertions and the complete test inventory are preserved. This does
+  not change runtime/STT deadlines or constitute a performance acceptance result.
+- Local 0047 applied; PRAGMA quick_check=ok; foreign_key_check empty; db:generate
+  reports no drift. Browser created only a synthetic patient named
+  `Тест создания 09 сентября 1723`, card SYN-BACF8174; POST 201, exact encounter
+  opened with eight empty sections, and dashboard listed the same record.
+  Test record intentionally retained; no real patient/provider/audio data used.
+- No listener existed on 3200 at start of browser QA. Started only the web app on
+  127.0.0.1:3200, left running; STT and ngrok were not started/stopped/reconfigured.
+- Latest URL transport test after shell-navigation correction: 26/26 PASS;
+  focused eslint PASS. Sites 0.1.66 build helper was attempted directly twice,
+  including absolute Node path; its Windows package-manager subprocess failed
+  with `The system cannot find the path specified`. Do not claim helper success;
+  the repository's established pnpm build remains part of aggregate verification.
+- Next: finish aggregate/build/recovery evidence and Git checkpoint. Then migrate
+  only `D1PatientRegistryRepository.createEncounter` / commitEncounterCreate and
+  `/api/patients/[patientId]/encounters` to equivalent exact-assignment guards and
+  replay hashes; preserve the existing patient's identity/profile and ownership.
+  Existing-patient creation is NOT covered by 0047. No full Phase 2I/production claim.
+  Preserve the owner's standalone unstaged `a` below Initial risks to maintain.
 
 ### 2026-09-09 — workspace-read audit and recovery assignment boundary
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { z } from 'zod';
 import { ArrowUpRight, RefreshCw, Search } from 'lucide-react';
 import type { AccessibleEncounter } from '@/lib/auth/workspace-access';
-import { useWorkspaceFetch, useWorkspaceUrl } from '@/lib/workspace-access-context';
+import { useWorkspaceCanManage, useWorkspaceFetch, useWorkspaceUrl } from '@/lib/workspace-access-context';
 import styles from './clinic-dashboard.module.css';
 
 const labels: Record<AccessibleEncounter['status'], string> = {
@@ -26,6 +26,7 @@ const responseSchema = z.object({
 export function ClinicDashboard({ capabilities }: { capabilities: { patientDirectory: boolean; scheduling: boolean; chronicCare: boolean } }) {
   const workspaceFetch = useWorkspaceFetch();
   const workspaceUrl = useWorkspaceUrl();
+  const canManage = useWorkspaceCanManage();
   const [encounters, setEncounters] = useState<z.infer<typeof encounterSchema>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -77,6 +78,7 @@ export function ClinicDashboard({ capabilities }: { capabilities: { patientDirec
       <button onClick={() => void load()} disabled={loading}><RefreshCw size={17} />{loading ? 'Загрузка…' : 'Обновить'}</button>
     </header>
     <div className={styles.notice}>Тестовые пациенты · только выбранное рабочее назначение · все даты</div>
+    {canManage && <p className={styles.createAction}><Link href={workspaceUrl('/encounters/new')}>+ Новый пациент и приём</Link></p>}
     <section className={styles.metrics} aria-label="Обзор приёмов">
       {[['all', 'Все приёмы', encounters.length], ['active', 'В работе', active.length],
         ['review', 'Ожидают подписания', review.length], ['completed', 'Завершены', completed.length]].map(([id, label, count]) =>

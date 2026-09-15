@@ -125,9 +125,10 @@ button { color: inherit; }
 .state p { max-width: 630px; margin: 12px 0 18px; color: var(--ink-soft); font-size: 1rem; line-height: 1.55; }
 .state a { color: var(--brand); font-weight: 720; }
 
-@media (max-width: 1180px) {
+@media (max-width: 1500px) {
   .workspace { flex-direction: column; }
   .departmentPanel { width: 100%; flex-basis: auto; }
+  .assignmentPanel { width: 100%; }
   .departmentList { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .assignmentList article { grid-template-columns: 1fr; }
   .assignmentActions { justify-content: flex-start; }

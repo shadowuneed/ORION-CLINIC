@@ -499,7 +499,7 @@
 
 .exportPanel {
   display: grid;
-  grid-template-columns: minmax(260px, 0.7fr) minmax(460px, 1.3fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 26px;
   margin-bottom: 14px;
   padding: 20px;
@@ -533,7 +533,7 @@
   font-size: 9px;
   font-weight: 550;
 }
-.exportWorkspace { display: grid; align-content: start; gap: 10px; }
+.exportWorkspace { display: grid; min-width: 0; align-content: start; gap: 10px; }
 .exportActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .exportActions > button,
 .exportBundleLink {

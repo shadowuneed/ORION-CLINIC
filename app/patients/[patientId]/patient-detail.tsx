@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { EncounterSummary, PatientDetail } from '@/lib/repositories/patient-registry';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
+import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import styles from '../patients.module.css';
 
 type DetailResponse = {
@@ -95,6 +96,10 @@ export function PatientDetailView({
   const router = useRouter();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [data, setData] = useState<DetailResponse>({});
+  const encounterUrl = (id: string) => scopedWorkspaceUrl(`/?encounterId=${encodeURIComponent(id)}`, {
+    accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '',
+    facilityId: data.facility?.id ?? facilityId ?? '',
+  });
   const [encounterOpen, setEncounterOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -163,7 +168,7 @@ export function PatientDetailView({
         return;
       }
       encounterKey.current = null;
-      router.push(`/?encounterId=${encodeURIComponent(payload.encounter.id)}`);
+      router.push(encounterUrl(payload.encounter.id));
     } catch {
       setMessage('Сервер не ответил. Обновите карточку перед повтором.');
     } finally {
@@ -462,7 +467,7 @@ export function PatientDetailView({
                         <h3>{encounter.reasonForVisit ?? 'Причина обращения не указана'}</h3>
                         <p>{formatTimestamp(encounter.updatedAt)} · версия {encounter.version}</p>
                       </div>
-                      <Link className={styles.encounterOpen} href={`/?encounterId=${encodeURIComponent(encounter.id)}`}>
+                      <Link className={styles.encounterOpen} href={encounterUrl(encounter.id)}>
                         <FileText aria-hidden="true" size={17} />
                         Открыть запись
                         <ArrowUpRight aria-hidden="true" size={16} />

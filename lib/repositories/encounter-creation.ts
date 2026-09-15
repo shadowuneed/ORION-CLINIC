@@ -1,5 +1,5 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
-import type { WorkspaceScope } from '@/lib/auth/workspace-access';
+import { assertEncounterCreationAccess, type EncounterCreationScope } from '@/lib/auth/encounter-creation-access';
 import { clinicalSectionCodeSchema } from '@/lib/domain/encounter';
 
 export type SyntheticPatientInput = {
@@ -40,6 +40,7 @@ type AuditHeadRow = {
 };
 
 type IdempotencyRow = {
+  accessAssignmentId: string | null;
   requestHash: string;
   status: string;
   resultResourceType: string | null;
@@ -88,10 +89,11 @@ function parseStoredResult(value: string | null) {
 export class D1EncounterCreationRepository {
   constructor(
     private readonly database: D1Database,
-    private readonly sourceScope: WorkspaceScope,
+    private readonly sourceScope: EncounterCreationScope,
   ) {}
 
   async create(input: CreateSyntheticEncounterCommand) {
+    await assertEncounterCreationAccess(this.database, this.sourceScope, input.actorId);
     const patient = {
       ...input.patient,
       displayName: normalizeDisplayName(input.patient.displayName),
@@ -99,14 +101,18 @@ export class D1EncounterCreationRepository {
     const reasonForVisit = input.reasonForVisit?.trim() || null;
     const requestHash = await sha256(
       JSON.stringify({
-        sourceEncounterId: this.sourceScope.encounterId,
+        schemaVersion: 2,
+        accessAssignmentId: this.sourceScope.accessAssignmentId,
+        organizationId: this.sourceScope.organizationId,
+        facilityId: this.sourceScope.facilityId,
+        actorId: input.actorId,
         patient,
         reasonForVisit,
         dataMode: 'synthetic-only',
       }),
     );
     const replay = await this.findIdempotency(input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) return this.resolveReplay(replay, requestHash, input.actorId);
 
     if (await this.hasPotentialDuplicate(patient)) {
       throw new PotentialPatientDuplicateError(
@@ -115,6 +121,7 @@ export class D1EncounterCreationRepository {
     }
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await assertEncounterCreationAccess(this.database, this.sourceScope, input.actorId);
       const auditHead = await this.getAuditHead();
       if (!auditHead) throw new Error('Audit stream is unavailable');
 
@@ -127,8 +134,9 @@ export class D1EncounterCreationRepository {
           auditHead,
         });
       } catch (error) {
+        await assertEncounterCreationAccess(this.database, this.sourceScope, input.actorId);
         const racedReplay = await this.findIdempotency(input.idempotencyKey);
-        if (racedReplay) return this.resolveReplay(racedReplay, requestHash);
+        if (racedReplay) return this.resolveReplay(racedReplay, requestHash, input.actorId);
         if (await this.hasPotentialDuplicate(patient)) {
           throw new PotentialPatientDuplicateError(
             'A matching active synthetic patient already exists',
@@ -153,6 +161,7 @@ export class D1EncounterCreationRepository {
     const patientId = `patient-${crypto.randomUUID()}`;
     const encounterId = `encounter-${crypto.randomUUID()}`;
     const commandId = `command-${crypto.randomUUID()}`;
+    const profileVersionId = `profile-${crypto.randomUUID()}`;
     const auditEventId = `audit-${crypto.randomUUID()}`;
     const medicalRecordNumber = `SYN-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
     const auditSequence = auditHead.lastSequence + 1;
@@ -179,6 +188,8 @@ export class D1EncounterCreationRepository {
     };
     const responseJson = JSON.stringify(result);
     const auditMetadata = JSON.stringify({
+      commandId,
+      accessAssignmentId: this.sourceScope.accessAssignmentId,
       dataMode: 'synthetic-only',
       patientCreated: true,
       encounterVersion: 1,
@@ -208,13 +219,20 @@ export class D1EncounterCreationRepository {
     });
 
     const statements: D1PreparedStatement[] = [
+      this.database.prepare(`insert into encounter_creation_events
+        (id,organization_id,facility_id,access_assignment_id,actor_membership_id,actor_id,
+         patient_id,encounter_id,request_id,request_hash,response_json,occurred_at)
+        values (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)`)
+        .bind(commandId,this.sourceScope.organizationId,this.sourceScope.facilityId,
+          this.sourceScope.accessAssignmentId!,this.sourceScope.reviewerMembershipId,input.actorId,
+          patientId,encounterId,input.requestId,requestHash,responseJson,now),
       this.database
         .prepare(`
           insert into patients (
             id, organization_id, facility_id, medical_record_number,
             display_name, birth_date, sex_at_birth, status,
-            created_at, updated_at, version
-          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?8, 1)
+            created_at, updated_at, version, creation_command_id
+          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'active', ?8, ?8, 1, ?9)
         `)
         .bind(
           patientId,
@@ -225,14 +243,15 @@ export class D1EncounterCreationRepository {
           patient.birthDate,
           patient.sexAtBirth,
           now,
+          commandId,
         ),
       this.database
         .prepare(`
           insert into encounters (
             id, organization_id, facility_id, patient_id,
             clinician_membership_id, status, reason_for_visit,
-            created_at, updated_at, version
-          ) values (?1, ?2, ?3, ?4, ?5, 'draft', ?6, ?7, ?7, 1)
+            created_at, updated_at, version, creation_command_id
+          ) values (?1, ?2, ?3, ?4, ?5, 'draft', ?6, ?7, ?7, 1, ?8)
         `)
         .bind(
           encounterId,
@@ -242,8 +261,24 @@ export class D1EncounterCreationRepository {
           this.sourceScope.reviewerMembershipId,
           reasonForVisit,
           now,
+          commandId,
         ),
     ];
+
+    statements.push(
+      this.database.prepare(`insert into patient_profile_versions (
+        id, organization_id, facility_id, patient_id, version, display_name,
+        birth_date, sex_at_birth, phone, email, address, status,
+        created_by_membership_id, change_reason, created_at
+      ) values (?1,?2,?3,?4,1,?5,?6,?7,null,null,null,'active',?8,'initial_registration',?9)`)
+        .bind(profileVersionId,this.sourceScope.organizationId,this.sourceScope.facilityId,
+          patientId,patient.displayName,patient.birthDate,patient.sexAtBirth,this.sourceScope.reviewerMembershipId,now),
+      this.database.prepare(`insert into patient_profile_heads (
+        id,organization_id,facility_id,patient_id,current_version_id,lock_version,updated_at
+      ) values (?1,?2,?3,?4,?5,1,?6)`)
+        .bind(`profile-head-${crypto.randomUUID()}`,this.sourceScope.organizationId,
+          this.sourceScope.facilityId,patientId,profileVersionId,now),
+    );
 
     for (const section of sectionVersions) {
       statements.push(
@@ -353,9 +388,9 @@ export class D1EncounterCreationRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) select ?1, ?2, ?3, ?4, 'encounter.create_synthetic', ?5, ?6,
-            'processing', ?7
+            'processing', ?7, ?9
           where exists (select 1 from audit_events where id = ?8)
         `)
         .bind(
@@ -367,6 +402,7 @@ export class D1EncounterCreationRepository {
           requestHash,
           now,
           auditEventId,
+          this.sourceScope.accessAssignmentId!,
         ),
       this.database
         .prepare(`
@@ -382,13 +418,25 @@ export class D1EncounterCreationRepository {
         .bind(encounterId, responseJson, now, commandId, auditEventId),
     );
 
+    // A skipped write must roll back the complete batch, not leave a partial patient/encounter.
+    statements.push(this.database.prepare(`select case when exists (
+      select 1 from command_idempotency command join audit_events audit
+        on audit.id=?2 join audit_stream_heads head on head.organization_id=audit.organization_id
+        and head.facility_id=audit.facility_id and head.last_sequence=audit.sequence
+        and head.last_event_hash=audit.event_hash
+      where command.id=?1 and command.status='succeeded' and command.response_json=?3
+        and command.access_assignment_id=?4 and head.lock_version=?5
+    ) then 1 else json('encounter_creation_not_published') end as verified`)
+      .bind(commandId,auditEventId,responseJson,this.sourceScope.accessAssignmentId!,auditHead.lockVersion+1));
+    await assertEncounterCreationAccess(this.database, this.sourceScope, input.actorId);
     const batchResults = await this.database.batch(statements);
-    if (batchResults.some((batchResult) => batchResult.meta.changes !== 1)) {
+    if (batchResults.slice(0,-1).some((batchResult) => batchResult.meta.changes !== 1)) {
       throw new EncounterCreationConflictError(
         'Synthetic encounter creation was not committed',
       );
     }
 
+    await assertEncounterCreationAccess(this.database, this.sourceScope, input.actorId);
     return result;
   }
 
@@ -427,7 +475,7 @@ export class D1EncounterCreationRepository {
   private async findIdempotency(idempotencyKey: string) {
     return this.database
       .prepare(`
-        select request_hash as requestHash, status,
+        select request_hash as requestHash, status, access_assignment_id as accessAssignmentId,
           result_resource_type as resultResourceType,
           result_resource_id as resultResourceId,
           response_json as responseJson
@@ -446,10 +494,12 @@ export class D1EncounterCreationRepository {
       .first<IdempotencyRow>();
   }
 
-  private resolveReplay(replay: IdempotencyRow, requestHash: string) {
+  private async resolveReplay(replay: IdempotencyRow, requestHash: string, actorId: string) {
+    await assertEncounterCreationAccess(this.database, this.sourceScope, actorId);
     const storedResult = parseStoredResult(replay.responseJson);
     if (
       replay.requestHash !== requestHash ||
+      replay.accessAssignmentId !== this.sourceScope.accessAssignmentId ||
       replay.status !== 'succeeded' ||
       replay.resultResourceType !== 'synthetic_encounter' ||
       replay.resultResourceId !== storedResult?.encounter.id ||
@@ -459,6 +509,15 @@ export class D1EncounterCreationRepository {
         'Idempotency key was already used for another encounter creation',
       );
     }
+    const current = await this.database.prepare(`select encounter.id from encounters encounter
+      join patients patient on patient.id=encounter.patient_id and patient.organization_id=encounter.organization_id
+        and patient.facility_id=encounter.facility_id and patient.status='active'
+      where encounter.id=?1 and encounter.patient_id=?2 and encounter.organization_id=?3
+        and encounter.facility_id=?4 and encounter.clinician_membership_id=?5`)
+      .bind(storedResult.encounter.id,storedResult.patient.id,this.sourceScope.organizationId,
+        this.sourceScope.facilityId,this.sourceScope.reviewerMembershipId).first();
+    if (!current) throw new EncounterCreationConflictError('Created encounter is no longer accessible');
+    await assertEncounterCreationAccess(this.database, this.sourceScope, actorId);
     return storedResult;
   }
 }

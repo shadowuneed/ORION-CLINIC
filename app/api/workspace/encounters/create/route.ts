@@ -9,7 +9,6 @@ import {
   AccessibleEncounterNotFoundError,
   ClinicianRoleRequiredError,
   MembershipRequiredError,
-  resolveClinicianWorkspaceAccess,
 } from '@/lib/auth/workspace-access';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import {
@@ -23,7 +22,8 @@ import {
   EncounterCreationConflictError,
   PotentialPatientDuplicateError,
 } from '@/lib/repositories/encounter-creation';
-import { D1WorkspaceAccessRepository } from '@/lib/repositories/workspace-access';
+import { resolveEncounterAssignmentAccess } from '@/lib/auth/encounter-assignment-access';
+import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +40,8 @@ const birthDateSchema = z
   });
 
 const commandSchema = z.object({
-  sourceEncounterId: z.string().min(1).max(100),
+  // Accepted only for old clients; never used as authority or as an idempotency input.
+  sourceEncounterId: z.string().min(1).max(100).optional(),
   patient: z.object({
     displayName: z
       .string()
@@ -99,14 +100,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const access = await resolveClinicianWorkspaceAccess(
-      new D1WorkspaceAccessRepository(env.DB, workspaceRequestSelection(request)),
+    const access = await resolveEncounterAssignmentAccess(
+      new D1AccessGovernanceRepository(env.DB),
       toSiteIdentityPrincipal(identity),
-      payload.sourceEncounterId,
+      'encounter.manage',
+      workspaceRequestSelection(request),
     );
     const created = await new D1EncounterCreationRepository(
       env.DB,
-      access.scope,
+      { organizationId: access.organization.id, facilityId: access.facility.id,
+        reviewerMembershipId: access.membership.id, accessAssignmentId: access.assignmentId,
+        accessPermission: 'encounter.manage' },
     ).create({
       patient: payload.patient,
       reasonForVisit: payload.reasonForVisit,

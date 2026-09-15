@@ -5,7 +5,7 @@ export function scopedWorkspaceUrl(path: string, selection: SelectedWorkspaceAcc
   // Scope is only propagated to same-origin clinical routes, never provider URLs.
   if (!path.startsWith('/') || path.startsWith('//')) return path;
   const url = new URL(path, 'https://orion.invalid');
-  const allowed = url.pathname === '/' || url.pathname === '/live' ||
+  const allowed = url.pathname === '/' || url.pathname === '/live' || url.pathname === '/encounters/new' ||
     url.pathname === '/api/workspace' || url.pathname.startsWith('/api/workspace/') ||
     url.pathname.startsWith('/api/clinical/') || url.pathname.startsWith('/api/local-speech/');
   if (!allowed) return path;
@@ -20,7 +20,7 @@ export type WorkspacePageQuery = {
   facilityId?: string | string[];
 };
 
-export function workspacePageUrl(path: '/' | '/live', query: WorkspacePageQuery) {
+export function workspacePageUrl(path: '/' | '/live' | '/encounters/new', query: WorkspacePageQuery) {
   const params = new URLSearchParams();
   for (const key of ['encounterId', 'accessAssignmentId', 'facilityId'] as const) {
     const value = query[key];
@@ -31,7 +31,7 @@ export function workspacePageUrl(path: '/' | '/live', query: WorkspacePageQuery)
 }
 /** Preserve explicit selectors, including malformed duplicates, for server validation. */
 export function workspaceNavigationUrl(target: string, currentPath: string, search: string): string {
-  if (!['/', '/live'].includes(target) || !['/', '/live'].includes(currentPath)) return target;
+  if (!['/', '/live'].includes(target) || !['/', '/live', '/encounters/new'].includes(currentPath)) return target;
   const source = new URLSearchParams(search);
   const query = new URLSearchParams();
   for (const key of ['encounterId', 'accessAssignmentId', 'facilityId']) {

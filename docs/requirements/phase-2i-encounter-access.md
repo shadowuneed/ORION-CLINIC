@@ -279,6 +279,20 @@ creation/selection is the next bounded audit; full Phase 2I is not complete.
 
 ## Remaining 2I.3 acceptance gates
 
+### 2026-09-09 creation subcheckpoint
+
+The combined new-patient/new-encounter API now resolves encounter.manage without
+sourceEncounterId. Migration 0047 attributes the immutable creation event, roots,
+command hash/result and audit to the exact current assignment. Patient profile,
+encounter and eight empty sections are one transaction with publication rollback.
+The new dashboard form `/encounters/new` works without a prior encounter. Current
+selected assignment replaces legacy membership-role filtering in encounter lists.
+See the latest master-plan ledger for test/build/recovery status.
+
+Still pending: the separate existing-patient `encounter.create_for_patient` writer
+in patient-registry.ts needs its own authoritative transaction/replay migration.
+Do not mark all encounter creation or Phase 2I complete based on 0047.
+
 1. Read the current master-plan handoff and preserve the owner's unstaged `a`.
 2. Reuse the 2I.1 assignment resolver, but also enforce the exact encounter's
    `clinicianMembershipId`, organization and facility. Do not grant nurses or
