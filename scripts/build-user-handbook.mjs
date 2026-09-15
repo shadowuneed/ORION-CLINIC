@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chapters, roles, problems } from '../docs/user-guide/handbook-content.mjs';
 
@@ -49,4 +49,7 @@ const dialog=document.querySelector('dialog');document.querySelectorAll('.screen
 </script></body></html>`;
 const output = new URL('docs/user-guide/ORION-CLINIC-GUIDE.html', root);
 await writeFile(output, html, 'utf8');
+// Public educational asset only: synthetic screenshots, no user/session/patient data.
+await mkdir(new URL('public/', root), { recursive: true });
+await writeFile(new URL('public/user-guide.html', root), html, 'utf8');
 console.log(`Handbook: ${chapters.length} screens, ${chapters.reduce((s,c)=>s+c.marks.length,0)} markers; ${Buffer.byteLength(html)} bytes\n${fileURLToPath(output)}`);

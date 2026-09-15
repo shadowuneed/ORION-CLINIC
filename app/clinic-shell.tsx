@@ -21,6 +21,7 @@ import {
   MessageSquareText,
   ShieldCheck,
   KeyRound,
+  BookOpen,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 
@@ -37,6 +38,7 @@ const navigation = [
   { href: '/communications', label: 'Связь с пациентом', icon: MessageSquareText, badge: 'D1', capability: 'communications' },
   { href: '/access/manage', label: 'Управление доступом', icon: KeyRound, badge: 'D1', capability: 'accessAdministration' },
   { href: '/access', label: 'Мой доступ', icon: ShieldCheck, badge: 'D1', capability: 'accessOverview' },
+  { href: '/help', label: 'Инструкция', icon: BookOpen, capability: 'accessOverview' },
 ] as const;
 
 function isActivePath(pathname: string, href: string) {

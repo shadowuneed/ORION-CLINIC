@@ -1,0 +1,9 @@
+.main { min-width: 0; padding: 22px; }
+.header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.header > div { flex: 1 1 340px; }
+.header h1 { margin: 0 0 6px; font-size: 25px; color: var(--ink); }
+.header p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.header a { padding: 10px 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--brand); font-weight: 650; text-decoration: none; }
+.header a:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.reader { display: block; width: 100%; height: calc(100dvh - 210px); min-height: 480px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+@media (max-width: 760px) { .main { padding: 14px; } .reader { height: 70dvh; min-height: 360px; } }

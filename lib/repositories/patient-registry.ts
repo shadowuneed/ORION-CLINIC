@@ -313,7 +313,9 @@ export class D1PatientRegistryRepository {
     limit?: number;
   } = {}) {
     const query = normalizeNullable(input.query ?? null);
-    const search = query ? `%${query}%` : null;
+    // A literal substring avoids D1's short LIKE-pattern limit (UTF-8 names
+    // reach it quickly) and does not interpret patient input as SQL wildcards.
+    const search = query || null;
     const status = input.status ?? 'active';
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
     const rows = await this.database
@@ -323,10 +325,10 @@ export class D1PatientRegistryRepository {
           and (?3 = 'all' or coalesce(profile.status, patient.status) = ?3)
           and (
             ?4 is null
-            or coalesce(profile.display_name, patient.display_name) like ?4
-            or patient.medical_record_number like ?4
-            or identifier.normalized_value like ?4
-            or coalesce(profile.phone, '') like ?4
+            or instr(lower(coalesce(profile.display_name, patient.display_name)), lower(?4)) > 0
+            or instr(lower(patient.medical_record_number), lower(?4)) > 0
+            or instr(lower(identifier.normalized_value), lower(?4)) > 0
+            or instr(lower(coalesce(profile.phone, '')), lower(?4)) > 0
           )
         order by coalesce(profile_head.updated_at, patient.updated_at) desc,
           patient.id desc

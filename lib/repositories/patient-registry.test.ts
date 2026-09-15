@@ -155,6 +155,16 @@ afterEach(() => {
 });
 
 describe('D1 patient registry', () => {
+  it('searches long Cyrillic names literally without LIKE wildcard expansion', async () => {
+    const { repository } = fixture();
+    const displayName = 'Тест интерфейса 15 сентября — вымышленный пациент';
+    const created = await repository.create({ ...patientInput, displayName });
+    expect((await repository.list({ query: displayName })).map(row => row.id)).toEqual([created.id]);
+    expect(await repository.list({ query: '%' })).toEqual([]);
+    expect(await repository.list({ query: '_' })).toEqual([]);
+    expect((await repository.list({ query: created.medicalRecordNumber.toLowerCase() })).map(row => row.id)).toEqual([created.id]);
+  });
+
   it('persists, lists and reads a complete patient record', async () => {
     const { repository } = fixture();
     const created = await repository.create(patientInput);

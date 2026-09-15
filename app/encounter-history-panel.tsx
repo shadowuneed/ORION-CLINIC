@@ -10,6 +10,7 @@ import {
   downloadTranscript,
 } from '../lib/encounter-export';
 import type { OrionEncounterRecord } from '../lib/encounter-history';
+import { localMaterialStatus } from '../lib/local-material-status';
 
 type EncounterHistoryPanelProps = {
   records: OrionEncounterRecord[];
@@ -112,7 +113,8 @@ export function EncounterHistoryPanel({
         <header className="history-panel__header">
           <div>
             <p className="eyebrow">Хранится только в этом браузере</p>
-            <h2 id="history-title">История приёмов</h2>
+            <h2 id="history-title">Локальные материалы приёмов</h2>
+            <p>Статус локального сеанса не означает завершение приёма в клинической записи.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Закрыть историю">
             Закрыть
@@ -142,11 +144,7 @@ export function EncounterHistoryPanel({
                   <span>{formatVisitDate(record.startedAt)}</span>
                   <span>{formatDuration(record.durationSeconds)} · {record.transcript.length} реплик</span>
                   <small>
-                    {record.status === 'completed'
-                      ? 'Завершён'
-                      : record.status === 'interrupted'
-                        ? 'Прерван'
-                        : 'Идёт сейчас'}
+                    {localMaterialStatus(record)}
                   </small>
                 </button>
               ))}
