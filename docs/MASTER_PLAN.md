@@ -977,8 +977,11 @@ rendering, authorization, backup, or external integration behavior.
   rejects final LF; provider identity verification and authorization are unchanged.
 - Four focused files /104 tests PASS, scoped ESLint and TypeScript PASS; source
   secret scanner766 files PASS before documentation. Independent read-only review
-  found no blocking regression. Deployment/retry evidence follows in the operation
-  receipt; successful owner login is not yet claimed. No password reset/read or
+  found no blocking regression. Clean pushed source5db36eca8bb5d6bbd681b48ae2b5c0277e20b66f
+  built on provider Linux and published READY as dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ;
+  canonical alias assigned. Fresh public checks: sign-in/health200, session/patients401,
+  CSRF200 with protected cookie, wrong-origin403; no-store. Owner manual retry was
+  requested; successful owner login is not yet claimed. No password reset/read or
   local account import. Original local resources and unrelated resources untouched.
 
 2026-10-01 owner-approved cloud publication (incomplete slice, actual READY):
@@ -2349,8 +2352,9 @@ control, detection, response, and residual acceptance.
 Owner manual login failed after publication. Shared refresh transport validation
 now accepts the provider's legacy12-character token format, retaining size/character
 bounds, upstream verification, exact-origin/CSRF and SecureHttpOnly cookies. Focused
-104 tests PASS. Publish the patched clean Git source only to dedicated ORION Vercel,
-then ask owner to retry manually on the canonical origin. Do not read/reset their
+104 tests PASS. Patched clean pushed Git source5db36ec was published READY only to
+dedicated ORION Vercel as dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ, canonical alias verified.
+Owner was asked to retry manually on the canonical origin. Do not read/reset their
 password. Authenticated acceptance and remaining unported modules stay open.
 Full repair/publication receipt: `docs/operations/cloud-checkpoint-2026-10-01.md`.
 
@@ -3879,8 +3883,11 @@ Source bug found after owner login failures: minimum16 rejects legacy Supabase12
 Patched bounded cookie-safe opaque refresh validation for login/refresh/logout;
 provider remains authority. Four focused files104 tests and scoped lint PASS;
 TypeScript and source secret scan766 files PASS after final validation hardening;
-provider Linux build is the publication gate. Publish exact pushed clean source to existing dedicated
-ORION project/canonical alias; never retry Windows-prebuilt output. Owner manually
+Provider Linux build PASS and READY dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ published
+source5db36eca8bb5d6bbd681b48ae2b5c0277e20b66f to dedicated canonical alias. Dry-run760
+files, unsafe uploads0, env.example excluded; never retry Windows-prebuilt output.
+Fresh public sign-in/health/CSRF200, anonymous session/patients401 and wrongorigin403
+verified. Owner manually
 retries with their existing Supabase credentials; no password read/reset or local
 credential import. Follow the operation receipt for actual deployment status.
 Do not replay0001–0004 or touch original DB/env/accounts/audio/3200/3101/STT.

@@ -43,10 +43,31 @@ pnpm.cmd security:secrets
 
 Four files /104 tests PASS; scoped ESLint and final TypeScript PASS. Source secret
 scan766 files PASS after this receipt; native provider build is the publication
-gate. Independent read-only diff
-review found no material regression. Updated deployment and owner retry remain
-pending at this source checkpoint. Owner password is unchanged and never read;
-local resources/data and all unrelated resources remain untouched.
+gate. Independent read-only diff review found no material regression. Owner
+password is unchanged and never read; local resources/data and all unrelated
+resources remain untouched.
+
+**Patched version genuinely published:** exact source
+`5db36eca8bb5d6bbd681b48ae2b5c0277e20b66f` committed/pushed and local/remote SHA matched.
+New clean Git archive extracted in a dedicated temporary directory; source private
+DB/key/audio count0. Vercel dry-run760 files, unsafe uploads0 and.env.example excluded.
+Source deployment (not Windows prebuilt) used the same exact project/scope and
+`--archive=tgz --meta sourceCommit=5db36eca8bb5d6bbd681b48ae2b5c0277e20b66f`.
+Provider Linux Next16.3.6 compile/TypeScript/build PASS, CLI exit0/READY/production.
+
+- Deployment: `dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ`.
+- Canonical alias: https://orion-clinic-cloud.vercel.app/sign-in .
+- Unique diagnostic URL: https://orion-clinic-cloud-4hmlzf2lr-shadowocc.vercel.app .
+- Inspector: https://vercel.com/shadowocc/orion-clinic-cloud/Xu2B6KCwdjxd78TktuzVSczyaPNJ .
+
+Fresh canonical public HTTPS checks: sign-in200, health/live200, anonymous
+session401 and patients401, CSRF200 with Secure/HttpOnly/__Host cookie, wrong-Origin
+CSRF403; responses no-store. Browser read visible text only, not field values:
+personal email/password form is present. Owner was asked to refresh and retry their
+existing credentials manually. **Owner authenticated login is not yet verified**;
+do not claim the actual account/password was tested or every401 is resolved.
+Original main SHA/sole owner plan edit reverified unchanged. No migration replay,
+local account import, external AI/audio request or other resource access occurred.
 
 ## Exact preservation boundary
 
