@@ -1,5 +1,8 @@
 param(
-    [ValidateSet("Auto", "Cpu", "Cuda")][string]$Device = "Auto"
+    [ValidateSet("Auto", "Cpu", "Cuda")][string]$Device = "Auto",
+    # Recovery of an already initialized checkout only. Never applies pending
+    # migrations/bootstrap or replaces existing logs in this explicit mode.
+    [switch]$SkipDataInitialization
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,7 +101,9 @@ if (-not $speechAlreadyReady) {
     Assert-PortFree 3101 "Local speech"
 }
 if (-not $webAlreadyReady) {
-    Remove-StaleVinextLock
+    # Recovery preserves existing runtime evidence. Vinext handles its own stale
+    # lock on startup and refuses to take over a live process.
+    if (-not $SkipDataInitialization) { Remove-StaleVinextLock }
     Assert-PortFree 3200 "ORION web"
 }
 
@@ -108,25 +113,39 @@ if (-not (Test-Path -LiteralPath $speechPython)) {
 }
 
 Set-Location -LiteralPath $projectRoot
-Write-Host "Applying local D1 migrations and application bootstrap..."
-& $runtime.Pnpm db:migrate:local
-if ($LASTEXITCODE -ne 0) { throw "Local D1 migration failed." }
-& $runtime.Pnpm db:bootstrap:local
-if ($LASTEXITCODE -ne 0) { throw "Local D1 bootstrap failed." }
+if ($SkipDataInitialization) {
+    Write-Warning "Recovery mode: migrations and bootstrap skipped. Existing data must already be compatible; this is not a schema upgrade."
+} else {
+    Write-Host "Applying local D1 migrations and application bootstrap..."
+    & $runtime.Pnpm db:migrate:local
+    if ($LASTEXITCODE -ne 0) { throw "Local D1 migration failed." }
+    & $runtime.Pnpm db:bootstrap:local
+    if ($LASTEXITCODE -ne 0) { throw "Local D1 bootstrap failed." }
+}
 
 $devVars = Join-Path $projectRoot ".dev.vars"
 $groqConfigured =
     (Test-Path -LiteralPath $devVars) -and
-    (Select-String -LiteralPath $devVars -Pattern '^\s*GROQ_API_KEY\s*=\s*gsk_' -Quiet)
+    (Select-String -LiteralPath $devVars -Pattern '^\s*GROQ_API_KEY\s*=\s*["'']?gsk_' -Quiet)
 if (-not $groqConfigured) {
     Write-Warning "Groq is not configured. STT and clinical records will work, but real AI drafts require CONFIGURE_GROQ.bat and a restart."
 }
 
+if ($SkipDataInitialization) {
+    # A separate directory avoids redirect truncation of any previous run, even
+    # when two recovery invocations receive the same timestamp.
+    $recoveryRunId = "recovery-{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss-fff"), ([guid]::NewGuid().ToString("N"))
+    $logRoot = Join-Path $logRoot $recoveryRunId
+    New-Item -ItemType Directory -Path $logRoot -ErrorAction Stop | Out-Null
+    Write-Host "Recovery logs: $logRoot"
+}
 $speechOut = Join-Path $logRoot "speech.out.log"
 $speechErr = Join-Path $logRoot "speech.err.log"
 $webOut = Join-Path $logRoot "web.out.log"
 $webErr = Join-Path $logRoot "web.err.log"
-Remove-Item -LiteralPath $speechOut, $speechErr, $webOut, $webErr -Force -ErrorAction SilentlyContinue
+if (-not $SkipDataInitialization) {
+    Remove-Item -LiteralPath $speechOut, $speechErr, $webOut, $webErr -Force -ErrorAction SilentlyContinue
+}
 
 $speechProcess = $null
 if ($speechAlreadyReady) {
@@ -163,7 +182,7 @@ for ($attempt = 0; -not $webReady -and $attempt -lt 120; $attempt += 1) {
     Start-Sleep -Milliseconds 500
 }
 if (-not $webReady) {
-    throw "ORION web did not become ready. Inspect .orion-runtime\logs\web.err.log."
+    throw "ORION web did not become ready. Inspect $webErr."
 }
 
 $speechReachable = $speechAlreadyReady
@@ -173,7 +192,7 @@ for ($attempt = 0; -not $speechReachable -and $attempt -lt 60; $attempt += 1) {
     Start-Sleep -Milliseconds 500
 }
 if (-not $speechReachable) {
-    throw "Local speech service did not become reachable. Inspect .orion-runtime\logs\speech.err.log."
+    throw "Local speech service did not become reachable. Inspect $speechErr."
 }
 
 Write-Host ""

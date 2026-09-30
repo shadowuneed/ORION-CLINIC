@@ -14,7 +14,7 @@ import {
 } from '@/lib/http/api-response';
 import { orderApiFailure } from '@/lib/http/order-api-errors';
 import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
-import { D1OrderWorkflowRepository } from '@/lib/repositories/order-workflow';
+import { D1OrderWorkflowRepository, OrderWorkflowNotFoundError } from '@/lib/repositories/order-workflow';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +36,10 @@ async function accessFor(
 export async function GET(request: Request) {
   const context = createApiRequestContext(request, '/api/orders');
   const url = new URL(request.url);
+  if (['facilityId', 'accessAssignmentId', 'requestId', 'encounterId', 'recommendationId', 'recommendationVersion']
+    .some(name => url.searchParams.getAll(name).length > 1)) {
+    return apiFailure(context, 400, 'INVALID_ORDER_QUERY', 'Проверьте параметры списка.');
+  }
   const parsed = orderListQuerySchema.safeParse({
     facilityId: url.searchParams.get('facilityId') ?? undefined,
     accessAssignmentId:
@@ -44,6 +48,10 @@ export async function GET(request: Request) {
     kind: url.searchParams.get('kind') ?? undefined,
     query: url.searchParams.get('query') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
+    requestId: url.searchParams.get('requestId') ?? undefined,
+    encounterId: url.searchParams.get('encounterId') ?? undefined,
+    recommendationId: url.searchParams.get('recommendationId') ?? undefined,
+    recommendationVersion: url.searchParams.get('recommendationVersion') ?? undefined,
   });
   if (!parsed.success) {
     return apiFailure(context, 400, 'INVALID_ORDER_QUERY', 'Проверьте параметры списка.');
@@ -57,7 +65,10 @@ export async function GET(request: Request) {
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const repository = new D1OrderWorkflowRepository(env.DB, access.scope);
     const [orders, encounters] = await Promise.all([
-      repository.list({
+      parsed.data.requestId ? repository.get(parsed.data.requestId).then(order => {
+        if (!order) throw new OrderWorkflowNotFoundError('Order unavailable');
+        return [order];
+      }) : repository.list({
         status: parsed.data.status,
         kind: parsed.data.kind,
         query: parsed.data.query,
@@ -69,6 +80,11 @@ export async function GET(request: Request) {
       resultCount: orders.length,
       requestId: context.requestId,
     });
+    const recommendationSource = parsed.data.recommendationId && parsed.data.encounterId && parsed.data.recommendationVersion
+      ? await repository.getRecommendationSource({
+        recommendationId: parsed.data.recommendationId, recommendationVersion: parsed.data.recommendationVersion,
+        encounterId: parsed.data.encounterId,
+      }) : null;
     return apiSuccess(context, {
       organization: access.organization,
       facility: access.facility,
@@ -76,6 +92,7 @@ export async function GET(request: Request) {
       assignments: access.assignments,
       orders,
       encounters,
+      recommendationSource,
       persistence: 'd1+r2',
       dataMode: 'synthetic-only',
     });
@@ -122,6 +139,7 @@ export async function POST(request: Request) {
     if (!access) return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
     const order = await new D1OrderWorkflowRepository(env.DB, access.scope).createDraft({
       encounterId: payload.encounterId,
+      recommendationSource: payload.recommendationSource,
       kind: payload.kind,
       priority: payload.priority,
       requestedService: payload.requestedService,

@@ -1,4 +1,9 @@
 .main { min-width: 0; padding: 22px; }
+.workflows { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin: 24px 0; }
+.workflows article { padding: 20px; background: var(--surface-strong); border: 1px solid var(--line); border-radius: 12px; color: var(--ink); }
+.workflows h2 { margin: 8px 0 16px; font-size: 20px; }
+.workflows li { margin: 10px 0; line-height: 1.55; }
+.workflows p { color: var(--ink-soft); line-height: 1.5; }
 .header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .header > div { flex: 1 1 340px; }
 .header h1 { margin: 0 0 6px; font-size: 25px; color: var(--ink); }

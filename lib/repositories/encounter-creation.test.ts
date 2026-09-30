@@ -1,4 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdtempSync, unlinkSync, rmdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
@@ -8,16 +10,25 @@ import { D1WorkspaceAccessRepository } from './workspace-access';
 import { resolveClinicianWorkspaceAccess } from '@/lib/auth/workspace-access';
 
 const opened: DatabaseSync[] = [];
-afterEach(() => opened.splice(0).forEach(db => db.close()));
+const temporaryDatabases: { directory: string; path: string }[] = [];
+afterEach(() => {
+  opened.splice(0).forEach(db => db.close());
+  for (const item of temporaryDatabases.splice(0)) {
+    unlinkSync(item.path);
+    rmdirSync(item.directory);
+  }
+});
 const scope: EncounterCreationScope = { organizationId: 'org-a', facilityId: 'fac-a', reviewerMembershipId: 'membership-a',
   accessAssignmentId: 'access-assignment-a-general-medicine', accessPermission: 'encounter.manage' };
 const input = () => ({ patient: { displayName: 'Тестовый пациент создания', birthDate: null, sexAtBirth: 'not_recorded' as const },
   reasonForVisit: 'Синтетическая проверка', actorId: 'user-a', requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() });
 
-function fixture(beforeBatch?: (db: DatabaseSync) => void) {
-  const db = new DatabaseSync(':memory:'); opened.push(db); db.exec('pragma foreign_keys=on');
-  for (const name of readdirSync('drizzle').filter(n => n.endsWith('.sql')).sort()) db.exec(readFileSync(`drizzle/${name}`, 'utf8'));
-  db.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
+function fixture(beforeBatch?: (db: DatabaseSync) => void, path = ':memory:', initialize = true) {
+  const db = new DatabaseSync(path); opened.push(db); db.exec('pragma foreign_keys=on');
+  if (initialize) {
+    for (const name of readdirSync('drizzle').filter(n => n.endsWith('.sql')).sort()) db.exec(readFileSync(`drizzle/${name}`, 'utf8'));
+    db.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
+  }
   const prepare = (sql: string, bindings: SQLInputValue[] = []) => ({
     sql, bindings, bind: (...args: SQLInputValue[]) => prepare(sql, args),
     first: async () => db.prepare(sql).get(...bindings) ?? null,
@@ -49,6 +60,32 @@ function changeAssignment(db: DatabaseSync, patch: Record<string, SQLInputValue>
 }
 
 describe('independent encounter creation', () => {
+  it('reopens user-created records from disk without seed patients and replays without duplicates', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orion-data-acceptance-'));
+    const path = join(directory, 'acceptance.sqlite');
+    temporaryDatabases.push({ directory, path });
+    const initial = fixture(undefined, path);
+    expect(initial.db.prepare('select count(*) as n from patients').get()?.n).toBe(0);
+    const command = input();
+    const created = await initial.repo.create(command);
+    initial.db.close();
+    opened.splice(opened.indexOf(initial.db), 1);
+
+    // A fresh connection/repository must read committed state, not a process cache.
+    const reopened = fixture(undefined, path, false);
+    const workspace = await resolveClinicianWorkspaceAccess(new D1WorkspaceAccessRepository(reopened.d1, {
+      accessAssignmentId: scope.accessAssignmentId, facilityId: 'fac-a', permission: 'encounter.read',
+    }), { issuer: 'openai:sites', subject: 'local_seedy', email: null }, created.encounter.id);
+    expect(workspace.encounter.patient.id).toBe(created.patient.id);
+    expect(workspace.encounter.patient.displayName).toBe(command.patient.displayName);
+    expect(await reopened.repo.create(command)).toEqual(created);
+    for (const table of ['patients', 'encounters', 'audit_events', 'command_idempotency']) {
+      expect(reopened.db.prepare(`select count(*) as n from ${table}`).get()?.n).toBe(1);
+    }
+    expect(reopened.db.prepare('select count(*) as n from clinical_section_heads').get()?.n).toBe(8);
+    expect(reopened.db.prepare('pragma foreign_key_check').all()).toEqual([]);
+    expect(reopened.db.prepare('pragma quick_check').get()?.quick_check).toBe('ok');
+  });
   it('creates the first patient and encounter in an empty clinic and resolves it under the selected doctor assignment', async () => {
     const { db, d1, repo } = fixture();
     expect(db.prepare('select count(*) as n from encounters').get()?.n).toBe(0);

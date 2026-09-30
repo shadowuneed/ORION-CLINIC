@@ -337,6 +337,41 @@
       "when": 1788955161922,
       "tag": "0047_tan_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1790194099828,
+      "tag": "0048_staff_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1790228326367,
+      "tag": "0049_staff_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1790246543606,
+      "tag": "0050_local_material_registry",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1790267814602,
+      "tag": "0051_local_material_authority_fences",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1790585318287,
+      "tag": "0052_patient_self_links",
+      "breakpoints": true
     }
   ]
 }

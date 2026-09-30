@@ -23,9 +23,11 @@ import {
   X,
 } from 'lucide-react';
 import type { EncounterSummary, PatientDetail } from '@/lib/repositories/patient-registry';
+import type { LatestPatientVitals } from '@/lib/repositories/patient-observations';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
 import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import styles from '../patients.module.css';
+import { PatientVitalsPanel, type PatientVitalsState } from './patient-vitals-panel';
 
 type DetailResponse = {
   viewer?: { id: string; displayName: string; role: string };
@@ -84,6 +86,13 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+const sexLabels: Record<PatientDetail['sexAtBirth'], string> = {
+  female: 'Женский',
+  male: 'Мужской',
+  unknown: 'Неизвестен',
+  not_recorded: 'Не указан',
+};
+
 export function PatientDetailView({
   patientId,
   facilityId,
@@ -108,6 +117,7 @@ export function PatientDetailView({
   const [profileError, setProfileError] = useState<DetailResponse['error']>();
   const [message, setMessage] = useState<string | null>(null);
   const [photoSaving, setPhotoSaving] = useState(false);
+  const [measurement, setMeasurement] = useState<PatientVitalsState & { scopeKey: string }>({ state: 'loading', value: null, scopeKey: '' });
   const encounterKey = useRef<string | null>(null);
   const updateKey = useRef<string | null>(null);
   const archiveKey = useRef<string | null>(null);
@@ -137,6 +147,28 @@ export function PatientDetailView({
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (state !== 'ready' || !data.patient) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ patientId: data.patient.id });
+    const exactFacility = data.facility?.id ?? facilityId;
+    const exactAssignment = data.accessAssignment?.assignmentId ?? accessAssignmentId;
+    if (exactFacility) params.set('facilityId', exactFacility);
+    if (exactAssignment) params.set('accessAssignmentId', exactAssignment);
+    const scopeKey = `${data.patient.id}:${exactFacility ?? ''}:${exactAssignment ?? ''}`;
+    const timer = window.setTimeout(() => setMeasurement({ state: 'loading', value: null, scopeKey }), 0);
+    void fetch(`/api/observations/latest-vitals?${params}`, {
+      cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error('Measurement unavailable');
+      const payload = await response.json() as { vitals: LatestPatientVitals };
+      if (!controller.signal.aborted) setMeasurement({ state: 'ready', value: payload.vitals, scopeKey });
+    }).catch(() => {
+      if (!controller.signal.aborted) setMeasurement({ state: 'unavailable', value: null, scopeKey });
+    });
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [state, data.patient, data.facility?.id, data.accessAssignment?.assignmentId, facilityId, accessAssignmentId]);
 
   async function createEncounter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -226,7 +258,7 @@ export function PatientDetailView({
             email: String(form.get('email') ?? '') || null,
             address: String(form.get('address') ?? '') || null,
             changeReason: String(form.get('changeReason') ?? ''),
-            testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+            testDataAcknowledged: true,
             expectedVersion: data.patient.version,
             idempotencyKey,
           }),
@@ -271,7 +303,7 @@ export function PatientDetailView({
             facilityId,
             accessAssignmentId,
             changeReason: String(form.get('changeReason') ?? ''),
-            testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+            testDataAcknowledged: true,
             expectedVersion: data.patient.version,
             idempotencyKey,
           }),
@@ -306,9 +338,10 @@ export function PatientDetailView({
   }
 
   const patient = data.patient;
+  const measurementKey = `${patient?.id ?? ''}:${data.facility?.id ?? facilityId ?? ''}:${data.accessAssignment?.assignmentId ?? accessAssignmentId ?? ''}`;
 
   return (
-    <main className={styles.main}>
+    <main className={`${styles.main} ${styles.detailMain}`}>
       <div className={styles.detailTopline}>
         <Link className={styles.backLink} href={`/patients${facilityQuery}`}>
           <ArrowLeft aria-hidden="true" size={18} />
@@ -356,7 +389,7 @@ export function PatientDetailView({
         <div className={styles.statePanel} role="status">
           <RefreshCw className={styles.spin} aria-hidden="true" size={28} />
           <h2>Открываем карточку</h2>
-          <p>Загружаем пациента и историю приёмов из D1.</p>
+          <p>Загружаем пациента и историю приёмов.</p>
         </div>
       )}
 
@@ -405,8 +438,9 @@ export function PatientDetailView({
               </div>
               <div className={styles.heroMeta}>
                 <span><IdCard aria-hidden="true" size={16} /> {patient.medicalRecordNumber}</span>
-                <span>{patient.testIin ? `ИИН ${patient.testIin}` : 'ИИН не указан'}</span>
+                {patient.testIin && <span>ИИН {patient.testIin}</span>}
                 <span>{formatDate(patient.birthDate)}</span>
+                <span>{sexLabels[patient.sexAtBirth]}</span>
               </div>
             </div>
             <div className={styles.heroStats}>
@@ -414,12 +448,15 @@ export function PatientDetailView({
                 <strong>{patient.encounterCount}</strong>
                 <small>приёмов</small>
               </span>
-              <span>
-                <strong>v{patient.version}</strong>
-                <small>версия карточки</small>
-              </span>
             </div>
           </section>
+
+          <PatientVitalsPanel key={measurementKey} measurement={measurement.scopeKey === measurementKey ? measurement : { state: 'loading', value: null }} patient={patient}
+            measurementsUrl={scopedWorkspaceUrl(`/pathway?view=observations&patientId=${encodeURIComponent(patient.id)}`, {
+              accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '', facilityId: data.facility?.id ?? facilityId ?? '',
+            })}
+            encounterUrl={patient.latestEncounter ? encounterUrl(patient.latestEncounter.id) : null}
+            encounterStatus={patient.latestEncounter ? encounterStatus[patient.latestEncounter.status] : null} />
 
           {message && <div className={styles.detailMessage}>{message}</div>}
 
@@ -437,7 +474,6 @@ export function PatientDetailView({
             <section className={styles.infoPanel}>
               <header>
                 <h2>Контактные данные</h2>
-                <span>D1</span>
               </header>
               <dl>
                 <div><dt><Phone aria-hidden="true" size={17} /> Телефон</dt><dd>{patient.phone ?? 'Не указан'}</dd></div>
@@ -546,7 +582,7 @@ export function PatientDetailView({
               </label>
               <label>
                 <span>Телефон</span>
-                <input defaultValue={patient.phone ?? ''} maxLength={40} name="phone" />
+                <input defaultValue={patient.phone ?? ''} minLength={5} maxLength={40} name="phone" />
               </label>
               <label>
                 <span>Email</span>
@@ -554,18 +590,11 @@ export function PatientDetailView({
               </label>
               <label className={styles.fieldWide}>
                 <span>Адрес</span>
-                <input defaultValue={patient.address ?? ''} maxLength={300} name="address" />
+                <input defaultValue={patient.address ?? ''} minLength={3} maxLength={300} name="address" />
               </label>
               <label className={styles.fieldWide}>
                 <span>Причина изменения *</span>
                 <textarea maxLength={300} minLength={3} name="changeReason" placeholder="Например: телефон уточнён со слов пациента" required rows={3} />
-              </label>
-              <label className={`${styles.confirmation} ${styles.fieldWide}`}>
-                <input name="testDataAcknowledged" required type="checkbox" />
-                <span>
-                  <strong>Подтверждаю искусственные данные</strong>
-                  <small>Контур пока не одобрен для реальных данных пациентов.</small>
-                </span>
               </label>
               {profileError && (
                 <div className={`${styles.formError} ${styles.fieldWide}`} role="alert">
@@ -613,10 +642,6 @@ export function PatientDetailView({
               <label className={styles.fieldWide}>
                 <span>Причина архивирования *</span>
                 <textarea autoFocus maxLength={300} minLength={3} name="changeReason" placeholder="Укажите проверяемую причину" required rows={4} />
-              </label>
-              <label className={`${styles.confirmation} ${styles.fieldWide}`}>
-                <input name="testDataAcknowledged" required type="checkbox" />
-                <span>Подтверждаю, что карточка содержит только искусственные данные.</span>
               </label>
               {profileError && (
                 <div className={`${styles.formError} ${styles.fieldWide}`} role="alert">

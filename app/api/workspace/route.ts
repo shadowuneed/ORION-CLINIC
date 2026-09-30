@@ -71,6 +71,36 @@ export async function GET(request: Request) {
       toSiteIdentityPrincipal(identity),
       requestedEncounterId,
     );
+    if (new URL(request.url).searchParams.get('view') === 'worklist') {
+      // A worklist must not depend on the completeness of any clinical record.
+      // Audit and recheck each returned encounter; never return clinical content.
+      const scopes = access.encounters.map((encounter) => ({
+        ...access.scope,
+        encounterId: encounter.id,
+      }));
+      for (const scope of scopes) {
+        await assertCurrentEncounterReadAccess(env.DB, scope, access.user.id);
+        await new D1AccessAuditRepository(env.DB, scope).recordWorkspaceRead({
+          actorId: access.user.id,
+          requestId: crypto.randomUUID(),
+        });
+      }
+      for (const scope of scopes) {
+        await assertCurrentEncounterReadAccess(env.DB, scope, access.user.id);
+      }
+      return apiSuccess(context, {
+        encounters: access.encounters.map((encounter) => ({
+          id: encounter.id,
+          facilityName: encounter.facilityName,
+          updatedAt: encounter.updatedAt,
+          status: encounter.status,
+          patient: {
+            displayName: encounter.patient.displayName,
+            medicalRecordNumber: encounter.patient.medicalRecordNumber,
+          },
+        })),
+      });
+    }
     const recommendationRepository = new D1SuggestionReviewRepository(
       env.DB,
       access.scope,
@@ -106,6 +136,7 @@ export async function GET(request: Request) {
         clinicalSections,
         consents,
         protocolDraft,
+        protocolPreview,
         amendments,
         exports,
       ] = await Promise.all([
@@ -113,6 +144,7 @@ export async function GET(request: Request) {
         sectionRepository.list(),
         consentRepository.listCurrent(),
         protocolRepository.getCurrentSummary(),
+        protocolRepository.getCurrentPreview(access.user.id),
         amendmentRepository.list(),
         documentRepository.listCurrentArtifacts(),
       ]);
@@ -129,6 +161,7 @@ export async function GET(request: Request) {
         clinicalSections,
         consents,
         protocolDraft,
+        protocolPreview,
         amendments,
         exports,
         canReadTranscript,
@@ -165,6 +198,7 @@ export async function GET(request: Request) {
       clinicalSections,
       consents,
       protocolDraft,
+      protocolPreview,
       amendments,
       exports,
       canReadTranscript,
@@ -246,6 +280,7 @@ export async function GET(request: Request) {
         recommendations,
         clinicalSections,
         protocolDraft,
+        protocolPreview,
         amendments,
         exports,
         accessAudit,

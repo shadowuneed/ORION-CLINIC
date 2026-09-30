@@ -169,9 +169,9 @@ describe('chronic-care assignment access', () => {
     ).rejects.toBeInstanceOf(AccessPermissionRequiredError);
   });
 
-  it('does not turn an unrelated role grant into a chronic-care actor', async () => {
+  it.each(['registrar', 'administrator', 'auditor', 'medical_lead'] as const)('does not turn %s grant into a chronic-care actor', async (role) => {
     const registrar = assignment({
-      roles: ['registrar'],
+      roles: [role],
       allowPermissions: ['care.manage'],
     });
     await expect(

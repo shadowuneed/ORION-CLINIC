@@ -3,6 +3,7 @@ import type {
   ClinicalSuggestion,
   ClinicalSuggestionCategory,
 } from './clinical-contract';
+import { localAccountModeEnabled } from './local-account-mode';
 
 export type SuggestionDecisionStatus = 'pending' | 'accepted' | 'discarded';
 
@@ -64,6 +65,9 @@ const ENCOUNTERS_STORE = 'encounters';
 let databasePromise: Promise<IDBDatabase> | null = null;
 
 function openHistoryDatabase() {
+  if (localAccountModeEnabled()) {
+    return Promise.reject(new Error('Локальный архив прежнего общего профиля изолирован. Используйте сохранённые серверные приёмы.'));
+  }
   if (typeof window === 'undefined' || !window.indexedDB) {
     return Promise.reject(
       new Error('Локальная история недоступна в этом браузере.'),

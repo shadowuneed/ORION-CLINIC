@@ -9,6 +9,15 @@ import {
   type LiveWorkspaceSnapshot,
 } from './live-authoritative-workspace';
 
+it('keeps persisted encounter order when a resumed recording restarts its clock', () => {
+  const base = { text: 'Synthetic', startMs: 5000, endMs: 6000, confidence: null, isFinal: true, speaker: 'doctor', language: 'ru' as const };
+  const result = mergeLiveTokens(
+    [{ ...base, sourceId: 'earlier', segmentIndex: 10 }],
+    [{ ...base, sourceId: 'resumed', segmentIndex: 11, startMs: 0 }],
+  );
+  expect(result.map((token) => token.sourceId)).toEqual(['earlier', 'resumed']);
+});
+
 function grantedConsent(
   type: LiveWorkspaceSnapshot['consents'][number]['type'],
   externalProcessor: string | null = null,

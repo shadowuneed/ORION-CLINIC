@@ -37,7 +37,7 @@ class SessionStore:
         self._sessions: dict[str, SessionState] = {}
         self._lock = threading.RLock()
 
-    def _prune_locked(self, now: float) -> None:
+    def _prune_expired_locked(self, now: float) -> None:
         expired = [
             session_id
             for session_id, session in self._sessions.items()
@@ -45,14 +45,16 @@ class SessionStore:
         ]
         for session_id in expired:
             self._sessions.pop(session_id, None)
-        if len(self._sessions) >= MAX_SESSIONS:
-            oldest = min(self._sessions.values(), key=lambda item: item.last_access)
-            self._sessions.pop(oldest.session_id, None)
 
     def create(self, *, doctor_first: bool = True) -> SessionState:
         now = time.monotonic()
         with self._lock:
-            self._prune_locked(now)
+            self._prune_expired_locked(now)
+            # Only insertion needs a free slot. Reads and health/count must not
+            # evict a live session merely because the store is exactly full.
+            if len(self._sessions) >= MAX_SESSIONS:
+                oldest = min(self._sessions.values(), key=lambda item: item.last_access)
+                self._sessions.pop(oldest.session_id, None)
             session_id = str(uuid.uuid4())
             session = SessionState(
                 session_id=session_id,
@@ -70,7 +72,7 @@ class SessionStore:
             raise SessionNotFoundError(session_id) from exc
         now = time.monotonic()
         with self._lock:
-            self._prune_locked(now)
+            self._prune_expired_locked(now)
             session = self._sessions.get(parsed)
             if session is None:
                 raise SessionNotFoundError(session_id)
@@ -87,7 +89,7 @@ class SessionStore:
 
     def count(self) -> int:
         with self._lock:
-            self._prune_locked(time.monotonic())
+            self._prune_expired_locked(time.monotonic())
             return len(self._sessions)
 
 

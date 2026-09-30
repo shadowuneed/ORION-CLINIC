@@ -69,7 +69,7 @@ describe('Groq clinical analysis provider', () => {
     [503, 'upstream_failed'],
   ] as const)('maps upstream %i to %s', async (status, code) => {
     const provider = new GroqClinicalAnalysisProvider({
-      apiKey: 'test-key',
+      apiKey: `test-status-${status}`,
       model: 'openai/gpt-oss-120b',
       baseUrl: 'https://api.groq.com/openai/v1',
       fetchImpl: async () => new Response('{}', { status }),
@@ -81,7 +81,7 @@ describe('Groq clinical analysis provider', () => {
     const invalid = structuredClone(output);
     invalid.suggestions[0].evidence[0].quote = 'Придуманная цитата';
     const provider = new GroqClinicalAnalysisProvider({
-      apiKey: 'test-key',
+      apiKey: 'test-invalid-output',
       model: 'openai/gpt-oss-120b',
       baseUrl: 'https://api.groq.com/openai/v1',
       fetchImpl: async () =>

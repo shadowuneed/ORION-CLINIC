@@ -42,6 +42,7 @@ export type LiveWorkspaceSnapshot = {
   };
   transcript: Array<{
     id: string;
+    segmentIndex?: number;
     version: number;
     role: 'doctor' | 'patient' | 'other' | 'unknown';
     language: 'ru' | 'kk' | 'mixed' | 'unknown';
@@ -158,6 +159,7 @@ export function mapLiveTranscript(
     )
     .map((segment) => ({
       sourceId: segment.id,
+      segmentIndex: segment.segmentIndex,
       version: segment.version,
       text: segment.text.trim(),
       startMs: segment.startedAtMs,
@@ -276,6 +278,9 @@ export function mergeLiveTokens(
     tokens.set(key, token);
   }
   return [...tokens.values()].sort(
-    (left, right) => (left.startMs ?? Number.MAX_SAFE_INTEGER) - (right.startMs ?? Number.MAX_SAFE_INTEGER),
+    (left, right) =>
+      typeof left.segmentIndex === 'number' && typeof right.segmentIndex === 'number'
+        ? left.segmentIndex - right.segmentIndex
+        : (left.startMs ?? Number.MAX_SAFE_INTEGER) - (right.startMs ?? Number.MAX_SAFE_INTEGER),
   );
 }

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "node scripts/build-user-handbook.mjs && vinext build",
+    "build:deploy-check": "pnpm build && node scripts/check-deployment-artifact.mjs --dir dist",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
@@ -24,6 +25,7 @@
     "db:seed:communications:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/seed.communications.local.sql",
     "db:seed:observations:local": "wrangler d1 execute orion-clinic-local --local --persist-to .wrangler/state --file db/seed.observations.local.sql",
     "security:secrets": "node scripts/scan-secrets.mjs",
+    "security:artifact": "node scripts/check-deployment-artifact.mjs",
     "security:dependencies": "pnpm audit --audit-level high",
     "backup:drill:local": "node scripts/local-backup-restore-drill.mjs",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm db:check && pnpm build",

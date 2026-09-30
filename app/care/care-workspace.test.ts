@@ -1,14 +1,38 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { chronicCareCapabilities } from '@/lib/auth/chronic-care-access';
 import type {
   ChronicCareWorkspace,
   ChronicTaskRecord,
 } from '@/lib/repositories/chronic-care-workflow';
 import {
   allowedCareTaskActions,
+  CareTaskMeasurementsLink,
   buildChronicCareAccessQuery,
   buildChronicCareOperationKey,
   unknownChronicCareOutcomeMessage,
 } from './care-workspace';
+
+describe('task measurement navigation', () => {
+  it('links the exact task and patient without completing the task', () => {
+    const html = renderToStaticMarkup(createElement(CareTaskMeasurementsLink, {
+      task: { id: 'task-a', title: 'Контроль давления', patient: { id: 'patient-a', displayName: 'Тест', medicalRecordNumber: 'SYN-A' } },
+      facilityId: 'fac-a', accessAssignmentId: 'assignment-a', disabled: false,
+    }));
+    expect(html).toContain('/observations?facilityId=fac-a&amp;accessAssignmentId=assignment-a&amp;patientId=patient-a&amp;careTaskId=task-a');
+    expect(html).toContain('Запись показателей не завершает задачу.');
+  });
+
+  it('does not navigate away while a command or unsaved dialog is open', () => {
+    const html = renderToStaticMarkup(createElement(CareTaskMeasurementsLink, {
+      task: { id: 'task-a', title: 'Контроль давления', patient: { id: 'patient-a', displayName: 'Тест', medicalRecordNumber: 'SYN-A' } },
+      facilityId: 'fac-a', accessAssignmentId: 'assignment-a', disabled: true,
+    }));
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain('href=');
+  });
+});
 
 const capabilities = {
   'workspace.read': true,
@@ -30,6 +54,19 @@ function task(status: ChronicTaskRecord['current']['status']) {
 }
 
 describe('chronic-care workspace actions', () => {
+  it.each(['pending', 'in_progress', 'escalated', 'completed', 'cancelled'] as const)(
+    'uses actual server nurse capabilities without exposing doctor decisions for %s', (status) => {
+      const actions = allowedCareTaskActions(task(status), chronicCareCapabilities('nurse'), 'nurse');
+      expect(actions).not.toContain('resolve');
+      expect(actions).not.toContain('cancel');
+      if (['escalated', 'completed', 'cancelled'].includes(status)) expect(actions).toEqual([]);
+    },
+  );
+  it('does not expose a colleague role task as actionable just because permission exists', () => {
+    const doctorTask = { ...task('pending'), ownerRole: 'clinician' as const };
+    expect(allowedCareTaskActions(doctorTask, chronicCareCapabilities('nurse'), 'nurse')).toEqual([]);
+    expect(allowedCareTaskActions(task('pending'), chronicCareCapabilities('clinician'), 'clinician')).toEqual(['cancel']);
+  });
   it('shows nurse actions only before escalation', () => {
     expect(allowedCareTaskActions(task('pending'), capabilities, 'nurse')).toEqual([
       'start',

@@ -115,6 +115,7 @@ function fixture() {
   };
   return {
     database,
+    reopenRepository: () => new D1AccessAdministrationRepository(createD1Adapter(database), scope),
     repository: new D1AccessAdministrationRepository(
       createD1Adapter(database),
       scope,
@@ -187,7 +188,7 @@ describe('D1 access administration repository', () => {
   });
 
   it('grants, revokes and retains immutable assignment history', async () => {
-    const { database, repository } = fixture();
+    const { database, repository, reopenRepository } = fixture();
     const granted = await repository.grantAssignment({
       facilityId: 'fac-a',
       actorAssignmentId: 'access-assignment-a-general-medicine',
@@ -228,10 +229,24 @@ describe('D1 access administration repository', () => {
         .get(granted.assignmentId),
     ).toEqual({ count: 2 });
     expect(
-      (await repository.getWorkspace()).assignments.find(
+      (await reopenRepository().getWorkspace()).assignments.find(
         (candidate) => candidate.id === granted.assignmentId,
       ),
     ).toMatchObject({ status: 'revoked', version: 2 });
+    const auditBefore = database.prepare('select count(*) as count from audit_events').get();
+    await expect(reopenRepository().updateAssignment({
+      facilityId: 'fac-a', actorAssignmentId: 'access-assignment-a-general-medicine',
+      idempotencyKey: '14dc8096-f383-4eee-a8a2-46e4724d5e20',
+      assignmentId: granted.assignmentId, expectedVersion: 1,
+      status: 'active', roles: ['nurse'], allowPermissions: [],
+      denyPermissions: ['communications.manage'], effectiveFrom: 1_704_067_200_000,
+      effectiveUntil: null, changeReason: 'Устаревшая форма до отзыва',
+      actorId: 'user-a', requestId: 'request-stale-assignment-after-revoke',
+    })).rejects.toBeInstanceOf(AccessAdministrationConflictError);
+    expect(database.prepare('select count(*) as count from audit_events').get()).toEqual(auditBefore);
+    expect((await reopenRepository().getWorkspace()).assignments.find(
+      (candidate) => candidate.id === granted.assignmentId,
+    )).toMatchObject({ status: 'revoked', version: 2 });
   });
 
   it('rejects self-mutation, self-disable and stale department versions', async () => {

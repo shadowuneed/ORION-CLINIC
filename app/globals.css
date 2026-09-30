@@ -1,15 +1,15 @@
 @import 'tailwindcss';
 
 :root {
-  --canvas: #f1f3f0;
-  --surface: #fbfcfa;
+  --canvas: #edf2f0;
+  --surface: #f8fbf9;
   --surface-strong: #ffffff;
-  --surface-muted: #f6f7f5;
-  --ink: #17211f;
-  --ink-soft: #4f5d59;
-  --ink-muted: #74807c;
-  --line: #d9dfdc;
-  --line-strong: #c6cfca;
+  --surface-muted: #eaf0ed;
+  --ink: #152722;
+  --ink-soft: #425a52;
+  --ink-muted: #586d64;
+  --line: #cbd7d1;
+  --line-strong: #91a89e;
   --brand: #125f56;
   --brand-strong: #0c4a43;
   --brand-soft: #dceee9;
@@ -23,7 +23,11 @@
   --danger-soft: #f7e8e4;
   --success: #2d6b50;
   --success-soft: #e2efe7;
-  --shadow-sm: 0 1px 2px rgb(23 33 31 / 4%);
+  --shadow-sm: 0 2px 6px rgb(23 49 37 / 6%);
+  --focus-ring: #126c60;
+  --on-brand: #ffffff;
+  --selection-ink: #103f36;
+  --selection-surface: #bfe0d8;
   --font-sans: 'Golos Text Variable', 'Segoe UI', Arial, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
@@ -52,6 +56,10 @@ html[data-theme='dark'] {
   --success: #82c39f;
   --success-soft: #253b2f;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 18%);
+  --focus-ring: #a4ded0;
+  --on-brand: #132b24;
+  --selection-ink: #102a22;
+  --selection-surface: #a4d7c9;
 }
 
 * {
@@ -88,11 +96,20 @@ button {
 }
 
 ::selection {
-  background: #bfe0d8;
-  color: var(--ink);
+  background: var(--selection-surface);
+  color: var(--selection-ink);
 }
 
 :focus-visible {
-  outline: 3px solid rgb(18 95 86 / 28%);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ink-muted);
+  opacity: 1;
+}
+
+input[type='checkbox'],
+input[type='radio'] { accent-color: var(--brand); }

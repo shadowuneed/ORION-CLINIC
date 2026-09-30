@@ -5,8 +5,9 @@ export function scopedWorkspaceUrl(path: string, selection: SelectedWorkspaceAcc
   // Scope is only propagated to same-origin clinical routes, never provider URLs.
   if (!path.startsWith('/') || path.startsWith('//')) return path;
   const url = new URL(path, 'https://orion.invalid');
-  const allowed = url.pathname === '/' || url.pathname === '/live' || url.pathname === '/encounters/new' ||
-    url.pathname === '/api/workspace' || url.pathname.startsWith('/api/workspace/') ||
+  const allowed = url.pathname === '/' || url.pathname === '/live' || url.pathname === '/orders' || url.pathname === '/pathway' || url.pathname === '/encounters/new' ||
+    /^\/patients\/[^/]+$/.test(url.pathname) ||
+    url.pathname === '/api/workspace' || url.pathname.startsWith('/api/workspace/') || url.pathname === '/api/dashboard/briefing' ||
     url.pathname.startsWith('/api/clinical/') || url.pathname.startsWith('/api/local-speech/');
   if (!allowed) return path;
   url.searchParams.set('accessAssignmentId', selection.accessAssignmentId);
@@ -31,10 +32,15 @@ export function workspacePageUrl(path: '/' | '/live' | '/encounters/new', query:
 }
 /** Preserve explicit selectors, including malformed duplicates, for server validation. */
 export function workspaceNavigationUrl(target: string, currentPath: string, search: string): string {
-  if (!['/', '/live'].includes(target) || !['/', '/live', '/encounters/new'].includes(currentPath)) return target;
+  // These modules use the same assignment identity, but authorize it independently.
+  // Preserve an explicit choice; never silently switch to a more privileged one.
+  const clinicalPages = ['/', '/live', '/encounters/new', '/patients', '/orders', '/scheduling', '/care', '/observations', '/communications', '/pathway'];
+  const sourceIsClinical = clinicalPages.includes(currentPath) || /^\/patients\/[^/]+$/.test(currentPath);
+  if (!clinicalPages.includes(target) || !sourceIsClinical) return target;
   const source = new URLSearchParams(search);
   const query = new URLSearchParams();
-  for (const key of ['encounterId', 'accessAssignmentId', 'facilityId']) {
+  const preservesEncounter = ['/', '/live'].includes(target) && ['/', '/live', '/encounters/new'].includes(currentPath);
+  for (const key of [...(preservesEncounter ? ['encounterId'] : []), 'accessAssignmentId', 'facilityId']) {
     for (const value of source.getAll(key)) query.append(key, value);
   }
   return query.size ? `${target}?${query}` : target;

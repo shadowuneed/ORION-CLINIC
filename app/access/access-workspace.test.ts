@@ -45,6 +45,25 @@ function assignment(): AccessAssignmentSummary {
 }
 
 describe('self-access workspace', () => {
+  it('explains combined roles without pretending they are isolated accounts', () => {
+    const selected: AccessAssignmentSummary = { ...assignment(), roles: ['doctor', 'administrator'] };
+    const html = renderToStaticMarkup(createElement(AccessWorkspace, { assignments: [selected], selected }));
+    expect(html).toContain('В этом назначении совмещены роли');
+    expect(html).toContain('Это не отдельные аккаунты');
+    expect(html).not.toContain('Управление доступом');
+  });
+  it.each([
+    ['nurse', 'Не заменяет врача'],
+    ['administrator', 'не даёт права вести приём'],
+    ['registrar', 'Не принимает клинические решения'],
+  ] as const)('explains %s responsibility without inventing permission grants', (role, explanation) => {
+    const selected: AccessAssignmentSummary = { ...assignment(), roles: [role], effectivePermissions: ['access.self.read'] };
+    const html = renderToStaticMarkup(createElement(AccessWorkspace, { assignments: [selected], selected }));
+    expect(html).toContain(explanation);
+    expect(html).toContain('Описание роли — не выдача прав');
+    expect(html).not.toContain('Управление доступом');
+    expect(html).toContain('Клинические данные не входят в это назначение');
+  });
   it('renders one server-selected D1 scope without employee identifiers or mutation controls', () => {
     const selected = assignment();
     const html = renderToStaticMarkup(
@@ -115,6 +134,9 @@ describe('self-access workspace', () => {
     );
 
     expect(allowed).toContain('Управление доступом');
+    expect(allowed).toContain('План наблюдения');
+    expect(allowed).toContain('Измерения пациента');
+    expect(allowed).not.toContain('Диспансерное наблюдение');
     expect(allowed).toContain('/access/manage?assignmentId=hidden-assignment-id');
     expect(denied).not.toContain('Управление доступом');
   });

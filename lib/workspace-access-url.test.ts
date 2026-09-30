@@ -4,19 +4,42 @@ import { workspaceRequestSelection, InvalidWorkspaceAccessSelectionError } from 
 
 const selection = { accessAssignmentId: 'assignment-a', facilityId: 'fac-a' };
 describe('exact workspace scope transport', () => {
+  it('opens the patient history under the exact selected access, not an implicit role', () => {
+    expect(scopedWorkspaceUrl('/patients/patient-a?facilityId=old', selection))
+      .toBe('/patients/patient-a?facilityId=fac-a&accessAssignmentId=assignment-a');
+  });
+  it('carries the exact selected access and source identity into the order draft handoff', () => {
+    const url = new URL(scopedWorkspaceUrl('/orders?encounterId=enc-a&recommendationId=hint-a&recommendationVersion=2&accessAssignmentId=old&facilityId=old', selection), 'https://orion.test');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ encounterId: 'enc-a', recommendationId: 'hint-a', recommendationVersion: '2', accessAssignmentId: 'assignment-a', facilityId: 'fac-a' });
+  });
   it('retains encounter scope through shell navigation without passing unrelated selections', () => {
     const query = 'encounterId=enc-a&accessAssignmentId=a&facilityId=f&unrelated=value';
     expect(workspaceNavigationUrl('/live', '/', query)).toBe('/live?encounterId=enc-a&accessAssignmentId=a&facilityId=f');
     expect(workspaceNavigationUrl('/', '/live', query)).toBe('/?encounterId=enc-a&accessAssignmentId=a&facilityId=f');
-    expect(workspaceNavigationUrl('/orders', '/live', query)).toBe('/orders');
-    expect(workspaceNavigationUrl('/live', '/orders', query)).toBe('/live');
+    expect(workspaceNavigationUrl('/orders', '/live', query)).toBe('/orders?accessAssignmentId=a&facilityId=f');
+    expect(workspaceNavigationUrl('/live', '/orders', query)).toBe('/live?accessAssignmentId=a&facilityId=f');
     expect(workspaceNavigationUrl('/', '/encounters/new', 'accessAssignmentId=a&facilityId=f')).toBe('/?accessAssignmentId=a&facilityId=f');
+  });
+  it.each(['/patients', '/patients/patient-a', '/orders', '/scheduling', '/care', '/observations', '/communications'])(
+    'keeps exact access context from %s without carrying resource selections', (source) => {
+      expect(workspaceNavigationUrl('/', source, 'encounterId=enc-a&patientId=p-a&accessAssignmentId=a&facilityId=f'))
+        .toBe('/?accessAssignmentId=a&facilityId=f');
+    },
+  );
+  it.each(['/access', '/access/manage', '/help', '/signed-out', 'https://external.test/', '//external.test/', '/api/workspace'])(
+    'does not leak module selectors to %s', (target) => {
+      expect(workspaceNavigationUrl(target, '/care', 'accessAssignmentId=a&facilityId=f')).toBe(target);
+    },
+  );
+  it('retains invalid duplicates across modules so target validation can reject them', () => {
+    expect(workspaceNavigationUrl('/orders', '/care', 'accessAssignmentId=a&accessAssignmentId=b&facilityId='))
+      .toBe('/orders?accessAssignmentId=a&accessAssignmentId=b&facilityId=');
   });
   it('does not erase a malformed explicit selector in shell navigation', () => {
     expect(workspaceNavigationUrl('/live', '/', 'accessAssignmentId=a&accessAssignmentId=b')).toBe('/live?accessAssignmentId=a&accessAssignmentId=b');
   });
   it.each(['/', '/live', '/encounters/new', '/api/workspace', '/api/workspace/exports/download?encounterId=enc-a&kind=pdf',
-    '/api/workspace/transcript/speech/session', '/api/clinical/research', '/api/local-speech/transcribe'])(
+    '/api/workspace/transcript/speech/session', '/api/clinical/research', '/api/local-speech/transcribe', '/api/dashboard/briefing'])(
     'propagates selection without dropping resource parameters: %s', (path) => {
       const url = new URL(scopedWorkspaceUrl(path, selection), 'https://orion.test');
       expect(url.searchParams.get('accessAssignmentId')).toBe('assignment-a');
@@ -27,7 +50,7 @@ describe('exact workspace scope transport', () => {
       }
     },
   );
-  it.each(['https://provider.test/api/workspace', '//provider.test/api/workspace', '/patients', '/signin-with-chatgpt', '/api/workspace-foreign'])(
+  it.each(['https://provider.test/api/workspace', '//provider.test/api/workspace', '/patients', '/signin-with-chatgpt', '/api/workspace-foreign', '/orders-foreign', 'https://provider.test/orders', '/api/dashboard/briefing-foreign', '/api/dashboard/briefing/foreign'])(
     'never propagates context to unrelated destinations: %s', (path) => {
       expect(scopedWorkspaceUrl(path, selection)).toBe(path);
     },

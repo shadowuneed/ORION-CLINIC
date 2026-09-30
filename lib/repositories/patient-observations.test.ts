@@ -253,6 +253,46 @@ afterEach(() => {
 });
 
 describe('D1 patient observations', () => {
+  it('projects independently latest corrected measurement groups without crossing patient or facility', async () => {
+    const { database } = createFixture();
+    const repository = new D1PatientObservationRepository(database, clinicianScope);
+    expect(await repository.latestVitals('patient-a')).toEqual({ anthropometry: null, bloodPressure: null, temperature: null });
+    const first = await repository.create(createCommand(uuid(94)));
+    const pressure = await repository.create({
+      ...createCommand(uuid(95)), measuredAt: Date.UTC(2026, 8, 8, 8),
+      values: { heightCm: null, weightKg: null, systolicMmhg: 118, diastolicMmhg: 75, temperatureC: null },
+    });
+    await repository.correct({
+      ...createCommand(uuid(96)), observationId: first.id, expectedVersion: 1,
+      values: { ...createCommand().values, weightKg: 70, temperatureC: 36.8 },
+    });
+    const vitals = await repository.latestVitals('patient-a');
+    expect(vitals.anthropometry).toMatchObject({ observationId: first.id, version: 2, heightCm: 170, weightKg: 70, bmi: 24.22, measuredAt: Date.UTC(2026, 8, 5, 8) });
+    expect(vitals.bloodPressure).toMatchObject({ observationId: pressure.id, version: 1, systolicMmhg: 118, diastolicMmhg: 75, measuredAt: Date.UTC(2026, 8, 8, 8) });
+    expect(vitals.temperature).toMatchObject({ observationId: first.id, version: 2, temperatureC: 36.8, measuredAt: Date.UTC(2026, 8, 5, 8) });
+    expect(await repository.latestVitals('patient-b')).toEqual({ anthropometry: null, bloodPressure: null, temperature: null });
+    expect(await new D1PatientObservationRepository(database, otherScope).latestVitals('patient-a')).toEqual({ anthropometry: null, bloodPressure: null, temperature: null });
+  });
+
+  it('returns only the latest current height and weight in the exact patient scope', async () => {
+    const { database } = createFixture();
+    const repository = new D1PatientObservationRepository(database, clinicianScope);
+    expect(await repository.latestAnthropometry('patient-a')).toBeNull();
+    await repository.create(createCommand(uuid(91)));
+    await repository.create({
+      ...createCommand(uuid(92)),
+      measuredAt: Date.UTC(2026, 8, 8, 8, 0),
+      values: { heightCm: null, weightKg: null, systolicMmhg: 118, diastolicMmhg: 75, temperatureC: null },
+    });
+    expect(await repository.latestAnthropometry('patient-a')).toMatchObject({
+      heightCm: 170,
+      weightKg: 68.2,
+      measuredAt: Date.UTC(2026, 8, 5, 8, 0),
+    });
+    expect(await repository.latestAnthropometry('patient-b')).toBeNull();
+    expect(await new D1PatientObservationRepository(database, otherScope).latestAnthropometry('patient-a')).toBeNull();
+  });
+
   it('records an exact synthetic measurement, derived BMI, audit and read history', async () => {
     const { target, database } = createFixture();
     const repository = new D1PatientObservationRepository(database, clinicianScope);

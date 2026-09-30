@@ -97,6 +97,12 @@ export async function POST(request: Request) {
       audio,
       signal: AbortSignal.timeout(45_000),
     });
+    // Silence is a valid STT result, not a failed provider or a clinical fact.
+    // No DB sequence advance; client reuses this index for the next audio fragment.
+    if (!transcription.text.trim()) {
+      if (transcription.upstreamSessionId !== prepared.run.upstreamSessionId || transcription.utteranceIndex !== headers.data.utteranceIndex) throw new SpeechProviderError('invalid_response');
+      return apiSuccess(context, { skipped: 'no_speech', segment: null });
+    }
     const segment = await repository.commitTranscription({
       sessionId: headers.data.sessionId,
       utteranceIndex: headers.data.utteranceIndex,

@@ -1,10 +1,27 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-15
+- Last updated: 2026-09-30
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
 - Legacy reference: `C:\Users\profm\OneDrive\Документы\ChatGPT\ariaproject`
+
+### Owner's absolute resource boundary — 2026-09-24
+
+**DO NOT TOUCH ANYTHING RELATED TO DIR ECHOES.** This applies to GitHub, Vercel,
+Neon and every other service: no code/data/configuration/secret reads, changes,
+deletion, linking, migration or reuse. `dir-echoes-db` and
+`dir-echoes-voice-router` belong to a different hackathon project, not ORION.
+Do not repeat broad remote inventories when they would inspect that project.
+The owner explicitly reiterated this prohibition after the initial inventory.
+
+The only authorized GitHub repository for this work is the existing
+`https://github.com/shadowuneed/ORION-CLINIC.git`, verified by local
+`git remote -v` on 2026-09-24. Do not create a replacement repository, change
+origin, or push this work to another project. This supersedes the earlier request
+to create a new repository. All ORION infrastructure must be dedicated to ORION;
+the deployment request does not authorize borrowing another project's resources.
+These constraints apply equally to subagents and the overnight continuation.
 
 ## 0. Purpose and continuation protocol
 
@@ -35,6 +52,224 @@ Status values:
 command, its result, and known limitations.
 
 ## 1. Product mission
+
+### PRIORITY ONLINE-1 · approved user request, 2026-09-24
+
+The owner now requests an online platform other staff can use, with implementation
+of useful remaining workflows beyond STT. This supersedes historical next-task
+pointers, but does not approve public exposure of development authentication, paid
+infrastructure, external patient communication or real medical data. The first
+target is a **closed online pilot using artificial records and real DB operations**.
+KMIS/ERDB integration and clinical production approval are separate later gates;
+they must not prevent engineering a usable multi-user pilot.
+
+Current audit: `outputs/PRODUCTION-AUDIT-2026-09-24.md` (local ignored evidence).
+Web/STT were restored on 3200/3101; full tests, build, isolated recovery and one
+artificial real STT/Groq probe passed during that audit. Those results do not
+validate code changed afterwards or establish an online deployment.
+
+Latest owner expansion: finish the original two screenshot requirement sets,
+deploy on **Vercel**, and work through safe checkpoints overnight. Requirement
+coverage and actual gaps are in `docs/operations/requirements-audit-2026-09-24.md`;
+deployment constraints in `docs/operations/vercel-readiness-2026-09-24.md`;
+speech options in `docs/operations/online-speech-options.md`. Vercel is the
+requested web destination, not evidence of working remote DB/auth/STT. Dedicated
+backend/storage, credentials, patient-data approval and paid-service/legal gates
+remain unresolved. No current deployment may expose the Sites development user.
+
+#### Ordered implementation checkpoints
+
+| ID | State | Scope and acceptance |
+| --- | --- | --- |
+| ONLINE-1A | VERIFIED · bounded checkpoint | Exact no-speech response is nonfatal; ordered speech uploads retain index after silence. Profile update/archive enforce current exact authority through transaction and replay. Care tasks open same-patient measurements and return to the task after scoped revalidation. Full suite: 103 files / 844 passed / 1 skipped; build and focused browser checks passed. See newest sections 13/15/16. This does not close accounts, offline durability or photo upload. |
+| ONLINE-1B | IN_PROGRESS · isolated server identity/TLS checkpoint | Individual sessions (0048), credentials/attempt reservations (0049), password verifier and guarded login/logout now share a server principal in an unmounted verification runtime. Actual loopback HTTPS/workerd/D1 tests cover two staff, sequential restart, logout, password reset and credential disable. This is not browser/clinical runtime acceptance: main UI remains Sites and neither migration is applied there. Next: safe provisioning, isolated clinical SSR/API adapters and trusted HTTPS browser acceptance, deployment-wide abuse/restore controls; ONLINE-1C before main activation. No role-fixed shared credentials or browser-supplied grants. |
+| ONLINE-1C | IN_PROGRESS · unmounted 1C0 + 1C1a–e + 1C2a1 + 1C2a2-fence | Internal durable registry0050 now has0051 terminal pending-work fences on organization/facility/membership mutations, including ABA/REPLACE. NOT an authorizing broker or protected current IndexedDB. Next1C2a2-coordinator: explicit wrapping dependency plus current action/consent SQL, remaining authority sources and preparation reconciliation; then encrypted v2 and isolated two-tab integration. Main0048–0051 remain unapplied. No key custody/issuance/action endpoint. Existing unowned v1 stays untouched; never silently assign/delete it. Browser-held key cleanup is not remote revocation. |
+| ONLINE-1D | NOT_STARTED | Deploy a closed artificial-data pilot with durable DB/object storage, migrations, TLS, secrets, backups/restore, logs/alerts and restart supervision. STT runs on a protected persistent service, not inside a transient web function. Rework loopback-only provider configuration only with a bounded authenticated service contract; no arbitrary URL/SSRF bypass. Production hosting/identity choices require owner confirmation. |
+| ONLINE-1E | NOT_STARTED | Make offline behavior explicit and durable: consent-bound local encrypted draft/audio queue with idempotent replay and conflict recovery; distinguish microphone pause, lost network and finalization. Never auto-send cached clinical text to AI after reconnect or claim recording survived crash until tested. Offline storage/security policy must be resolved with ONLINE-1C. |
+| ONLINE-1F | NOT_STARTED | Two real browsers, separate doctor/nurse/admin/registrar accounts: create/save/reload/restart, denial after revoke/logout, protected recordings, one complete synthetic encounter to reopened signed protocol and export, backup restoration and service recovery. Refresh illustrated instructions from verified screens. |
+
+Vercel is requested for web hosting; its backend topology is not finalized.
+Retaining the current Workers/D1/R2 bindings plus a protected STT service is the
+smallest port; Vercel requires a Vinext adapter and separately resolved
+backend/storage bindings. Do not describe the current
+placeholder D1 IDs or local `.wrangler/state` as a remote database. No cloud resources
+have been created by this plan.
+
+#### Further product work that can be built without clinical vendor contracts
+
+1. **Care tasks and measurements (UX-R4 / D-R4):** exact patient/task navigation,
+   measurement history and explicit task outcome; no inferred task completion.
+2. **Recommendation to order draft (D-R3) — bounded local checkpoint verified:**
+   accepted action recommendation → reviewed form → persisted draft with immutable
+   decision/derivative/encounter provenance, exact-scoped links and idempotency.
+   Browser creation/reload/reopen passed in isolated D1; separate approval remains.
+   Not medication prescribing, external sending or automatic referral creation.
+3. **Long consultation notes (D-R2):** retain supported cumulative facts beyond the
+   rolling 24-turn window, with source versions and contradiction handling; never
+   overwrite clinician-edited/reviewed sections or invent absent facts.
+4. **Scheduling:** versioned rescheduling, waiting list and trusted hold-expiry job;
+   manual/local schedule remains labelled until a real authoritative source exists.
+5. **Operations:** staff provisioning, backup schedule/restore runbook, background-job
+   ownership/retry monitoring and complete role-specific UI acceptance.
+
+External WhatsApp/SMS/telephony, KMIS/LIS/ECG, ERDB/PUZ/free medication, approved
+critical thresholds and hospital transfer remain dependent on named provider/clinic
+decisions. Do not implement a painted success response or claim these are connected.
+
+### MOBILE-1 · separate accessible mobile application — approved scope, 2026-09-24
+
+The owner explicitly requests a **real installable application connected to the
+platform**, not a responsive website, PWA or WebView wrapper presented as a native
+product. Planning target: Android and iOS. This adds a separate product track;
+it does not displace the platform identity/data/reliability release gates.
+Detailed executable backlog: `docs/operations/mobile-application-plan.md`.
+Status: **M1a IN_PROGRESS, native application NOT_STARTED**. The isolated
+patient self-link migration is not a credential, release API or deployed app.
+
+Patient experience: upcoming appointments and queue, signed visit documents and
+released results, physician-approved care/medication/diet plans, reminders,
+self-reported measurements and wellbeing, clinic communication, consent and
+history. Patients cannot approve AI drafts, change a diagnosis/prescription or
+gain staff powers. Caregiver access requires a separately verified, scoped,
+revocable delegation; knowing a patient's ID/phone/name is never sufficient.
+Staff mobile workflows, if enabled, retain their own exact assignment rules.
+
+Accessibility is mandatory from the first screen: VoiceOver/TalkBack labels,
+logical focus and announcements, scalable text and reflow, sufficient contrast,
+large targets, reduced motion, text alternatives to every audio/voice action,
+keyboard/switch navigation and understandable RU/KK instructions. Add simplified
+navigation and optional assistive preferences without inferring a diagnosis.
+Test actual devices and assistive technologies with representative users; passing
+a linter or displaying an accessibility setting is not acceptance.
+
+| Stage | Initial state | Required outcome |
+| --- | --- | --- |
+| M0 | PLANNED | Patient/caregiver/staff journey and source-of-truth mapping; accessibility contract, threat model and native-stack ADR. No invented integrations. |
+| M1 | NOT_STARTED | Dedicated patient identity and verified patient link; versioned mobile API, per-object authorization, device/session revoke, no staff-auth/header fallback. Depends on secure online platform foundation. |
+| M2 | NOT_STARTED | Real native Android/iOS read-only client: own appointments, released records/results and approved plan from actual API; loading/empty/offline/denied states and accessible sign-in. No fixture-only success. |
+| M3 | NOT_STARTED | Explicit booking confirmation/change requests, patient-reported measurements/messages and consent; audited/idempotent DB operations; private opt-in notifications with real delivery states. |
+| M4 | NOT_STARTED | Minimal encrypted identity-bound offline data/drafts, expiration and safe replay with current authorization/conflict checks. No silent clinical approval, cross-account cache reuse or automatic AI upload. |
+| M5 | NOT_STARTED | Complete appropriate patient functions, explicit caregiver delegation and separately authorized staff workflows; optional device integrations behind separate acceptance. |
+| M6 | NOT_STARTED | Real devices, accessibility user testing, multi-account/revocation/reinstall/network interruption tests, signed builds and limited distribution. Store accounts/legal declarations/payments require owner participation. |
+
+AI may explain released information or prepare questions for a clinician with
+clear sources and limits; it must not autonomously diagnose, prescribe, override
+a care plan or promise emergency monitoring. "All functions" means all applicable
+authorized journeys, not exposing the clinician/admin console to every patient.
+External KMIS/ERDB/PUZ, messaging and hospital-transfer dependencies stay visible.
+Mobile code belongs in this same existing ORION repository; no new or unrelated
+GitHub/Vercel/Neon project is to be repurposed.
+
+### PRIORITY UX-R · approved user request, 2026-09-15
+
+This remains the **UX execution backlog**, sequenced with ONLINE-1 above after the
+owner's online-platform clarification. Do not delete
+the existing security backlog or mark clinical/external gates complete.
+The user reports indistinguishable pages, unclear care vs measurements,
+non-working access management and unclear doctor/nurse/admin responsibilities.
+They request corrected workflows and rebuilt illustrated instructions afterwards.
+This is not authorization to grant live privileges or bypass consent.
+
+#### Outcome and boundaries
+
+- Owner clarification (2026-09-15): **artificial records, real data operations**.
+  Synthetic means fictitious input data, NEVER painted-in results or a bypass of
+  persistence. This applies to every UX-R phase and the production backlog.
+  Each feature must support an empty database (identity/schema bootstrap only),
+  user-created records, scoped API reads/writes, durable relations and history,
+  reload/restart, failure handling and authorization. No success before commit;
+  no fallback patient, fixture-only selectable record or fake external delivery.
+  Do not remove test-data labels to pretend production readiness.
+- Data acceptance order: D-R1 patient/encounter create-read-reopen-retry;
+  D-R2 saved sections/transcript/approved protocol; D-R3 order-result-booking;
+  D-R4 care tasks-measurements; D-R5 role isolation and operational release checks.
+  Track source/UI/API/repository/migration/test evidence and limitations for each.
+  UX and data checkpoints progress together; DB tests alone do not prove UI.
+- Production preparation: separate fixtures from normal startup, retain migrations,
+  transactional audit/idempotency/concurrency, verify backup restore and deployment
+  configuration, then complete identity/MFA, hosting/residency, retention and clinic
+  release gates. Never enable real patient data merely by flipping synthetic mode.
+  Named disconnected integrations stay visibly unavailable until implemented.
+
+- Main platform remains dashboard-led; LIVE is the encounter's speech tool.
+- Stable URLs, stored data, STT model/timings and Groq stay unchanged unless a
+  separately reproduced defect requires a scoped fix. No rewrite or reseed.
+- Unified typography, spacing and navigation; distinctive task-oriented layouts,
+  not separate themes for every page and not merely changed colours.
+- Clinical controls continue to be enforced server-side with exact assignment,
+  facility, patient relation, consent, lifecycle and immutable audit/version guards.
+- Synthetic fixtures only. Preserve unrelated owner `a` under Initial risks.
+- Each phase ends with changed files, test commands/results, browser evidence,
+  remaining defects and exact next step in sections 15/16 below.
+
+#### Ordered deliverables
+
+| ID | Status at planning | Deliverable and acceptance |
+| --- | --- | --- |
+| UX-R1a | DONE | Initial naming/meaning slice: meaningful menu labels, remove D1 badges from primary navigation, distinguish care tasks from measured facts, remove misleading external "send" promise. 14 focused tests, types, focused lint and care/measurements browser inspection passed; not full-role acceptance. |
+| UX-R1b | IN_PROGRESS | First code slice distinguishes encounter header from dashboard and explains disabled order decisions with visible, accessible guidance. Remaining: browser acceptance, common breadcrumbs, selected patient/assignment context and primary-action/prerequisite audit across remaining pages. |
+| UX-R2 | IN_PROGRESS | Role explanations and combined-role warning implemented; current browser account confirmed doctor+administrator. Separate doctor, nurse, registrar and access-admin acceptance remains. Reproduce actual broken action before claiming cause; positive UI save and negative API checks; no combined-role fixture as sole proof. |
+| UX-R3 | NOT_STARTED | Task-oriented visual workflows: encounter editor and progress, orders/results registry, time-oriented scheduling and queue, follow-up task list by due date/owner, measurements table/history. Shared shell and responsive light/dark styles. |
+| UX-R4 | IMPLEMENTED · bounded navigation | Same-patient/task navigation with exact facility/assignment, scoped server revalidation, follow-up form context and return/focus verified in browser on 24.09.2026. Measurement saving still uses the existing writer; no automatic task completion. Permanent task-to-measurement DB association and targeted lookup beyond the 200-patient list remain separate work. |
+| UX-R5 | NOT_STARTED | Full role-based acceptance on synthetic data, persistence after refresh, failed/expired/no-access cases, keyboard, dialog cancel, logout, responsive layout and exports. Record unsupported provider/microphone tests separately. |
+| UX-R6 | NOT_STARTED | Rebuild instructions AFTER screens stabilize: new screenshots/markers for changed screens, role entry points, actual labels/workflows, troubleshooting and accurate limitations; regenerate offline and in-app copies together. |
+
+#### UX-R1 terminology contract
+
+| Destination | User-facing meaning | Primary work |
+| --- | --- | --- |
+| `/` without encounter | Рабочий день | Pick assigned encounter or new patient |
+| `/` with encounter | Приём и протокол | Consult, review sources, complete eight sections and sign |
+| `/live` | Запись разговора | Start/stop speech capture for selected encounter |
+| `/orders` | Направления и анализы | Create/approve request; attach and review result |
+| `/scheduling` | Расписание и очередь | Reserve/confirm agreed time; manage arrival and queue |
+| `/care` | План наблюдения | What to do next, due date, responsible staff member |
+| `/observations` | Измерения пациента | What was measured, when, by whom, and values/history |
+| `/access` | Моя роль и права | Actual current assignment and effective permissions |
+| `/access/manage` | Сотрудники и доступ | Grant/version/revoke assignments with explanation |
+
+Example to show in UI: "Измерить давление через месяц" is a follow-up task;
+"Сегодня 120/80" is a recorded measurement. Neither is an automatic diagnosis.
+Technical version IDs and storage engines belong in details, not primary headings.
+Do not relabel local approval as successful external delivery.
+
+#### UX-R2 access investigation checklist (must not be skipped)
+
+1. Inventory `lib/domain/access-governance.ts`, access resolvers/repositories,
+   `app/authenticated-clinic-page.tsx`, shell visibility and `/access/manage` forms.
+   Capture UI/API/DB mismatch with exact operation and error, without secrets.
+2. Write a capability matrix from actual server permissions versus intended roles:
+   doctor clinical decisions/protocol; nurse measurements and assigned tasks;
+   registrar demographics/scheduling; access-admin staff/permissions, not automatic
+   treatment rights. Explicitly label combined assignments; no cosmetic role switch.
+3. Test isolated identities with permitted operations and denied direct endpoint
+   calls. Revoked/expired/wrong-facility/self-escalation must remain denied.
+   Use isolated fixtures; do not alter the owner's current authorizing assignment.
+4. Repair demonstrated defects with transaction/audit/replay tests. Browser menu
+   visibility alone is not authorization proof. Pending existing-patient writer
+   hardening remains a tracked security dependency, not silently "done".
+5. Make the header show resolved role/department or explicit selection required;
+   explain denied actions without exposing inaccessible patient information.
+
+#### UX-R3–R6 acceptance and continuation checklist
+
+- Use real UI backed by local DB, not mock cards. Open/save/reload/cancel each
+  main form; patient switching must not mix local edits or data across patients.
+- Preserve clinical review and separate consents. Show errors and recovery actions,
+  not endless loading, fictitious delivery or disabled unexplained buttons.
+- Browser at desktop and narrow width: no clipped main action, unreadable labels,
+  horizontal page overflow or identical ambiguous tabs; inspect both themes.
+- Final tests: `pnpm verify:ci` with aggregate exit code, plus browser acceptance
+  report with role, route, action, expected/actual result, evidence and unresolved
+  blockers. No microphone/Groq/Word rendering claim from API/build success alone.
+- Instructions source: `docs/user-guide/handbook-content.mjs`; generator:
+  `scripts/build-user-handbook.mjs`; in-app route: `/help`. Refresh screenshots
+  and marker coordinates, verify image/anchor/zoom/download and compare public
+  asset against offline HTML. Do not include secrets or real patients.
+- Current guide remains available during migration, but must be flagged as
+  awaiting UX-R6 refresh where it differs. Do not describe old screenshots as new.
+- Keep reports/checkpoints in this repository; another agent should start from
+  this section, then section 16, then current diff. No need to reconstruct chat.
 
 ORION Clinic is a clinician-controlled platform for the complete patient care
 workflow, not a chat bot and not an autonomous diagnostic system.
@@ -698,6 +933,9 @@ Gate 4 — production:
 | DEC-014 | Source of truth for free-medication accounting | Phase 6 | Pharmacy/clinic IT |
 | DEC-015 | SLO, RPO, RTO, support hours, and incident owner | Phase 10 | Clinic IT/leadership |
 | DEC-016 | Pilot KPI and pass/fail thresholds | Phases 0, 10 | Product/clinical lead |
+| DEC-017 | Verified patient-account linking, caregiver delegation, minors and revocation | MOBILE-1 M1/M5 | Product/clinic security/legal |
+| DEC-018 | Mobile offline retention/shared-device policy, accessibility acceptance participants, supported devices/languages | MOBILE-1 M0/M4/M6 | Product/security/accessibility lead |
+| DEC-019 | Mobile distribution accounts, signing ownership, store disclosures and support channel | MOBILE-1 M6 | Product owner/clinic operations |
 
 Unknown decisions do not block safe local foundation work. They block the
 specific external integration or clinical release named above.
@@ -727,6 +965,997 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-09-30 owner-authorized Git publication and Vercel preflight:
+
+- Explicit owner request authorizes committing/pushing the current checkpoint to
+  the existing ORION repository and attempting Vercel deployment. Local origin
+  and `git ls-remote origin refs/heads/main` confirmed the exact authorized repo,
+  with main initially at5489c18. No other remote project was inventoried.
+- Source secret scan713files, full lint/typecheck, `pnpm.cmd db:check` PASS.
+  `pnpm.cmd build:deploy-check` built all routes successfully, then blocked the
+  exact533-file artifact on `server/.dev.vars`, exit1. Values were not printed.
+  Current output is Workers/Vinext, not Vercel Build Output; SSR/API needs D1/R2,
+  and local personal credentials are installed only by dev middleware.
+- Full test run:151files PASS,2318tests PASS,1skipped; one configuration test
+  exceeded the global5000ms deadline while loading the real Next ESLint config.
+  The exact7-test file then passed twice in isolation; a test-specific90000ms
+  toolchain cold-start allowance preserves both actual ignore assertions. The
+  changed file passed again (7/7,2.15s). The full suite was not rerun after this
+  timeout-only change; do not report an all-green aggregate run.
+- Vercel CLI59.25.4 `whoami` confirmed the existing authenticated account;
+  `project inspect orion-clinic --scope shadowocc` returned project_not_found.
+  `wrangler whoami` initially reported not authenticated. No backend resources,
+  roles or deployments were created. Full working deployment is blocked on the
+  dedicated backend/public staff verifier and Vercel adapter, beyond packaging.
+- Owner opened a new Cloudflare account and explicitly requested executing the
+  official `https://developers.cloudflare.com/agent-setup/prompt.md` instructions.
+  Installed14Cloudflare skills globally in `C:\Users\profm\.agents\skills` and
+  registered all5MCPs in user `C:\Users\profm\.codex\config.toml`, outside Git.
+  CLI confirms OAuth for cloudflare, cloudflare-bindings, builds and observability;
+  Docs is public. Builds and Bindings succeeded after fresh OAuth callbacks.
+  Initial wide API authorization
+  was cancelled before completion and reissued requesting only Workers/D1/R2 and
+  related read scopes. Credential values were not read, printed or copied.
+  Duplicate IAB and Opera callback pages caused confusing connection-refused
+  screens; CLI OAuth result, not the final browser page, determines success.
+  Subsequent authentication uses Opera only. Restart Codex to load new MCP tools;
+  MCP OAuth is not evidence of Wrangler login or a deployed backend.
+- Independent publication review found production auth-only runtime remains
+  unmounted,49direct API Sites-identity consumers need principal adapters, and
+  legacy IndexedDB isolation is disabled outside local account mode. Preserve
+  ONLINE-1B/1C gates; do not deploy the main Worker by injecting identity headers.
+- Exclude the local `.local-build-check.log` from publication. Preserve the
+  owner's standalone `a` in the working tree and leave it unstaged. No local
+  credential files, runtime DB, audio, secrets or generated dist belong in Git.
+- STT host assessment: current stateful FastAPI GigaAM/CAMPPlus sidecar needs
+  persistent CPU/GPU compute, TLS and server authentication for cloud access.
+  Preferred first pilot host is an always-on GPU VM/Runpod Pod;16GB+ VRAM is a
+  proposed benchmark starting point, not a measured model minimum. Browser audio
+  goes via authorized ORION API; service credential remains server-side.
+  GPU resources and remote transcription were not provisioned by this request.
+
+2026-09-28 follow-up — first-load CSS ownership and female anatomy:
+
+- Owner reported bare dashboard/shell content during initial loading. CSS HTTP
+  responses and DOM module hashes matched; missing-file/hash drift was not found.
+  Installed RSC plugin removes `client-reference` stylesheet links on hydration.
+  Added explicit server-side CSS imports in `app/page.tsx` and
+  `app/authenticated-clinic-page.tsx`, retaining the existing CSS and compiler.
+  No artificial delay, content hiding, forced reload or dependency patch.
+- Browser full reloads in light/dark showed dashboard grid styling while data was
+  still loading; after hydration both dashboard/shell CSS links remained with
+  `vite-rsc/importer-resources`. No document overflow at the current755px viewport,
+  no captured browser errors. This is not complete390/768/1280/1920 acceptance.
+  Captures: ignored `outputs/ui-2026-09-28/dashboard-first-load-fixed.png` and
+  `dashboard-loaded-fixed.png`.
+- Added transparent1024x1536 generated female anatomical PNG, selected only for
+  stored `sexAtBirth=female`; male retains original. Unknown/not_recorded keeps
+  the generic original with a neutral accessible description (distinct neutral
+  artwork remains open). Browser verified patient-a female image loaded with the
+  existing118/76,36.5,165cm,64kg values intact; `patient-female-verified.png`.
+  Asset prompt/provenance is in `design/patient-anatomy.md`; no patient image used.
+- `pnpm.cmd exec vitest run app/first-paint-styles.test.ts app/patients/patient-vitals-panel.test.ts lib/config/vite-runtime.test.ts lib/dashboard-events.test.ts lib/dashboard-work-items.test.ts lib/pathway-transition.test.ts app/pathway-link.test.ts --maxWorkers=1`:
+  7 files/41 tests PASS. Full typecheck, scoped ESLint for5 changed source/test
+  files, `pnpm.cmd build` and `git diff --check` PASS. Existing nonfatal build
+  classification/future-native-loader warnings remain. No full SQL/recovery rerun.
+  Final `pnpm.cmd security:secrets` PASS for713 source files.
+- No migration, seed, clinical write, credential reset, process restart, provider
+  analysis call, commit/push or deployment. Existing read audits may append.
+  The initial credentials were printed only at the owner's explicit request;
+  no password was added to source or documentation. Broader remaining plan stays open.
+
+2026-09-28 owner-requested patient panel, event center, motion, light theme and local staff login:
+
+- Final `pnpm.cmd exec vitest run --project unit --no-file-parallelism --maxWorkers=1`:
+  123 files / 1795 PASS / 1 opt-in provider test skipped, exit0, 84.00s.
+  `pnpm.cmd exec vitest run --project database-integration lib/repositories/patient-observations.test.ts --no-file-parallelism --maxWorkers=1`:
+  1 file / 10 PASS, exit0, 13.16s. This is a focused SQL gate, not a rerun of all SQL suites.
+- Full `pnpm.cmd lint`, `pnpm.cmd typecheck`, `pnpm.cmd build` PASS after final
+  product changes. Build retains nonfatal Vinext classification and future Vite
+  extension warnings. Generated handbook retains older labelled captures.
+  `git diff --check` PASS with existing unrelated Python CRLF notice.
+- Source secret scan initially flagged two computed random-password expressions,
+  not literal credentials. Renamed the local variables to `generatedPassword`;
+  scanner policy and password generation unchanged. Final `pnpm.cmd security:secrets`
+  PASS for 708 files. Post-rename local-account-store test 5/5 and scoped ESLint
+  PASS. Aggregate/build above precede this non-product identifier-only change.
+- Browser on main3200: actual login/password worked for existing `user-a`, `user-b`
+  and `user-care-nurse`, with distinct profile identities and existing permissions.
+  Nurse landed in her permitted pathway; no new clinical grants were made.
+  Final user-b browser check reached `Активного назначения нет` on `/access`;
+  the physician account was subsequently restored successfully for QA.
+  Logout returned to the form and another already-open patient tab cleared to
+  sign-in. New non-clinician Home routing is covered by 5 helper tests; no-assignment
+  users go to `/access`, explicit encounter requests keep their original denial.
+- Current patient-a displayed saved BP118/76, temperature36.5, height165, weight64
+  and recorded BMI23.51 with date/source. Clicking the body pressure label changed
+  the provenance selection. Full anatomical bitmap is generic illustration, not
+  a patient scan, organ finding or calculated health/risk map. Independent latest
+  observation heads are read through exact selected observation access and audited.
+- Event center showed existing 2 overdue care tasks, 7 active encounters, 3 open
+  care tasks and empty queue/contact sources. No patient/clinical fixtures were
+  inserted to fill cards. Analytics opens/closes separately; partial source failures
+  stay unavailable, not false zero. Results awaiting review remain actionable even
+  when the request is completed, except cancelled/entered-in-error records.
+- One explicit browser Groq briefing succeeded: summary of 7 open encounters and
+  2 overdue tasks. Only the strict six aggregate counters were sent; no names,
+  notes, identifiers or audio. This is operational summarization, not clinical AI
+  validation. The skipped opt-in clinical provider test above remains skipped.
+- Persistent medical transition observed both entering and exiting `/pathway`:
+  cover phase made the old shell inert, then removed phase/inert after destination
+  mounted. Light/dark patient and dashboard inspected; token tests enforce normal,
+  muted and primary-button contrast. A fresh browser load after the final build had
+  no captured error logs. Earlier during HMR an OrionMark useId hydration warning
+  was observed, not reproduced by the fresh load.
+- Mobile viewport override did not change the measured QA tab (still1280px);
+  reset was called. Do NOT count that attempt as current390px browser acceptance.
+  Reduced-motion, browser Back/Forward and unsaved-form cancellation have automated
+  coverage, not complete manual acceptance in this checkpoint.
+- Web `/api/health/ready`3200 and speech `/health`3101 both HTTP200. No service,
+  main migration, seed, clinical write, audio deletion, cloud deployment, commit or
+  push. Existing read audits may append. The local credential store below was the
+  explicitly implemented state change; online/clinical release gates remain open.
+
+2026-09-28 owner-requested navigation and patient-pathway UI checkpoint:
+
+- Replaced the desktop sidebar with a 72px icon rail that expands over the
+  content to 228px on hover or keyboard focus; full names remain accessible on
+  links. The mobile bottom navigation retains short visible labels. Removed the
+  redundant top "Рабочий день" indicator and sidebar collapse toggle.
+- Grouped orders, care, observations and communications into `/pathway`, each
+  still gated by its own server capability and existing API checks. The left
+  route panel uses a browser-tab treatment and a connected vertical tool rail;
+  its `view` URL is preserved, and visited forms stay mounted on tool switches.
+  The synthetic patient is not inferred or assigned by this visual layer.
+- Owner clarified that clicking "Маршрут" must open a separate platform-inside-
+  platform home screen, not automatically open orders. `/pathway` now defaults
+  to `overview`: its own tab bar, explicit patient picker, scoped server-data
+  summary and horizontally scrollable event/deadline timeline modeled on the
+  supplied visual reference. Patient and source IDs are projected only from
+  successful authorized `/api/orders`, `/api/care` and `/api/observations`
+  reads; failures display an unavailable warning, not invented zeroes. A
+  scope-bound state prevents a previous assignment's fetched patient names
+  appearing during a scope change. Selecting a patient survives entering a
+  tool and returning to the route home. The inner screen is read-only; tools
+  retain their own distinct server authorization and clinician approvals.
+- Added a 260ms entry/exit transition for ordinary internal links between the
+  pathway and other workspaces. Modified/middle-click browser behavior remains
+  native; reduced-motion preference skips both the delay and CSS animations.
+  Made the live-encounter start, profile, dashboard cards and sign-in status
+  clearer in the same local UI slice; individual credential login is NOT active.
+- `pnpm exec vitest run app/clinic-shell.test.ts app/sign-in/page.test.ts
+  lib/dashboard-summary.test.ts lib/workspace-access-url.test.ts`: 4 files /62
+  passed. `pnpm exec vitest run app/pathway/pathway-workspace.test.ts
+  app/clinic-shell.test.ts`: 2 files /7 passed. `pnpm typecheck`, scoped ESLint,
+  `pnpm build` and `git diff --check`: PASS. No new full-suite run after this
+  UI-only delta; the earlier 133-file result above predates it.
+- After the inner-screen correction, `pnpm exec vitest run
+  app/pathway/pathway-workspace.test.ts app/pathway/pathway-overview.test.ts
+  app/clinic-shell.test.ts`: 3 files /11 passed. `pnpm typecheck`, scoped
+  ESLint, `pnpm build` and `git diff --check` PASS after the final
+  scope-state hardening.
+- Browser on main3200: desktop1280 showed 72px default and 228px hover rail,
+  working pathway exit/entry with the transition phase and real target URLs;
+  vertical route panel and care/order views rendered. At width390 the layout
+  reflowed to bottom navigation and scrollable tool chips without document-wide
+  horizontal overflow (`scrollWidth=375`, viewport390). Temporary viewport
+  override reset. Web3200 and local speech3101 health both returned HTTP200.
+  Reduced-motion OS mode and unsaved-form/back-navigation behavior were not
+  manually exercised; no deployment, main migration or clinical approval.
+- Browser on main3200 after the clarification: `/pathway` without `view`
+  opened the inner overview, loaded 11 patient cards across authorized
+  modules, selected one synthetic patient and showed four matching care
+  events. Entered care, returned to the overview and confirmed the selected
+  patient remained. Desktop1280 and mobile390 had no document-wide horizontal
+  overflow; the event strip scrolls internally. Future task due dates are
+  labelled as deadlines, not recorded clinical events. No new DB writes.
+
+2026-09-28 direct owner request — queue, AI context and MOBILE-1/M1a:
+
+- Added a read-only, current-facility queue board in `/scheduling`, derived from
+  authorized referral/confirmed appointment/current ticket versions. It
+  selects the exact referral for existing actions; it does not mutate order,
+  call a patient or invent an automatic priority. Focused scheduling tests 7/7,
+  TypeScript and browser empty-state check on main3200 passed. Populated-board
+  browser acceptance remains to be done on a separate synthetic fixture.
+- Follow-up server boundary: `D1SchedulingWorkflowRepository.list` now filters
+  preference, appointment and ticket DTOs by the caller's current eligible
+  referral and exact patient before they leave the API; occupied slots do not
+  expose another patient's appointment ID. A second synthetic clinician in the
+  same facility cannot read another's three row types or slot ID;
+  focused database-integration8/8 passed. The browser board explicitly says
+  its API-limited100+100 sample is not a complete queue. A cursor-paginated
+  full queue and automated hold expiry remain unfinished. Final aggregate after
+  this follow-up: `pnpm test` 133 files/2235 passed/1 opt-in skipped,
+  exit0, 671.41s. Full lint, types, db-check, build and secret scan also pass.
+- Live and clinical recording screens now disclose when the rolling 24-final-
+  segment Groq input omits earlier turns. `analysis-window` tests3/3,
+  TypeScript and scoped ESLint passed. One explicit opt-in provider request
+  with artificial text passed4/4 Groq tests. This proves provider reachability,
+  not long-visit memory, clinical quality or the entire consent/UI loop.
+- Added unmounted `patient_self_links` in migration0052/schema, with exact
+  issuer/subject/scope, internal verification reference, expiry and terminal
+  revocation guards. A distinct temporary SQLite file applies all migrations;
+  focused3/3 tests passed including close/reopen and tombstone checks;
+  `pnpm db:check` and typecheck passed. No main D1 migration, patient endpoint,
+  credential/session, audit stream, publication or native build was made.
+- Earlier full `pnpm test` before the server follow-up: 133 files/2234 passed/
+  1 opt-in skipped, exit0 (676.86s). The final rerun above supersedes it.
+  Full `pnpm lint`, `pnpm typecheck` and `pnpm db:check` exit0 after the final
+  code changes.
+- `pnpm build` PASS (five Vinext environments); `pnpm security:secrets` PASS
+  for 666 tracked/untracked files; `git diff --check` PASS apart from an
+  unrelated pre-existing CRLF notice. Web3200 and speech3101 health both 200;
+  the browser reloaded `/scheduling` and showed the new D1-backed board (empty
+  on this main synthetic state). This is not populated-board browser proof or
+  clinical/STT long-session acceptance. The prior cloud/auth blockers remain.
+
+2026-09-24 deployment-artifact hardening, 17:27 UTC continuation:
+
+- Fixed false-safe artifact inspection: a NUL no longer skips all content;
+  malformed UTF-8/unknown binary and archive/document/database containers are
+  blocked. Signature+extension permit ordinary web binary assets, with WOFF/WOFF2
+  header size/length checks; literal token detection also runs on binary assets.
+  Private-file copies/date suffixes, private roots/ancestors and root-ancestor
+  symlink/junction paths fail closed without traversing their target contents.
+- `pnpm exec vitest run --project unit lib/config/deployment-artifact.test.ts --no-file-parallelism --maxWorkers=1`:
+  final46/46 PASS. Independent read-only virtual-FS reviewer:20/20 adversarial and
+  ordinary-asset probes PASS, no real private contents read. No full decoder/PHI/
+  malware/unknown-secret detection or frozen-upload guarantee is claimed.
+- New `pnpm security:artifact --dir <explicit-directory>` and
+  `pnpm build:deploy-check` are local-only. Actual latter command successfully
+  rebuilt app/handbook and then intentionally exited1:481files,
+  `server/.dev.vars: private-file`. Actual client-only112assets PASS, but they are
+  not a separately usable platform and were NOT deployed. No cloud CLI retries.
+- An intermediate final unit run timed out at the existing1MiB AES-GCM boundary
+  assertion:1701passed/1failed/1skipped,132.15s. Replaced only the expensive deep
+  comparison with Uint8Array type + exactlength + native byte equality, retaining
+  all oversize/tamper checks and the same timeout. Focused62/62 PASS755ms;
+  independent positive/bit-change/length/offset assertion review PASS. Product
+  crypto implementation was not changed. Final aggregate recorded below.
+- Final `pnpm exec vitest run --project unit --no-file-parallelism --maxWorkers=1`:
+  103files /1702passed /1opt-in skipped,116.40s,exit0 after the assertion change;
+  the final explicit Uint8Array type assertion also passed focused62/62. No
+  failure was hidden by skipping a test or increasing its timeout.
+- Focused ESLint, typecheck, source-secret scan634 and diff-check PASS. Database
+  suite not rerun for this packaging/test-only change: prior514PASS belongs to
+  the D-R3 checkpoint, not a new SQL execution. Browser reloaded main /help after
+  build and showed current workflow, errorlogs[]; same listeners3200/21448,
+  3101/12948 and isolated3214/23896 remain running. Web200/STTok.
+- Owner then requested stop at checkpoint and remove scheduling. Exact app
+  automation `orion` / `ORION — ночная доработка` was deleted at17:40UTC; tool
+  confirmed deleteStatus=deleted. No other schedules/resources changed. Do not
+  resume unattended or recreate a schedule; wait for a new owner request.
+
+2026-09-24 D-R3 completed local checkpoint, final verification at 17:12 UTC:
+
+- `pnpm exec vitest run --project unit --no-file-parallelism --maxWorkers=1`:
+  103 files, 1669 passed, 1 opt-in skipped, 61.14s, exit0.
+- `pnpm exec vitest run --project database-integration --no-file-parallelism --maxWorkers=1`:
+  27 files, 514 passed, 599.09s, exit0. Full final aggregate is 2183 passed,
+  1 opt-in skipped; this supersedes the earlier pre-feature aggregates below.
+- Final `pnpm build` exit0 after final source-conflict UX: application + generated
+  handbook, 19 existing screenshots /75 markers /2233460 bytes. Screenshots were
+  not recaptured; the new verified workflow is current text, marked accordingly.
+- Final `pnpm lint`, `pnpm typecheck`, `pnpm db:check`, `pnpm security:secrets`
+  (634 tracked/untracked source files) and `git diff --check` all exit0. Source
+  secret scan PASS is separate from the BLOCKED deployment artifact scan below.
+- Real browser + isolated D1 on3214: doctor accepted action → explicit form;
+  type/priority are deliberately unselected, patient/encounter fixed by server
+  source. Save produced one draftv1 with null approval, succeeded command,
+  exact accepted decision/version and valid audit chain. Reload exact requestId,
+  reopen source and Live source link all reopened the same draft, no duplicate.
+  Stale source version409 now shows an actionable return-to-encounter state,
+  not a generic failed-load/retry loop. No real audio, external AI, patient message
+  or referral dispatch was performed by this browser acceptance.
+- Independent SQL review found and fixed ignored audit-head publication and
+  historical-source disclosure without current encounter.read. Focused34 SQL
+  and22 API/domain tests plus unit coverage for scope-preserving /orders links,
+  stale response suppression and source-conflict recovery are included above.
+- Main3200 post-build: explicit local sign-in → existing orders loaded → /help
+  displayed the new five-step referral workflow; fresh tab error logs empty.
+  Main database/audio untouched by the isolated creation test. Listeners3200 and
+  3101 remain running; main0048–0051 deliberately NOT applied.
+- Final exact artifact scan after this build inspected481files and BLOCKED
+  server/.dev.vars. No secret values printed or uploaded, no Vercel deployment.
+  A compatible Vercel build/runtime, dedicated durable backend and mounted
+  individual staff auth remain unresolved. No DIR ECHOES resource accessed.
+
+2026-09-24 runtime recovery + ONLINE-1C2a2-fence, 16:26 UTC continuation:
+
+- Main web3200 and speech3101 were found stopped; old PIDs27128/5612 absent.
+  Root restored the same services with reviewed hidden child launches, separate
+  timestamped recovery logs and NO migrations/bootstrap/cache deletion. Current
+  listeners21448/12948, ready200. Vinext reclaimed its own dead-PID lock.
+  New opt-in launcher `-SkipDataInitialization` skips DB initialization and
+  preserves prior logs/lock. Isolated launcher tests14/14, types/lint/parser PASS.
+  Use `docs/runbooks/local-runtime-recovery.md`; do not use ordinary full launcher
+  while main0048–0051 are deliberately unapplied.
+- Main browser: dashboard10encounters → SPA Live → reload/visual check → patients9;
+  captured error logs empty. Temporary tab closed. No real microphone, consent,
+  clinical write, staff switch or local-history read.
+- Actual synthetic STT: generated6615ms system-TTS WAV recognized locally in1990ms;
+  large_ctc CUDA/fp16_autocast, CAMPPlus ready, localFilesOnly=true,
+  audioPersistence=none. Own generated WAV/session cleaned; activeSessions0.
+  `python -B -m unittest discover -s tests -p test_sessions.py -v` in sidecar:
+  8/8 PASS. Not mixed-RU/KK/long-session/clinical-quality or Groq acceptance.
+- Added0051 authority fences for pending registry rows across organization,
+  facility and membership changes, including REPLACE/ABA and installation-time
+  retirement of unprovable preexisting pending work. Event+retirement share the
+  authority transaction; committed receipts/heads preserved. Main migration NOT
+  applied. Root focused registry80/80 PASS42.91s; independent59 adversarial SQL
+  scenarios PASS, recursive_triggers0/1, fault rollback, ignored/no-op, unique
+  displacement, scopes, races and reopen. db:check/diff PASS. Not coordinator,
+  action/consent authority, key release or protection of current browser material.
+- Pre-D-R3 aggregates: unit103files/1630passed/1opt-in skipped65.82s;
+  database-integration27files/497passed764.91s. Both exit0, commands
+  `pnpm exec vitest run --project <unit|database-integration> --no-file-parallelism --maxWorkers=1`.
+  These predate the final two launcher tests and D-R3 implementation; do not use
+  these counts as its final feature gate. Subsequent results recorded separately.
+- Owner then requested a visible bounded deliverable before departure: D-R3
+  accepted recommendation → explicit order draft. Disposable persona3214
+  acceptance is separate from the main clinical DB.
+- Owner additionally requested immediate Vercel attempt. Exact artifact scan
+  inspected479files and BLOCKED `server/.dev.vars` without printing contents.
+  CLIwhoami returned authorized user (version-check worker separately timed out);
+  targeted `vercel project inspect orion-clinic --scope shadowocc` returned
+  project_not_found. No broad project inventory. Runtime remains Workers/D1/R2
+  and main identity Sites-dev; Nitro/backend/staff wiring absent. No unsafe
+  upload, empty substitute deployment or cloud resource created. See readiness doc.
+
+2026-09-24 ONLINE-1C2a1 internal durable registry, 10:35 UTC continuation:
+
+- Added `lib/repositories/local-material-registry.ts`, four schema tables and
+  forward-only `0050_local_material_registry.sql` with generated snapshot/journal.
+  Main0048–0050 remain unapplied. Only disposable fixtures receive51 migrations.
+  This is internal storage, NOT a public broker/auth boundary or key facility.
+  Required policy/provider identifiers are configuration, not approval/custody.
+- Immutable request/owner/run/kind/revision/pins/key metadata;120s DB-clock
+  reservation; preparing→prepared does not publish a head. Exact receipt insertion
+  atomically publishes head + committed state + minimal event. Same-command
+  replay is distinct from changed payload; historical receipt explicitly reports
+  currentHead=false after a subsequent revision. CurrentHead is a transaction
+  observation, not an access lease or proof local ciphertext exists.
+- Terminal states and immutable fields resist UPDATE/DELETE/REPLACE with
+  recursive_triggers0/1. Ignored/aborted publication rolls back; direct changes()
+  is used instead of trigger-inclusive D1 meta.changes. Result is read in the same
+  batch. Ordinary input is snapshotted before the first await, including config;
+  DB errors have generic output without key/clinical content. SQL guards core
+  descriptor binding, not the full arbitrary direct-SQL JSON shape.
+- Independent schema-agent probes:70/70 adversarial SQL assertions and12/12
+  actual-adapter checks PASS; full51-chain fixtures, FKcheck0/quickcheckok.
+  Permanent suite by separate test agent39/39 PASS21.43s. Root independently ran
+  `pnpm exec vitest run --project database-integration lib/repositories/local-material-registry.test.ts --no-file-parallelism --maxWorkers=1`:
+  **39/39 PASS**,20.12s,exit0. Covers two connections/reopen, CAS, replay, expiry,
+  state/identity immutability, publication failures, pre-await mutation and
+  error sanitation. A deliberate test records NON-authorization: a revoked
+  session relationship can still be stored; no caller may treat this as permission.
+- Root `pnpm exec vitest run --project unit --no-file-parallelism --maxWorkers=1`:
+  **102 files /1618 passed /1 opt-in skipped**,54.31s,exit0.
+  Root `pnpm exec vitest run --project database-integration --no-file-parallelism --maxWorkers=1`:
+  **27 files /456 passed**,539.99s,exit0. Together the two complete projects are
+  **129 files /2074 passed /1 opt-in skipped**; these were separate commands,
+  not a claimed single-run duration. Final focused39 above was independently
+  repeated after the test agent froze its file. Runtime/schema sources stayed
+  unchanged during the aggregate; no remote D1 clinical commands are implied.
+  Full lint/typecheck/db:check/secrets (**629 files**) and diff-check PASS.
+  Agent re-ran db:generate: no schema changes. Existing PythonLF warning only.
+- Root `pnpm build` PASS after final runtime sources. Handbook regenerated
+ 19screens/75markers, no newly recaptured handbook illustrations. Correct artifact
+  scan command `node scripts/check-deployment-artifact.mjs --dir dist` inspected
+  **479 files, BLOCKED server/.dev.vars**,exit1, pathname only. Initial invocation without
+  --dir returned usage, not a scan; no secret contents printed/uploaded.
+- Browser-use postbuild: temporary tab11 dashboard10encounters loaded → SPA LIVE
+  chooser → reload/visual check → choose-patient registry9loaded. Captured error
+  logs empty; temporary tab11 closed. No microphone/consent/clinical mutation.
+  This is main navigation smoke, NOT browser registry/crypto/auth acceptance.
+  Ready200 and speechstatusok; web3200 PID27128 and speech3101 PID5612 unchanged.
+- No main DB migration/reseed, v1 read/adoption/deletion, audio change, runtime
+  restart, staff switch, external egress, resource/grant/credential creation,
+  commit/push/deployment or forbidden-resource access. Separate real workerd/D1
+  registry commands and browser IndexedDB acceptance remain unperformed.
+- Next1C2a2: injected wrapping facility/coordinator, current action/consent checks
+  in committing SQL, preparation reconciliation and terminal pending revocation.
+  Existing membership/org/facility versions lack enforced monotonic ABA fences;
+  do not use preflight metadata/fingerprint as a grant. Clinical/key/retention/
+  hosting decisions and MOBILE native-client gates remain open.
+
+2026-09-24 ONLINE-1C1d/e + remote-STT control foundation, 09:35 UTC continuation:
+
+- ADR-0003 records the online-first wrapped-DEK direction, explicit action/consent
+  matrix, minimal opaque local header and pending/finalize recovery across separate
+  D1/IndexedDB boundaries. Retention, actual custody, recovery/withdrawal, export
+  and offline policy remain gates, not engineering approval of real data.
+- New `lib/local-materials/envelope.ts` performs actual bounded AES-256-GCM on
+  synthetic bytes using platform Web Crypto: 96-bit IV,128-bit tag, fixed AAD,
+  expected descriptor/kind/key scope separate from opaque envelope. No IO, main
+  imports, persistence, keys returned or broker. One-shot encryption attempts
+  do not establish global key uniqueness. Primitive bound1MiB is not chunking.
+- Independent review reproduced two initial defects: spoofed byte-view properties
+  bypassed the payload/shared-buffer checks, and mutable public CryptoKey metadata
+  could mislabel a weak key. Fixed with native view/backing getters and internal
+  import from exact32 raw key bytes, with both exploit regression tests. Caller
+  key input remains caller-owned; only the helper's temporary copy is cleared.
+- Subagent added unmounted `lib/speech/remote-gigaam.ts`: injected-fetch health/
+  create-session only, exact HTTPS origin/auth/model/protocol pins,16KiB/256chunks,
+  5s/10s total deadline, no redirect/cookie/retry/fallback. No audio/delete adapter
+  or actual gateway. Hostname checks do NOT replace DNS/IP egress enforcement;
+  preparation references do NOT authorize a request. Main3101 remains unchanged.
+- A third independent finding in remote control (simultaneous stream completion/
+  abort returning success) is fixed by post-await and pre-publication checks;
+  six regression cases added. Final independent in-memory probes: crypto9/9 and
+  native-stream control4/4 PASS, no remaining finding within bounded review scope.
+- Final focused crypto **62 PASS**,1.95s; remote control **165 PASS**,0.354s.
+  Intermediate root all-unit **102 files /1612 passed /1 opt-in skipped**,53.72s
+  preceded the six remote cancellation regressions; final aggregate follows below.
+  Root typecheck, full lint/secrets625/diff-check PASS at that intermediate gate.
+  **Final frozen-source gate** after all three fixes:
+  `pnpm exec vitest run --project unit --no-file-parallelism --maxWorkers=1`
+  **102 files /1618 passed /1 opt-in skipped**,53.89s,exit0; `pnpm typecheck`,
+  `pnpm lint`, `pnpm security:secrets` (**625 files**) and `git diff --check` PASS.
+  Existing Python LF warning only. New tests in this checkpoint:62+165=227.
+  No new DB/schema code;
+  previous full SQL aggregate is historical and not claimed repeated here.
+- `pnpm build` PASS after final key-input tightening, before the last unmounted
+  remote-control cancellation fix; unchanged
+  main consumers. Handbook regenerated19screens/75markers, not newly recaptured.
+  Artifact scanner inspected477 files and **BLOCKED** `server/.dev.vars` pathname
+  only. No contents printed/uploaded; no deploy attempted.
+- Browser-use smoke after build: dashboard10encounters, SPA LIVE chooser and
+  visual inspection, reload, choose-patient registry9loaded; captured error logs
+  empty. Only temporary tab10 closed. This is NOT browser crypto/broker/login/
+  STT/audio acceptance. Web readinessHTTP200, speechstatusok; PIDs27128/5612 kept.
+- Next: 1C2a durable broker state machine with disposable DB and explicit
+  wrapping dependency; actual custody/host/policy remains external. Remote STT
+  next needs bounded audio + run/cleanup/idempotency and realgateway gates.
+  No account/consent/clinical record commands, mainDB/audio/cache changes,
+  cloud resources, provider requests, Git push or deployment in this checkpoint.
+
+2026-09-24 ONLINE-1C1c, immediate follow-on within 08:34 UTC continuation:
+
+- Added unmounted `lib/local-materials/envelope-binding.ts`: exact validated
+  descriptor + closed audio/transcript kind -> domain-separated versioned fixed
+  JSON array string. Input property order does not matter; no delimiter ambiguity,
+  coercion, Unicode normalization or shared mutable byte buffer. Generic errors.
+- This is only canonical metadata for a future reviewed crypto adapter. No AEAD,
+  keys/nonces, IO, authentication, persisted material or UI. Scope IDs in output
+  are not anonymous and must not be logged/published as harmless metadata.
+- Source peer review: no actionable finding. New codec gate **94/94 PASS**,0.298s.
+  Final root `pnpm exec vitest run --project unit --no-file-parallelism --maxWorkers=1`:
+  **100 files / 1391 passed / 1 opt-in skipped**,51.77s,exit0. Full lint/typecheck,
+  source secret scan **620 files** and diff-check PASS (existing LF warning only).
+  Prior 1C1b 1714-test full aggregate/build/browser evidence below predates this
+  new unmounted codec; no repeat full SQL/build/browser run was needed/claimed
+  for this pure, unimported-by-UI addition. Existing runtime/schema unchanged.
+- Next 1C1d explicit envelope/key architecture and action/consent/storage contract;
+  unresolved policy/hosting decisions do not authorize silent v2 activation.
+
+2026-09-24 ONLINE-1C1b, scheduled continuation at 08:34 UTC:
+
+- Added unmounted `lib/local-materials/descriptor.ts` and `target-lifecycle.ts`.
+  Immutable exact staff owner plus distinct material/run IDs and positive revision;
+  strict own data-field validation, no content/keys/current authority in owner.
+  No ID allocation or revision increment, storage/CAS, crypto or access-grant claim.
+- Target fence composes the existing lifecycle with exact descriptor: every
+  replacement (including equal/malformed and A→B→A) retires old operations; late
+  resolve/reject/finally cannot publish into a new target. Captured resource
+  cleanup remains one-shot. All owner fields must match the context; authority
+  generation/consent changes never relabel stored ownership.
+- Independent source review + 29 in-memory reentrancy probes found one error
+  normalization inconsistency: throwing context Proxy could propagate its text.
+  Fixed at replacement boundary, added 12 tests; peer re-review cleared finding.
+  Publication callback exceptions remain explicit, not a false rollback claim.
+- New focused tests: **124 descriptor + 87 target-lifecycle PASS**. Four-file
+  local-material gate including earlier lifecycle/server-context: **354 PASS**,
+  initial run 1.08s. These are synthetic unit/async-publication contract tests,
+  NOT main recorder/history/export or browser storage acceptance.
+- Root `pnpm test`: **125 files / 1714 passed / 1 opt-in skipped**,567.46s,
+  exit0. A test callback return-type annotation was corrected after initial
+  typecheck/start of aggregate; runtime source/test behavior unchanged. Final focused postgate:
+  **354 PASS**,1.25s. Full lint/typecheck/db-check PASS; secrets **618 files PASS**;
+  diff-check PASS with the existing unrelated sessions.py LF warning only.
+- Build PASS; handbook regenerated (19 screens/75 markers), not recaptured.
+  Artifact scan **477 files, BLOCKED** on private `server/.dev.vars` pathname;
+  no contents printed or uploaded. Main temporary-browser smoke after build and
+  reload: dashboard10 encounters, styled Live chooser, scoped registry9 patients,
+  captured error log empty. Only the temporary tab was closed. No record/consent/
+  microphone/history/login actions; normal read audit can append from GETs.
+  This is main-navigation smoke, not new helper/browser-auth/storage acceptance.
+- Fresh health: web readiness HTTP200 and speech status `ok`; listeners remain
+  3200/PID27128 and 3101/PID5612. Health does not prove live speech recognition or
+  provider availability; no new actual-audio/Groq probe in this checkpoint.
+- Main UI/v1/DB/audio/ports unchanged; no main migration/account activation,
+  key allocation, provider calls, upload or foreign-resource access. Next 1C1c
+  envelope binding/key contract is described in the isolation plan §8. Actual
+  ciphertext persistence, key custody, offline/recovery and cross-tab gates open.
+
+2026-09-24 ONLINE-1C1a, scheduled continuation at 07:33 UTC:
+
+- Added unmounted `lib/local-materials/server-context.ts` and
+  `lib/repositories/local-material-context.ts`. Strict required selection, common
+  staff principal, captured session cookie and final single-statement DB-clock
+  snapshot. Current individual/session, exact doctor read assignment, treatment
+  membership, patient/encounter, department/profile heads and five consent heads
+  are checked together. No first-assignment fallback or Sites identity emulation.
+- Independent review found current patient archival is in immutable profile
+  versions. The new boundary checks both base and current profile status and
+  rejects broken head/version joins; genuine legacy absence remains supported.
+  Membership/org/facility epochs were added to fingerprint to distinguish their
+  versioned disable/reactivate transitions. A read-only assignment is metadata
+  eligible; can-manage is not returned as an action permission.
+- Root new unit gate: **76 tests PASS**, 0.439s total. Agent final full-migration
+  SQL gate: **35 tests PASS**, 63.78s tests / 64.21s total. Exact identity/scope,
+  forged cookie/headers, corrupt result/consent heads, five separate decisions,
+  DB-time expiry, archived profiles, same-role isolation, two connections/reopen,
+  logout/reset/revoke/regrant/consent replacement races and versioned authority
+  transitions covered. The SQL fixture uses actual `node:sqlite` and a D1-shaped
+  adapter, not new actual-workerd, remote-D1 or browser acceptance.
+- Snapshot DTO is frozen, minimal, without names/clinical text/session token or
+  hash. Generation is a non-bearer observed-state fingerprint, NOT an offline
+  entitlement, a complete monotonic revocation log, key release or permission to
+  reveal/commit material. `effectiveByTime` is not processor/policy approval.
+  Future consumers must reauthorize the exact action at publication/commit.
+- Source peer review of resolver/query/unit and SQL tests: no remaining actionable
+  finding in this bounded scope. Final root aggregate: **123 files / 1503 passed /
+  1 opt-in skipped**, 587.02s, exit 0, after all final source/test edits. Only handoff
+  docs changed during this run. Full lint/typecheck/db-check and source secret scan
+  **614 files PASS**; diff-check PASS (existing unrelated LF warning only).
+- Build PASS, 19 guide screens/75 markers regenerated rather than recaptured.
+  Artifact scanner again **477 files, BLOCKED on `server/.dev.vars`** by pathname
+  only. No artifact upload. Main browser after build/reload: dashboard loaded 10
+  encounters, SPA Live chooser styled, choose-patient opened the scoped registry
+  with 9 entries; captured error log empty. Only a new temporary ORION tab, closed
+  afterward. No login/consent/record/microphone or local-history action. This is
+  navigation smoke, NOT new context/browser-auth acceptance.
+- Main web3200/PID27128 and speech3101/PID5612 preserved; fresh readiness HTTP200,
+  speech health `ok`. No new real audio/STT or live Groq proof. Main DB/audio,
+  staff roles, migrations0048/49 and external resources unchanged; ordinary read
+  audit can append from browser GETs. No main UI imports or v1 access. Trusted
+  isolated HTTPS/browser, Cloudflare and dedicated deployment blockers unchanged,
+  no repeat authentication attempt. Safe next slice: 1C1b material/run/revision
+  descriptor; source-only consumer hazards recorded in isolation plan §8.
+
+2026-09-24 ONLINE-1B3a, scheduled continuation at 06:32 UTC:
+
+- Final root `pnpm test`: **121 files / 1392 passed / 1 skipped**, 508.09s,
+  exit 0. Includes the new 1B3a principal/transport/actual TLS tests and earlier
+  1C0/mobile/clinical regressions. The existing opt-in real provider test remains
+  skipped; no live Groq availability claim. This aggregate ran after the final
+  source fixes; only handoff documentation changed while it was running.
+- Added `lib/auth/server-principal.ts`: shared server-only tri-state resolver,
+  strict immutable minimal identity, explicit internal `user.id` separate from
+  exact external `issuer/subject`, current durable lookup on every request. No
+  Sites/header/URL/role fallback or cross-request cache; unavailable does not turn
+  into an anonymous redirect. C0/C1/isolated-surrogate adapter fields fail closed.
+- Added unmounted `lib/auth/staff-runtime.ts`: five fixed technical routes,
+  exact configured HTTPS origin, method/URL-selector/Origin/Fetch Metadata guards,
+  existing durable login/logout, identical principal for SSR/API, escaped HTML
+  and private/CSP headers. `/sign-in` explicitly says technical verification,
+  with no form or clinical data. This is NOT new main authentication.
+- Root focused `pnpm exec vitest run lib/auth/staff-runtime.test.ts
+  lib/auth/server-principal.test.ts lib/auth/staff-session.test.ts
+  --no-file-parallelism --maxWorkers=1`: **3 files / 149 tests PASS**, 1.10s
+  (37 transport + 68 principal + 44 existing session). A test-only HeadersInit
+  inference error was corrected; subsequent typecheck/lint passed. Independent
+  source review found no blocking issue in this bounded, unmounted scope.
+- New reproducible `lib/auth/staff-runtime.integration.test.ts`: actual HTTPS
+  client -> local workerd/default scrypt -> D1 repositories. Agent final focused
+  run **4 tests PASS**, tests 18.43s / total 18.70s. Full 50 migrations / 908 SQL
+  statements in a unique disposable D1, no main config/env-file imports. Tests:
+  wrong/unknown credential same 401; two same-role people with different internal
+  IDs/external subjects; forged identity and duplicate-cookie denial; CSRF logout;
+  logout A keeps B; sequential runtime restart preserves B and A's revocation;
+  password reset invalidates old token/password, new password works, credential
+  disable revokes it. Trusted fixture commands are not admin authorization APIs.
+- TLS fixture pins installed Miniflare 5.20260826.0-alpha / workerd 1.20260826.1 /
+  esbuild 0.28.1. Only its public bundled shared development CA is trusted in a
+  scoped Node HTTPS Agent; default CA/wrong hostname negatives pass. No system or
+  browser trust change, ignored certificate error, fetched untrusted CA, provider
+  request, external port exposure or main state access. Own temp directory is
+  realpath-validated before cleanup. Child environment values are blanked except
+  OS execution paths, outbound calls denied. Independent safety review passed.
+- Limits: manual Node Cookie headers do NOT prove browser Secure/SameSite
+  enforcement. No trusted browser HTTPS origin is configured; browser auth gate
+  stays open without bypassing warnings. No clinical assignment authorization,
+  simultaneous replica/load/CPU acceptance, remote D1, credential-bearing backup
+  restore, real mic/STT or live Groq test is claimed by this harness.
+- `pnpm build` PASS (19 handbook screens / 75 markers regenerated, not newly
+  captured). Full lint/typecheck and `pnpm db:check` PASS; source secret scan
+  **610 files PASS** after renaming an explicitly synthetic fixture identifier
+  flagged by the heuristic; scanner rules were not weakened. Fresh artifact scan
+  `node scripts/check-deployment-artifact.mjs --dir dist`: **477 files, BLOCKED**
+  on `server/.dev.vars` pathname only. No generated bundle was uploaded.
+- Read-only browser acceptance after build: dashboard counts loaded; SPA link
+  opened the styled Live chooser; choose-patient loaded the registry with exact
+  facility/assignment. Captured error log empty. Only a new temporary ORION tab,
+  then closed; no record, consent, login, local history or microphone mutation.
+  This is main navigation smoke, NOT individual staff/browser-cookie acceptance.
+- Main web 3200 PID27128 / speech 3101 PID5612 preserved. Main migrations 0048/49,
+  accounts, grants, DB/audio and external resources unchanged. Existing audited
+  reads may append read audit. Vercel/Cloudflare blocker unchanged, no auth retries.
+  The 47 direct API identity callers plus SSR/shared-helper migration map and next
+  safe gates are in `docs/operations/online-staff-auth-handoff.md`.
+  Fresh health probes: web ready HTTP200, speech status `ok`; this is not a new
+  microphone, transcription-quality or loaded-speech-source acceptance. Final
+  typecheck/secret scan610/diff-check passed after test-fixture finalization.
+
+2026-09-24 ONLINE-1C0 follow-on, after credential aggregate/build:
+
+- Added only unmounted `lib/local-materials/lifecycle.ts` and its test file.
+  Strict copied/frozen identity/scope and five distinct consent-version pins;
+  retiring an operation generation aborts outstanding work and runs registered
+  cleanup. Late completion cannot publish through an old lease. No storage, UI,
+  auth, recorder or v1 import wiring; null/version consent pins are not grants.
+- Root review found validation-phase reentrancy through structural Proxy traps;
+  guarded the whole replacement/validation/install transition, not just cleanup.
+  Final helper suite: **67 tests PASS**. Independent read-only review additionally
+  ran 18 top-level/nested Proxy assertions; no open bounded-1C0 findings.
+- Root final `pnpm exec vitest run lib/local-materials/lifecycle.test.ts
+  lib/auth/staff-password.test.ts lib/auth/staff-login-adversarial.test.ts
+  lib/mobile/patient-protocol.test.ts --maxWorkers=1`:
+  **4 files / 232 tests PASS**, 5.26 seconds. Full lint, strict typecheck and
+  secret scan **605 files PASS**; dependency audit found no known vulnerabilities.
+  The earlier aggregate/build does not include this later unmounted module.
+- Source audit documents possible v1 Blob overwrite and global interruption
+  marking; these were NOT reproduced against existing data. Follow
+  `docs/operations/local-material-isolation-plan.md`: old v1 remains untouched,
+  no automatic owner assignment or deletion, exact material/run/revision still
+  belongs to the future adapter. Main shared auth is not switched.
+- Remaining acceptance: trusted current server context/key policy, encrypted v2,
+  real IndexedDB transaction fencing, logout/recording/export integration, old-tab
+  migration gate and disposable two-tab browser tests. The helper alone cannot
+  discover server revocation, secure plaintext legacy data, undo arbitrary sync
+  callback effects or recall downloaded files. ONLINE-1C is not complete.
+
+2026-09-24 credential lifecycle, guarded login and mobile publication contract:
+
+- Full `pnpm test`: **117 files / 1216 passed / 1 skipped**, 487.25 seconds,
+  exit 0. This aggregate started before the final user-ID immutability regression
+  correction; the final postgate below is the evidence for those last changes.
+  The opt-in provider test is still skipped; no real Groq availability claim.
+- Final postgate: `pnpm exec vitest run lib/auth/staff-password.test.ts
+  lib/auth/staff-login-adversarial.test.ts lib/auth/staff-session.test.ts
+  lib/repositories/staff-credentials.test.ts lib/repositories/staff-sessions.test.ts
+  lib/mobile/patient-protocol.test.ts --maxWorkers=1`:
+  **6 files / 273 tests PASS**, 56.73 seconds. Includes malformed/aborted streaming
+  login bodies, immutable credential snapshots across password reset, generic
+  failed-login responses, two same-role staff, SQL rollback/reopen, and patient
+  publication denials. Totals overlap the aggregate; do not add them together.
+- Independent review found two real repository hazards and the final postgate
+  proves their corrections: D1 `meta.changes` includes trigger writes, so commands
+  now read direct `changes()` receipts inside the same batch; UPDATE OR REPLACE
+  cannot displace an existing user ID and revive old grants. Regression covers
+  both recursive-trigger settings. Existing 0048 is not rewritten; new 0049 adds
+  the identity guard. No main DB migrations were applied.
+- Agent-run actual Miniflare/workerd D1 smoke applied 50 migrations / 908 SQL
+  statements in disposable isolated storage and exercised the production
+  repositories: provision, reset, disable, revoke, old-session/grant denial and
+  append-only audit. Trigger-inclusive/direct receipts were 3/1, 4/1, 4/1 for the
+  credential lifecycle. Miniflare 5.20260826.0-alpha / workerd 1.20260826.1;
+  compatibility date 2026-05-22 with nodejs_compat. The temporary test script was
+  removed after completion, not main data. This is not remote D1, credential-bearing
+  backup restoration, target-worker KDF load, or browser-auth acceptance.
+- `pnpm build`: PASS after the final credential postgate. Handbook regenerated
+  (19 screens / 75 markers), not newly photographed. Full lint, strict typecheck,
+  `pnpm db:check`, schema generation with no drift, secret scan (602 files) and
+  `git diff --check` passed at this checkpoint. Subsequent ONLINE-1C-only evidence
+  is recorded separately; no combined `verify:ci` or new backup drill is claimed.
+- Fresh read-only deployment-artifact scan after that build: **BLOCKED**, 477
+  files inspected; `server/.dev.vars` is a forbidden private file. Only the path
+  was reported, not its contents. A successful build is not permission to upload
+  local output. No Vercel deployment was attempted in this checkpoint.
+- MOBILE-1/M0: 87 tests verify a pure allowlisted own-patient view of an explicitly
+  released signed immutable protocol. This is executable contract code, not a
+  patient identity provider, durable release/audit API or installed mobile app.
+- Runtime preserved: web 3200 PID 27128 and speech 3101 PID 5612, web ready HTTP
+  200 and speech health status `ok`. No new microphone/real STT or browser-auth
+  run in this checkpoint; current auth is still local Sites. Main DB schema and
+  clinical records, recordings, passwords, role grants, services and external
+  resources were not changed. Normal audited read endpoints may append read audit.
+- Subsequent browser smoke after build: dashboard loaded server counts, SPA link
+  opened the LIVE new/continue chooser, and its choose-patient link loaded the
+  patient registry while retaining exact facility/assignment. Captured error log
+  was empty. Only a new temporary local ORION tab was used and then closed; no
+  record/consent/clinical decision or login was changed. This is current navigation
+  evidence, not new-credential or identity-scoped browser-storage acceptance.
+
+2026-09-24 UI/runtime recovery and deployment preparation, canonical ORION-CLINIC:
+
+- Reproduced the reported dynamic import failure: the requested navigation file
+  was absent from the shared optimizer cache. Test startup emptied metadata used
+  by the running dev server. Separate serve/build/test/persona cache namespaces
+  and a deterministic plugin-name salt now separate their browser import hashes.
+  Merely changing cacheDir was insufficient and caused a React/renderer mismatch;
+  that intermediate issue was reproduced and corrected before acceptance.
+- Full `pnpm test`: **110 files / 994 passed / 1 skipped**, 483.67 seconds, exit 0.
+  Followed by `pnpm build`: PASS. The existing opt-in real Groq test remained
+  skipped; no live AI/provider-availability claim. Handbook regenerated with
+  19 screens / 75 markers; historical captures remain explicitly labelled.
+- Active optimizer fingerprint before/after focused tests, full suite and build:
+  46 JS/metadata files; SHA-256
+  `549195975db1c9b9ed42c33371d7ae15a6dc3998f3c4dbd132a66ba837f2ed72` unchanged.
+  Actual served navigation and React/ReactDOM import URLs returned HTTP 200. A
+  manually constructed disk-global hash URL was not a valid test of per-entry
+  browser imports; the earlier false alarm was discarded after this check.
+- Browser: real logout -> signed-out -> direct protected URL -> explicit sign-in
+  -> LIVE worked on 127.0.0.1 and localhost. Patients, orders, scheduling, care,
+  measurements and communications loaded DB-backed views; access/help navigation
+  worked. LIVE -> new encounter form/history preserved exact facility/assignment.
+  Desktop/mobile 390px and light/dark visual checks passed without page overflow.
+  After the full test/build gate, reload and SPA navigation still worked with no
+  observed browser errors. No patient record, consent, clinical decision or role
+  grant was changed to obtain this evidence. Separate employee passwords are NOT
+  delivered by these entry screens; the local Sites user remains shared dev auth.
+- New manual navigation-recovery notice handles identified chunk/import errors,
+  warns about unsaved edits and never reloads automatically or clears storage.
+  Route error screen is neutral. Initial bootstrap failure and injected real
+  lazy-module failure with unsaved edits were not browser-tested.
+- Post-aggregate focused gate:
+  `pnpm exec vitest run lib/config/deployment-artifact.test.ts app/error.test.ts
+  app/layout.test.ts app/encounters/new/creation-form.test.ts app/help/page.test.ts`
+  **30 tests / 5 files PASS**. These include 13 artifact-scan and 9 SSR-theme
+  tests added after the aggregate suite; do not add overlapping totals together.
+  Afterwards full `pnpm typecheck`, `pnpm lint`, `pnpm security:secrets` PASS
+  (587 files at that scan). Independent config suite: 7 PASS.
+- Final UI/config/recovery/auth-navigation focused rerun at 01:59 local:
+  `pnpm exec vitest run lib/auth/chatgpt-navigation.test.ts
+  lib/module-load-recovery.test.ts lib/config/vite-runtime.test.ts
+  lib/config/deployment-artifact.test.ts app/layout.test.ts
+  app/live/encounter-start.test.ts app/live/page.test.ts app/sign-in/page.test.ts
+  app/signed-out/page.test.ts app/encounters/new/creation-form.test.ts
+  app/help/page.test.ts app/error.test.ts --maxWorkers=1`:
+  **106 tests / 12 files PASS**, 4.81 s. Subsequent secret scan PASS (589 files).
+  This overlaps the aggregate/postgate tests; it is not 106 additional tests.
+- After the completed MOBILE-1 plan and handoff edits: `pnpm security:secrets`
+  PASS (590 files), `git diff --check` PASS. Mobile plan local links and M0–M6
+  coverage checked; no mobile SDK, app build, patient API or store deployment
+  implemented by the planning document. Final listener check retained 27128/5612.
+- Added `.vercelignore` and read-only
+  `node scripts/check-deployment-artifact.mjs --dir dist`. Its real scan correctly
+  **BLOCKED** the current artifact: 475 files inspected, `server/.dev.vars`
+  private-file, exit 1. It reports paths/rules, not secret values. This is a
+  successful guard test, NOT a safe-to-deploy result. No file was deleted/uploaded.
+- Web was narrowly restarted after verifying the canonical process ownership to
+  activate Vite config; no migration/bootstrap was run. Final listeners at this
+  checkpoint: web 3200 PID 27128; existing speech 3101 PID 5612 unchanged. Web
+  health was HTTP 200; speech/model/speaker ready. Health is not an audio soak test.
+- Vercel CLI authentication exists, but no ORION deployment/project was created.
+  Cloudflare CLI authentication is absent; current bindings are local placeholders.
+  No unrelated resource data, settings, credentials or integrations were opened
+  or modified. Owner's subsequent absolute dir echoes ban and existing-repo-only
+  constraint are recorded at the top of this plan, in AGENTS and the night task.
+  No public/clinical readiness, individual auth or real remote STT claim.
+
+2026-09-24 additional bounded speech-session correction:
+
+- `services/local-speech/orion_local/sessions.py`: get/count prune only expired
+  sessions; capacity eviction now runs only when creating a new session under the
+  same lock. Existing LRU/TTL semantics retained. A read/health query at capacity
+  no longer removes a live session. This was a reproducible code defect, not proof
+  that it caused every earlier speech outage.
+- Agent regression proof: original implementation failed 7/8 new tests. Parent
+  independently reran all **8/8 PASS** in 0.005 s using
+  `C:\Users\profm\AppData\Local\ORION\python-env\Scripts\python.exe -B -m unittest
+  discover -s tests -p test_sessions.py -v` from `services/local-speech`.
+  Synthetic deterministic clock, no HTTP/audio/model load or main DB writes.
+- Running speech PID 5612 was NOT restarted; **source fix is not loaded in the
+  current service**. Later controlled idle restart + health/audio acceptance is
+  required. Python regression is separate from the pnpm aggregate/CI. Capacity
+  backpressure, multi-host session ownership and persistent STT hosting remain open.
+
+2026-09-24 ONLINE-1B session foundation, canonical ORION-CLINIC repository:
+
+- Added `lib/auth/staff-session.ts`, `lib/repositories/staff-sessions.ts`, matching
+  test files, additive `0048_staff_sessions.sql`, schema and Drizzle metadata.
+  Three subagents independently implemented/reviewed repository, SQL tests and
+  security. Preserved all unrelated work; no main-DB migration, credential change,
+  runtime auth switch, provider call or port restart.
+- `pnpm exec vitest run --no-file-parallelism --maxWorkers=1 lib/auth/staff-session.test.ts
+  lib/repositories/staff-sessions.test.ts`: 77 tests / 2 files PASS, independent final
+  review run 26.34 s. 44 cookie/crypto/HTTP unit tests + 33 actual SQLite repository
+  tests, including the complete migration chain, two file connections, close/reopen,
+  issue -> cookie -> reopen -> POST logout -> old-token denial on another connection.
+  This is not remote-D1 or browser login acceptance.
+- Negative/race checks: duplicate/malformed cookie, forged identity headers without
+  fallback, stale/disabled/versioned principal, idle/absolute expiry, final-read
+  revoke, session/account SQL REPLACE resurrection, ignored revoke/user invalidation,
+  partial-batch rollback, and a valid new login after a completed global revoke.
+  Revocation is terminal; no raw bearer persists in the DB. In a storage failure,
+  logout returns 503 and does not claim success or clear the cookie.
+- `pnpm typecheck`, full `pnpm lint`, `pnpm db:check`, `pnpm build` PASS. Build retains
+  handbook 19 screens / 75 markers. `pnpm security:secrets` PASS (567 files),
+  `pnpm security:dependencies` PASS (no known vulnerabilities). Initial scanner false
+  positive on the crypto-generation expression was resolved by multiline formatting;
+  scanner policy unchanged and no stored secret was introduced.
+- `node scripts/local-backup-restore-drill.mjs --keep`: PASS, 82729 ms, 90 tables,
+  162 rows, 49 migrations, 3 R2 objects, 578876 backup bytes. Run
+  `db7ab84f-c643-4922-b2b4-bce0499905a2`, artifacts `work/backup-restore-ln0cRO`.
+  Only that drill's isolated source was removed after backup and restored into a
+  new empty target; retained backup/restored artifacts are recoverable. Main DB/R2
+  and previous artifacts were untouched. New session table was empty: this does
+  NOT prove restore of session-bearing data or prevention of post-backup token
+  resurrection. Production auth restore/invalidation and retention remain open.
+- Main runtime health at 2026-09-23 20:18 UTC (24 September local): 3200 live/ready
+  HTTP 200, synthetic-only; 3101 health HTTP 200, STT/CUDA and speaker ready,
+  activeSessions=0. Existing listeners unchanged: 3200 PID 14584, 3101 PID 5612.
+  Health does not prove microphone, transcription accuracy or Groq availability.
+- Full `pnpm test` PASS: 105 files, 921 tests passed / 1 skipped, 453.86 s, exit 0
+  (completed 2026-09-23 20:22 UTC / 24 September local). The opt-in live Groq test
+  was not enabled; the skip does not establish provider availability. Final
+  `git diff --check` PASS. Password verifier, provisioning/reset, common SSR/API
+  resolver, mounted login/logout,
+  distributed throttling, two-browser/HTTPS and production tests remain unperformed.
+
+2026-09-24 ONLINE-1A implementation, canonical ORION-CLINIC repository:
+
+- Three delegated slices reviewed together: speech adapter/client queue, care/measurement
+  navigation, and patient profile update/archive transaction/replay authorization.
+  Existing unrelated dirty worktree edits retained; no migration, seed, live patient
+  mutation, credential change, public exposure or port restart performed.
+- Speech gate: 63 tests / 8 files PASS (33 new-focused + existing ingestion/LIVE
+  regressions). Real running 3101 adapter probe used in-memory silence then Microsoft
+  Irina synthetic speech at the same session/index 0. Upstream 422 exact no-voice
+  detail became empty text; next HTTP 200 recognized the artificial Russian phrase,
+  6615 ms audio / 110 ms processing. Temporary sidecar session removed; activeSessions=0.
+  No microphone, saved patient audio, main DB or Groq was used for this probe.
+- Care/measurement gate: 36 tests / 3 files PASS. Browser on 3200 opened the existing
+  synthetic pending care task, selected its patient in measurements, prefilled
+  follow_up context/reason, cancelled the form and returned/focused the exact task.
+  While form open, patient choices disabled and return anchor had aria-disabled=true
+  and no href. Invalid task/patient pairing displayed a neutral warning, selected no
+  fallback patient and exposed no return link. 390 px view: document width 375 px,
+  no horizontal overflow; warning/error console empty. No measurement save or task
+  completion was performed in this browser check; current local identity is combined
+  doctor/admin, not independent nurse acceptance.
+- Profile security gate: 40 integration tests PASS, including selected-assignment
+  revoke/expiry/deny, no alternate-assignment fallback, guards before/inside batch,
+  atomic head/command/audit publication, legacy/cross-assignment replay rejection and
+  final-response denial after revoke. Main DB and R2 objects untouched.
+- Aggregate types, full lint, db:check, build (including handbook regeneration),
+  secret scan (561 files) and dependency audit (no known vulnerabilities) PASS.
+  Shared in-app/offline help regression 2/2 PASS. Full `pnpm test` PASS: 103 files,
+  844 tests passed / 1 skipped, 433.65 s, exit 0 (completed 19:58 UTC).
+  The opt-in live Groq test was not enabled by this aggregate run; the skip is not
+  a provider availability result. Handbook retains 19 screens / 75 markers;
+  new verified care-to-measurement workflow is shared by /help and offline HTML.
+- Runtime check 2026-09-23 19:53 UTC (24 September local): web live/ready HTTP 200,
+  speech health HTTP 200 with STT ready / CUDA and speaker ready. Existing loopback
+  listeners preserved: web 3200 PID 14584, speech 3101 PID 5612.
+- Not verified here: browser microphone soak, real multi-persona online login,
+  crash/offline persistence, RU/KK clinical quality, public deployment or production
+  recovery. Earlier same-day production audit and isolated backup drill are separate
+  evidence, not rerun by this checkpoint.
+
+2026-09-15 persona-runtime audit: inspected installed sites-vite-plugin/dist/index.js.
+Local sign-in fixes subject to local_seedy and removes incoming authenticated-user
+headers before issuing its own identity. bootstrap nurse/registrar entries use
+orion:synthetic, while app identity issuer is openai:sites. Therefore changing query
+assignmentId or supplying headers is NOT a valid separate-persona browser test.
+Do not patch node_modules, spoof the current runtime identity, or change live
+bootstrap user. Separate test runtime must have isolated DB/R2, loopback-only port,
+explicit test authentication, matching fixture identities and no provider secrets.
+
+2026-09-15 UX-R2 care role boundary: plan-sign/enrollment APIs now explicitly
+require resolved action permission before constructing the write repository.
+Existing repository permission + transactional guards remain unchanged (this is
+defense-in-depth, not evidence they were previously bypassable). New isolated API
+tests retain actual schema/permission/error mapping, mock identity/access resolution
+and storage: nurse with doctorConfirmed=true -> 403 and no write; clinician ->
+201 and repository call. These are handler tests, not live auth/DB acceptance.
+UI action tests use server chronicCareCapabilities across pending/in-progress/
+escalated/completed/cancelled and task-owner mismatch. Resolver negatives now include
+registrar, administrator, auditor and medical_lead with care.manage but no doctor/
+nurse role. `pnpm exec vitest run lib/auth app/access app/care/care-workspace.test.ts
+app/api/care`: 18 files / 137 tests passed; typecheck, focused lint and diff-check
+passed. Separate `pnpm exec vitest run lib/repositories/chronic-care-workflow.test.ts`
+passed 6 integration tests (11.64s), including nurse response/escalation/doctor
+resolution and SQL nurse-signature denial. No live identity or assignment changed.
+
+2026-09-15 recovery follow-up: shared header offers explicit "Сменить рабочий
+доступ" for a selected assignment/facility. It uses a full-document anchor, not
+client navigation: browser testing proved client navigation retained stale forbidden
+state when only query changed. Care and communications denial guidance now points
+to this recovery instead of the scope-preserving menu. Browser negative read using
+missing-test-assignment stayed denied; clicking reset reloaded care, resolved the
+current authorized assignment and displayed stored care tasks. No data/permissions
+changed. Focused shell tests 3/3 and lint passed after anchor correction; preceding
+160-test auth/UI/navigation suite and typecheck passed. This tests missing assignment
+recovery, not separate nurse/admin credentials or every forbidden-state variant.
+
+2026-09-15 UX-R1b cross-module scope: workspaceNavigationUrl now retains exact
+assignment/facility between allowlisted clinical pages, including patient detail.
+Only encounter/live navigation retains encounterId; other resource IDs never move
+across modules. Duplicate/empty selectors remain for target validation; provider,
+API, access-admin and signout links unchanged. Existing server resolvers still
+authorize selected assignment per module (no fallback or privilege union added).
+Browser /care -> /orders retained assignment-a-general-medicine and fac-a and
+loaded the orders workspace. Target incompatible-assignment error recovery still
+needs dedicated browser acceptance.
+
+UX-R2 started: self-access shows role responsibilities with explicit permission
+disclaimer, plus combined-role warning. Browser confirmed current local identity
+has doctor+administrator in one assignment, not isolated personas. Do not claim
+nurse/admin isolated login acceptance from this account. No live assignments changed.
+`pnpm exec vitest run lib/auth app/access lib/workspace-access-url.test.ts
+app/clinic-shell.test.ts`: 17 files, 160 tests passed; typecheck, focused ESLint and
+diff-check passed. Prior 688-test aggregate predates this scope/role slice.
+
+2026-09-15 aggregate recovery COMPLETE: session 23567 `pnpm verify` exited 0.
+Log `.local-verify-latest.log`: 90 test files / 688 tests passed, 392.60s test run;
+lint, typecheck, drizzle-kit check and production build passed. This supersedes
+pending aggregate notes below. Focused post-addition shell/helper run: 7/7 passed.
+Not a verify:ci/security-audit/backup or production-readiness claim.
+
+UX-R1b mobile navigation (2026-09-15): at viewport 390x844 browser revealed inherited
+column direction in bottom navigation, hiding all but the first link. Explicit row
+direction now fixes this; text labels remain visible below 620px, scroll reaches
+care/measurements and a click opened /care with real server-selected scope. Header
+keeps current section and dashboard breadcrumb at mobile width. Screenshots visually
+checked dashboard and care; no clinical writes. Existing cross-module selection
+transport (care -> dashboard currently drops explicit scope) is NOT fixed here;
+audit as next UX-R1b task, without blindly copying module-specific assignments.
+
+UX-R1b breadcrumb slice (2026-09-15): shared header now includes a dashboard
+return link for clinician-capable users away from dashboard; current page uses
+aria-current. Browser clicked it from the persisted encounter above: dashboard
+opened without encounterId while retaining accessAssignmentId and facilityId.
+No patient/clinical state was changed. `pnpm exec vitest run
+app/clinic-shell.test.ts lib/workspace-ux.test.ts`: 7 tests passed; focused ESLint,
+typecheck and diff-check passed. Tests also cover no clinician dashboard link for
+non-clinician capability and no redundant link on dashboard. Narrow-screen header
+visibility retains existing behavior; mobile breadcrumbs and role acceptance are
+not claimed complete.
+Earlier aggregate session 48719 could not be recovered after output truncation.
+Re-run `pnpm verify` is session 23567, log `.local-verify-latest.log` (ignored local
+artifact); wait for final exit before recording aggregate success. The breadcrumb
+test was added after this run started, so its focused result is recorded separately.
+
+D-R1 browser acceptance (2026-09-15): existing synthetic patient SYN-9693657D
+opened from registry; New encounter dialog saved a separate draft; exact encounter
+`encounter-5fbe14d7-2122-4dde-a5b2-8975902a5a26` opened with correct patient/reason,
+8 empty sections, no transcript/suggestions. Reload returned same persisted state.
+No consent, clinical signature, microphone or provider action was performed.
+UX-R1b follow-up: editor now explains actual lifecycle/access/recovery prerequisite
+instead of asking for an absent Edit button; browser displayed draft instructions.
+4 helper tests, types and focused lint passed. Aggregate outcome for session 48719
+was not recoverable; see newer re-run entry above. No aggregate PASS is claimed.
+
+Runtime follow-up: Vinext uses `--hostname`, not `--host`. Initial restart bound
+only ::1; localhost readiness returned 200 while 127.0.0.1 refused. Stopped only
+that newly started process and restarted with `pnpm dev --hostname 127.0.0.1
+--port 3200` (session 27615). No other service was stopped.
+
+D-R1 existing-patient writer (2026-09-15): focused patient-registry and
+patient-directory-access tests passed 20 tests / 2 files (22.76 s), types and
+focused ESLint passed. Tests cover actual creation/replay, wrong actor, disabled
+membership, access loss immediately before batch, skipped section-head/audit-head
+publication rollback. Initial negative fixtures incorrectly used `inactive` rather
+than schema value `disabled`; corrected and final run passed. No full CI or browser
+creation claim: port 3200 was stopped; web restarted with pnpm dev, but browser
+automation remained blocked on its connection-error page.
+
+D-R1 first persistence acceptance (2026-09-15): `pnpm exec vitest run
+lib/repositories/encounter-creation.test.ts` passed 14 tests (16.59 s), including
+file-backed SQLite close/reopen, exact assigned read, duplicate-free command replay,
+eight section heads, one patient/encounter/audit/command and integrity checks.
+Only schema and identity bootstrap were applied, no patient seed. `pnpm typecheck`
+and focused ESLint passed. This uses a local D1-compatible test adapter, not a live
+D1 runtime restart or browser acceptance. Temporary test DB removed, application
+data/ports unchanged. Full CI and production acceptance not run.
+
+UX-R1b first slice (2026-09-15): `pnpm exec vitest run lib/workspace-ux.test.ts
+app/orders/orders-workspace.test.ts` passed 2 files / 12 tests; `pnpm typecheck`
+and focused ESLint on workspace-ux helper/test, shell and orders workspace passed.
+Presentation helper retains existing busy/reason/result prerequisites. Browser
+acceptance and full aggregate/build were not run for this slice.
+
+UX-R1a (2026-09-15): 4 focused files / 14 tests passed (`section-purpose`, help,
+care workspace, observations workspace), `pnpm typecheck` and focused ESLint
+passed. Browser at port 3200: care and measurements loaded saved synthetic data,
+new purpose panels rendered without clipping at the current viewport, and menu
+navigation from care to measurements succeeded. No data writes, role changes,
+full build/CI, microphone, provider call or all-role acceptance in this slice.
+
 UI acceptance update (2026-09-15): `pnpm verify` exit 0, 87 files / 676 tests,
 lint/types, Drizzle and build; full-name patient-search regression fixed and
 reproduced successfully in browser. Post-run local-history label change: 4 focused
@@ -736,6 +1965,7 @@ real-audio test, external delivery test or production acceptance.
 
 | Date | Command | Result | Scope and limitation |
 |---|---|---|---|
+| 2026-09-16 | `pnpm typecheck`; focused ESLint; `pnpm exec vitest run lib/providers/clinical-analysis.test.ts lib/providers/groq-live-mode.test.ts lib/providers/groq-clinical-analysis.test.ts lib/providers/groq-rate-limit.test.ts lib/repositories/clinical-analysis.test.ts lib/repositories/clinical-sections.test.ts lib/live-authoritative-workspace.test.ts lib/workspace-access-url.test.ts app/help/page.test.ts --maxWorkers=1`; `node scripts/build-user-handbook.mjs`; `git diff --check` | PASS | 91 tests passed, 1 network test skipped. Separate opted-in synthetic Groq probe passed (2 tests at probe time). Automatic section persistence, provenance, isolation and concurrent clinician-write protection tested; browser link/section UI checked. No actual microphone end-to-end, full CI, cumulative long-note or production claim. |
 | 2026-09-15 | Independent new-patient creation/selection; pnpm verify:ci; illustrated handbook | PASS for bounded synthetic slice | Final aggregate exit 0: secrets/dependency audit, lint/types, 86 files/673 tests, Drizzle, build and isolated recovery of 89 tables/161 rows/48 migrations/3 R2 objects/572689 bytes; run 83a4116a-d659-4af8-b4d1-cbc588d77960. Handbook: 17 current screenshots, 67 SVG markers, embedded images/font, zero broken anchors or external images; zoom opened/closed and desktop rendering verified. Post-edit focused ESLint, typecheck, URL 26/26 tests and diff checks pass. No real microphone, live Groq, external delivery, print/PDF rendering or production acceptance claim. |
 | 2026-09-09 | Workspace-read audit/recovery assignment boundary; pnpm verify:ci | PASS for this bounded local slice | Final exit 0: secret policy 481 files, no known dependency vulnerabilities, lint/types, 85 files/658 tests (298.46 s), Drizzle and production build. Isolated recovery passed after disposable source destruction: 88 tables/160 rows/47 migrations/three R2 objects/560,469 bytes, 127,136 ms; run 0f76163c-d6f3-4d62-8d13-b7a42f1d5956. Local 0046 confirmed; quick_check ok and foreign_key_check empty. Earlier run had three 5-second integration timeouts; only those cases now have 20-second limits and all assertions remain. Narrow miniflare>sharp 0.35.4 override removes the reported dependency advisory. Independent creation/selection and full Phase 2I remain open; no browser/audio/provider or deployment claim. |
 | 2026-09-08 | Explicit fenced export reconciliation; pnpm verify:ci | PASS for this bounded synthetic local slice | Security policy 477 files (478 after operator documentation), no known dependency vulnerabilities, lint/types, 84 files/639 tests (280.79 s), Drizzle and production build passed. Isolated recovery passed after disposable source destruction: 88 tables/159 rows/46 migrations/three R2 objects/559,351 bytes; run d67c9f91-5135-4464-9134-c6ef48bf74ba, 119,489 ms. Local 0045 applied, quick_check ok, foreign_key_check empty, db:generate no drift. Explicit pending schema-2 cleanup only; no automatic retention, existing-user-file deletion, live UI/audio/provider or deployment claim. |
@@ -872,6 +2102,844 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — compact clinical UI and personal local staff login, 2026-09-28
+
+The latest owner request is implemented locally: an anatomical patient panel with
+independently timestamped saved vitals, card-based notification center, optional
+analytics, actual aggregate-only Groq briefing, persistent medical route entry/exit
+and corrected light-theme contrast. Three parallel implementation agents plus
+independent cross-review were used. Exact current evidence/limits are in §13.
+
+Main loopback3200 now uses real local login/password for six EXISTING staff
+principals. `scripts/configure-local-accounts.mjs` provisioned separate random
+initial passwords in a separate local SQLite registry; clinical D1 users,
+memberships, assignments and pending0048–0052 migrations were not changed.
+Credential handoff is outside the repo/OneDrive at
+`C:\Users\profm\AppData\Local\ORION-Clinic\5bd7b8e5a1549d88\accounts.html`.
+Do not copy its contents into chat, source, logs or documentation. Password change
+is available to the signed-in employee. Missing registry does not fall back to
+Seedy. This supersedes historical statements that main local login is still shared.
+
+This local-only alternative does NOT complete ONLINE-1: it rejects non-loopback
+transport; public HTTPS identity, deployment and recovery remain separate gates.
+New pages fence old session generations; legacy shared IndexedDB readers/writers
+are disabled before opening the store in this mode. Old materials are preserved,
+not adopted, deleted or made available to a newly selected user. Pre-release tabs
+must be refreshed/closed after saving needed in-memory work; already downloaded
+old JS cannot acquire the new local-history guard retroactively. Durable protected
+recording recovery remains unfinished; do not describe blocked legacy history as
+completed owner-scoped storage. Retain synthetic-only mode and clinician approval.
+
+### Latest bounded UI checkpoint — compact navigation and animated pathway, 2026-09-28
+
+The icon-only desktop rail, hover/focus labels and browser-like left pathway
+panel are implemented and checked at desktop/mobile widths. Entry and exit
+motion is local UI only and respects reduced motion; no clinical or persistence
+semantics changed. §13 records exact tests/build/browser evidence and the
+remaining manual reduced-motion/unsaved-form checks. This does not supersede
+the ONLINE-1 release gates or complete true personal sign-in.
+The owner's immediate clarification adds a separate read-only route home at
+`/pathway` with patient selection and a server-derived timeline; orders are
+now entered only from an explicit inner tab/card. This does not make the
+timeline a complete clinical record: each source is capped at100 and legacy
+integrations remain disconnected.
+
+### Current — queue visibility, honest AI context and patient-link groundwork, 2026-09-28
+
+The owner directly resumed work after the old stop checkpoint. This bounded
+checkpoint adds a server-data queue board, exposes the rolling-window limit in
+both consultation screens and starts MOBILE-1/M1a with an unmounted durable
+patient self-link registry. It does **not** complete automatic waitlist/hold
+expiry, cumulative fact memory D-R2, protected patient login, document release,
+an installable mobile application or online deployment. The next safe mobile
+vertical slice is verified identity binding, patient actor/version pins,
+audited release/read and terminal revoke with a final authority check, all on
+an isolated DB before any HTTP route. Next AI slice is cumulative sourced facts
+with correction/contradiction handling and clinician review. Next queue slice
+is a server-side, cursor-paginated worklist with exact staff scope and a
+trusted, audited expiry worker; the current UI only shows up to 100 loaded
+appointments and tickets. Preserve main
+D1/audio and keep dev identity off the public internet.
+
+### Current — visible D-R3 order-draft checkpoint, 2026-09-24
+
+**Owner stop instruction, 17:40UTC:** finish the current verified checkpoint only.
+The exact ORION heartbeat schedule was deleted by the app tool; do not recreate
+it or continue to the next phase unattended. Main servers remain running.
+Subsequent bounded delta hardened the local artifact guard and added a checked
+build command; current full deployment remains BLOCKED, not uploaded (§13).
+
+The latest owner requested one concrete completed result before departure, then
+an immediate Vercel attempt. D-R3 now connects accepted action recommendations
+from clinical/Live to a server-verified form and explicit saved order draft.
+No action is performed on navigation. Exact accepted decision/derivative and
+version are preserved in immutable creation audit; current rights/consent/source
+and all publication parts are checked in one transaction. Existing same-key
+retry returns its receipt; another key for the same decision conflicts, and GET
+offers the existing order. Historical source text requires current encounter.read.
+
+Browser on isolated3214 created one draft, reloaded the exact requestId URL and
+reopened the source without another order. Independent D1 read proved draftv1,
+null approval, exact provenance/command and a valid audit head/hash chain. Final
+aggregate: 1669 unit +514 database-integration passed, 1 opt-in skipped; build PASS.
+Exact commands and browser limits are in §13. Instructions include the new flow.
+
+Vercel preflight blocked current dist/server/.dev.vars and unresolved Workers
+bindings/trusted main auth. Exact target orion-clinic was not found in shadowocc;
+no other projects inspected, no upload/deploy or new cloud resource. Dedicated
+backend+individual identity+Vercel build adapter remain implementation gates, not
+something solved by removing one file. Read vercel-readiness updated note.
+
+Main3200/3101 restored with no initialization; preserve current main DB/audio.
+New safe launcher option `-SkipDataInitialization` avoids pending0048–0051.
+Parallel0051 authority fence passed80 SQL tests but remains unmounted. Next online
+task is1C2a2-coordinator / isolated staff UI integration, not public dev exposure.
+D-R2 cumulative facts and MOBILE native client remain unfinished; do not call this
+whole platform production-complete. See latest handoff and explicit external gates.
+
+### Previous — internal durable material registry 1C2a1, 2026-09-24
+
+Newest1C2a1 adds `D1LocalMaterialRegistry` and additive0050/schema/meta: durable
+reservation→prepare→receipt/head/events, exact retry, CAS and terminal states.
+39 real-SQL integration tests plus independent review pass; aggregate129files /
+2074passed /1opt-inskipped (two projects), build/lint/types/dbcheck/secrets629
+and main navigation smoke pass; details in section13. Main0048–0050 remain unapplied. This storage
+primitive does NOT authorize clinical actions or issue/create/unwrap keys; no
+consumer is mounted and current history is not isolated by these new tables.
+Next **1C2a2** adds explicit wrapping coordinator, current action/consent SQL,
+terminal revoke/ABA fences and preparation recovery, before any endpoint/v2 UI.
+Policy/provider identifiers are not a working facility or approved policy.
+Read ADR-0003 + local-material-isolation-plan §8; do not auto-adopt/read/delete v1.
+
+Previous bounded checkpoints:
+
+Newest checkpoint 1C1d/e adds ADR-0003 plus a tested real AES-GCM primitive, still
+unmounted. It accepts exact32 raw key bytes and fixes spoofed view/key-metadata
+issues found in independent review; no key broker, v2 storage or audio chunking.
+Next **1C2a** is a durable reservation/head/CAS/audit state machine in disposable
+DB with an explicitly injected wrapping facility. Missing custody denies; never
+use process Map/default key/legacy migration to manufacture a working runtime.
+Read ADR-0003 and local-material-isolation-plan §8 before implementation.
+Separate new remote-GigaAM control helper supports only mocked health/create;
+no gateway or remote audio implementation. See online-speech-options §7.
+
+ONLINE-1C1b now provides strict immutable descriptors and target-bound operation
+leases, with 211 new focused tests. Equal/replaced/invalid targets and A→B→A retire
+late work; changing authority stays separate from ownership. No main consumers,
+storage or audio are wired to it yet. This is not an encrypted cache or DB CAS.
+The immediate 1C1c follow-on adds canonical audio/transcript metadata binding only,
+not an encrypted envelope. Subsequent 1C1d/e above establishes the engineering
+architecture and isolated crypto, not actual key release/retention/restore. Read isolation
+plan §8 and newest verification ledger; never auto-adopt legacy v1 into a user.
+
+ONLINE-1C1a now resolves a current staff/session + exact assignment/facility/
+patient/encounter context with five separate consent decisions in one final SQL
+snapshot. It handles profile archival, corrupt heads, DB-clock expiry and
+concurrent logout/reset/regrant. Scope/version fingerprint is not a bearer grant,
+key or offline entitlement; new helpers remain unmounted and read no material
+bytes. Focused checks: 76 unit + 35 real-SQL tests; aggregate in section 13.
+Read `docs/operations/local-material-isolation-plan.md` §8 before next work.
+The follow-on 1C1b descriptor/fence is now implemented separately, without
+storage/keys/v1 reads. Remaining: separate encryption/key-release,
+transaction/retention/restore policies and isolated browser integration gates.
+
+ONLINE-1B3a adds a shared server-only identity resolver and an isolated technical
+SSR/API transport. Real loopback HTTPS/workerd/D1 now verifies default password
+KDF, two individual same-role accounts, durable logout, sequential restart,
+reset and disable. Exact evidence/limits are in section 13. This is an unmounted
+test runtime, not the clinical pages or the user's new login screen. Browser
+acceptance remains blocked on a trusted isolated HTTPS origin; do not bypass the
+browser warning or install the bundled shared development CA into system trust.
+
+Latest bounded code: ONLINE-1B2 has real versioned credentials, durable pre-KDF
+admission, an unmounted HTTPS login handler and fixed-profile password hashing.
+Provision/reset/disable advance the user epoch and revoke old sessions/grants
+atomically. Independent review caught and corrected D1 trigger-inclusive change
+counts and an UPDATE OR REPLACE user-ID displacement/resurrection path. Final
+tests and exact limits are recorded in section 13, not inferred from source alone.
+MOBILE-1/M0 now has ADR-0002 and a tested pure own-patient released-protocol view;
+it has no API/native client and cannot substitute for verified identity/DB audit.
+ONLINE-1C0 adds a tested, unmounted staff context/async-publication fence. Source
+audit and staged gates are in `docs/operations/local-material-isolation-plan.md`;
+it does not yet fix ownership, encryption, overwrites or cross-tab behavior in
+the running legacy history. Preserve that data; do not enable individual staff
+login on the existing shared browser profile before the isolation gates pass.
+
+The reported broken navigation, unstyled/ambiguous LIVE start and bare logout
+screen have a bounded verified correction. `/sign-in`, truthful `/signed-out`,
+theme-aware access screen, compact new-vs-continue LIVE choices and scoped links
+are implemented. Optimizer isolation prevents tests/build from replacing active
+dev navigation modules. Browser/test limits are explicit in section 13.
+
+**This is not project completion or deployment.** Main login remains the Sites
+development identity; ONLINE-1B credential/session foundation is not mounted and
+main 0048/0049 migrations remain unapplied. No public endpoint may expose that identity. Current
+build output is rejected by the new artifact scanner due to `server/.dev.vars`.
+Vercel CLI access is present, dedicated backend/auth/STT are not yet ready.
+
+Original requirement coverage is now tracked in
+`docs/operations/requirements-audit-2026-09-24.md`: real local workflows are
+distinguished from partial features and absent external integrations. Deploy plan:
+`docs/operations/vercel-readiness-2026-09-24.md`; STT options and limits:
+`docs/operations/online-speech-options.md`. Do not silently mark KMIS/ERDB/PUZ,
+actual message delivery, critical rules or inter-hospital exchange as implemented.
+
+Owner added MOBILE-1: separate native Android/iOS patient application with
+accessibility and server-enforced patient/caregiver/staff boundaries. Full plan:
+`docs/operations/mobile-application-plan.md`; M0 contract implemented, native app not started. Same
+existing ORION repo only, never any dir echoes resource. This does not authorize
+buying infrastructure, registering store accounts or accepting legal terms.
+
+Parallel auth track: ONLINE-1B3b safe initial provisioning and isolated
+clinical SSR/API adapters/two-person browser tests, using the shared resolver.
+The fresh migration map covers 47 direct Sites API callers plus SSR/shared
+helpers. Preserve internal user ID vs external subject semantics; never emulate
+Sites headers or alias user IDs into an external principal. While trusted browser
+HTTPS is unavailable, continue independent server access/key and restore contracts;
+do not repeat unchanged certificate/Cloudflare checks or claim browser acceptance.
+No main migration/auth switch until ONLINE-1C owner-scoped local history and
+legacy recovery pass. Keep global abuse limits, password policy/MFA/recovery,
+target-runtime CPU/load, attempts retention and backup invalidation as explicit
+pre-publication gates. Mobile M1 can independently add patient link/release/audit
+persistence from ADR-0002; no mounted patient API or native completion is claimed.
+Preserve current ports and do not reuse shared role subjects or process Maps.
+
+Additional STT source correction (8 tests) prevents health/read capacity eviction.
+It is not loaded by the unchanged running speech process; apply only during a
+controlled idle restart and record actual service/audio verification separately.
+
+Overnight continuation `orion` is ACTIVE for seven hourly runs in this task;
+its prompt includes existing-repo-only, full dir echoes prohibition and MOBILE-1.
+This is scheduled bounded work, not a guarantee of uninterrupted operation or
+completion overnight. Local runs need the computer/app and checkout available.
+
+### ONLINE-1B — durable staff-session foundation, 2026-09-24
+
+**Historical foundation checkpoint; ONLINE-1B remains IN_PROGRESS.** The current
+3200 interface still uses Sites development authentication. A newer entry UI is
+recorded above; it does not deliver independent password accounts or online readiness.
+
+The new server-only module issues a 32-byte random opaque bearer after a separately
+verified credential grant; only SHA-256 is stored. Its cookie is `__Host-`, Secure,
+HttpOnly, SameSite=Strict, Path=/, without Domain. Exact configured HTTPS origin
+and Fetch Metadata guard POST logout; headers/URL/body never select an identity.
+The handler is not mounted. Wrong-site/GET requests cannot revoke sessions, and
+DB failure is unavailable rather than a successful logout or identity fallback.
+
+`D1StaffSessionRepository` stores individual identity/user-version, not roles.
+Idle 30 minutes and absolute 8 hours use the database clock. Atomic revoke and
+user-change triggers leave terminal tombstones, including across SQL REPLACE and
+disable/reactivate. A current-state read after insert/touch denies a concurrent
+revocation. Exact-assignment authorization still belongs to existing D1 resolvers.
+77 focused tests include actual file-DB reopen/two connections; limits/results are
+in the ledger. No session migration or credentials were applied to the main DB.
+
+Next bounded task: mount this foundation in an isolated HTTPS staff test runtime
+with separate D1/R2 and no provider keys; implement individual credentials and a
+common SSR/API principal, login/logout forms, durable throttling and audited
+provisioning/reset. Prove direct URL/API denial after logout with two browsers.
+Never accept a browser-supplied credential grant or trust forwarded identity.
+Preserve main 3200/3101 and the synthetic-only boundary. See detailed continuation
+in `docs/operations/online-staff-auth-handoff.md`.
+
+Still mandatory before public access: ONLINE-1C per-identity recordings/legacy
+recovery, deployment/STT protection, session retention and an auth-restore policy
+that cannot revive bearer tokens revoked after a backup. The new-table-empty
+backup drill is not proof of session-bearing recovery. Hosting choice remains open.
+
+### ONLINE-1A — first online-readiness fixes, 2026-09-24
+
+The owner approved work toward non-local staff access and asked for other stages
+besides STT. ONLINE-1 in section 1 is the active implementation order. Hosting
+choice was asked (Cloudflare + protected STT or Vercel + separate backend/STT)
+but not yet supplied. No deployment account, paid service or production identity
+was chosen on the owner's behalf. Synthetic-only and all clinical approval gates
+remain in effect.
+
+Completed implementation slices:
+
+1. Speech: only the exact upstream 422 no-voice detail is normalized to empty text;
+   invalid audio and unavailable service remain errors. Clinical upload queue now
+   assigns index on send, advances only after a persisted segment and does not call
+   onSegment(null). Real failures stop subsequent queued sends; a new session owns
+   its own queue. Existing LIVE no-speech path remains intact.
+2. Care → measurements → care: context carries exact patient/task/facility/assignment,
+   revalidates against the authorized care response and uses fixed local paths only.
+   Opening a pending current-plan task preselects its patient and follow-up context.
+   Return highlights that task. Dialog/saving state disables return and patient switch;
+   changed scope/patient clears task context. No diagnosis, task completion or clinical
+   signature is inferred from a measurement.
+3. Profile update/archive: current exact actor/assignment and effective permission
+   are checked before replay, each retry, first/last statement in the D1 transaction
+   and before releasing the result. Assignment/actor attribution enters command/hash/
+   response/audit. A transactional final assertion rolls back incomplete publication
+   of the profile head, command or audit. Revocation after a valid commit suppresses
+   the response without destroying committed history or duplicating the operation.
+
+Verification and limits are in the newest ledger above. Operator text updated in
+chronic-care.ru.md, patient-observations.ru.md and shared verified-workflows.mjs;
+offline/in-app handbook regenerated. Illustrations have not all been recaptured.
+
+Next online blockers: durable individual staff identity/session/logout (ONLINE-1B),
+per-identity local recordings and legacy shared-browser recovery (ONLINE-1C), then
+closed deployment with guarded persistent STT (ONLINE-1D). Photo register/R2 cleanup
+needs a separate ownership/publication protocol: blindly deleting the common
+content-addressed object after a late authorization error can delete a valid object.
+Care navigation safely refuses patients outside the initial 200-item observations
+list; targeted authorized lookup and durable task/measurement provenance remain.
+Non-STT roadmap also includes accepted-hint → explicit draft order, cumulative notes
+beyond 24 transcript turns, rescheduling/waitlist/trusted reservation expiry and
+operational readiness. External KMIS/LIS/ERDB/PUZ/communications require actual
+contracts and must not be simulated as completed integrations.
+
+### Open persisted protocol and simplify signed encounter — 2026-09-17
+
+Owner could not find the protocol after assembly. Previously only metadata was
+returned to the UI, the success message incorrectly said signing unavailable,
+and the signed header button was disabled. New getCurrentPreview reads the exact
+immutable protocol_versions content behind the scoped head, validates schema,
+encounter and hash, and rechecks selected read access before returning. It exposes
+only note sections, accepted effective recommendations and amendments, not the
+stored transcript/evidence. Workspace's existing snapshot consistency, read audit
+and final authorization boundary also cover this projection.
+
+Assembly now scrolls to the persisted document. Both draft and signed protocols
+have an Open action; preview itself is read-only even before recovery confirmation.
+Signature remains explicit and gated. Until 8-section, transcript-role and
+unsaved-state prerequisites pass, top CTA says Check record and scrolls to the
+review controls; it does not send an assembly request. Errors are also shown beside the
+local workflow, and a rejected non-version 409 no longer leaves Saving stuck.
+Signed view is document-first/full-width: AI action sidebar hidden, historical
+materials folded but still accessible. Active review's verbose guide is a disclosure.
+
+Verification: isolated DB lifecycle test reviews eight sections, assembles, reads
+snapshot, signs, reopens and generates actual DOCX/PDF/ZIP bytes. Preview rejects
+wrong actor/encounter and revocation during read. Focused six-file gate 42 PASS;
+types and focused lint PASS. Final five-file UI/API/help/UX gate 29 PASS;
+handbook regenerated (19 screens/75 markers), git diff --check PASS. Live browser on 3200
+opened an existing synthetic signed encounter, Open scrolled to the document,
+Word/PDF scrolled to artifacts, PDF click produced authorized HTTP 200 in server
+log. Anonymous direct download returned 401. Local SQLite quick_check=ok; 3 draft
+and 4 signed version rows exist (versions, not counts of distinct encounters).
+Started only free 3200/3101, STT health ready. No clinical approvals of owner's
+records, no new consent, no Groq call, no full CI or production readiness claim.
+Handbook wording updated; illustrative screenshot remains older and labelled.
+
+### Review unlock and visible outcome/storage — 2026-09-16
+
+Owner could see AI drafts but not approve them: recoveryConfirmed was false on
+reopening, while the sole resume action was above the fold and hints incorrectly
+said to start the already in_progress encounter. Keep explicit recovery; new
+ResumeReviewAction sits beside editor and recommendations, refreshes through the
+existing guarded read, and never grants consent, starts audio or approves content.
+After a read failure its retry remains available. Corrected blocker/tooltip text.
+
+EncounterReviewGuide separates 8 reviewed sections, accepted suggestions, assembly,
+explicit signature and exports. Unknown/provisional transcript count is exposed;
+assembly CTA stays disabled until section/role/current-state prerequisites pass.
+Explicit links/actions go to next unresolved section, transcript, signing and
+exports. Accepted hints are protocol items, not automatically issued orders.
+Storage label now distinguishes saved unsigned record from signed protocol.
+History action opens exact patient's card preserving the selected assignment;
+data remains encounter-scoped, not a silent rewrite of demographics/care orders.
+
+Verified browser: resume made edit/accept controls enabled without any clinical
+approval; history action opened correct patient and listed exact source encounter.
+Typecheck and focused ESLint PASS. First focused run (guide/UX/sections/protocol)
+38 PASS; final guide/UX/scope/help run 55 PASS. An initially overbroad patient-list
+scope change was narrowed to patient detail after regression test failed; final
+scope tests PASS. No full CI, new signed clinical document, microphone/provider
+run or external integration tested. Handbook wording rebuilt; screenshots older.
+
+### Automatic LIVE analysis -> eight clinical sections — 2026-09-16
+
+Owner explicitly requested AI output in complaints/history/diagnosis/plans, not
+only right-hand hints. This SUPERSEDES the older hints-only LIVE entry below.
+Groq LIVE now requests sections in the same structured response as hints, with
+3000 max output tokens (reviewed mode remains 4000), unchanged model, timings,
+consent and throttling. Policy version is orion-clinical-drafts-v2. Prompt requires
+exact evidence, omits unsupported sections and distinguishes proposed diagnosis/
+plans from physician decisions. No fabricated negative findings or automatic orders.
+
+Existing D1 completion persists these as ai_draft versions in this exact encounter.
+Only empty/ai_draft heads are eligible, under version guards; clinician_edited,
+reviewed and explicitly_absent are preserved, including edits during inference.
+Opening a saved encounter does not send it to Groq; old hints-only outputs are not
+backfilled. A new successful analysis is necessary. Current context is still last
+24 canonical segments; cumulative summarization beyond that window is NOT complete.
+
+UI: LIVE links directly to the same encounter's eight-section editor; preserved
+URL anchor and post-load scrolling. Editor explains drafts versus approval and
+unknown data. Manual reviewed generation now submits last 24 instead of an invalid
+unbounded snapshot. Patient external-AI consent action is visible in LIVE; no
+consent was granted on behalf of an actual patient. Guide workflow updated and
+both HTML copies regenerated; previous screenshots explicitly labelled as older.
+
+Verification: pnpm typecheck PASS; focused ESLint PASS; git diff --check PASS.
+Nine focused Vitest files: 91 passed, 1 opt-in network test skipped. Tests cover
+section persistence/reload/provenance, same-encounter isolation, exact replay,
+concurrent save/review/explicit-absence protection and invalid AI evidence.
+ORION_LIVE_GROQ_CHECK=1 groq-live-mode.test.ts: 2/2 PASS at probe time, including
+one real Groq call using only hardcoded artificial text; complaints and hints
+returned and exact citations validated. Two further negative unit cases added
+after probe passed in the 91-test run. Browser verified updated text/navigation
+and loaded all eight sections, without submitting patient text or changing consent.
+No full microphone -> live API -> UI generated-content acceptance, aggregate CI,
+production validation, new screenshots, migration, commit or push is claimed.
+
+### Speech interruption / invalid AI response — 2026-09-16
+
+Logs show SPEECH_INVALID_RESPONSE and separately SPEECH_UNAVAILABLE; health now
+returns 200. Found empty-text mismatch: Python intentionally returns empty text
+for silence but TS required min(1), causing fatal capture shutdown. Provider now
+allows empty text; route validates session/index then returns skipped:no_speech,
+does not write transcript or advance DB sequence. Client uses a separate sequential
+persisted-upload counter (increments only for persisted text), so the next queued
+audio reuses the expected DB index. Model/VAD unchanged. UI always exposes speech
+error even with existing transcript and stops elapsed timer on error.
+
+AI schema now limits evidence to 4 quotes to match validator, and prompt includes
+question-mark/safety-risk/medication-count rules already required by validator.
+No evidence checks bypassed. First live probe rejected a nested schema reference;
+replaced with the previously supported definition ref, real synthetic Groq probe
+then passed both tests. Focused provider unit tests 9 passed/1 skipped; types and
+lint passed. Long microphone/noise/queued-silence end-to-end not yet verified.
+SPEECH_UNAVAILABLE cause remains unproven; do not claim all disconnections fixed.
+
+### New-visit startup deadlock follow-up — 2026-09-16
+
+Owner screenshots show disabled consent controls on newly created visits and
+generic profile validation. LIVE consent UI now permits draft/ready/in_progress
+instead of only in_progress. Added explicit activate action using existing guarded
+transition API draft -> ready -> in_progress, exact returned version, per-step
+idempotency keys, and care consent enforced server-side. Microphone starts only
+after separate start click and existing speech consents. No server guard removed.
+Profile errors now identify invalid fields without echoing submitted values;
+phone/address HTML minLength matches schema. Chooser border colors use clinic
+fallback tokens, not absent legacy variables. Typecheck/focused lint passed.
+Browser end-to-end acceptance remains required; no assertion that all system
+issues or accepted-suggestion materialization are complete.
+
+### Conversation isolation and compact LIVE — 2026-09-16
+
+`/live` without explicit encounterId now shows a start chooser, never implicitly
+loads the previous encounter. Existing explicit URLs still resume that encounter.
+After recording stops, new-conversation action waits for audio finalization and
+local materials save before leaving for the chooser; persistence failure blocks
+navigation. It does not finalize the clinical lifecycle or delete history.
+Existing patients create visits from their patient card; new patients use creation.
+
+Compact scoped LIVE styles remove decorative orbit from ready state, reduce hero
+typography and collapse technical AI explanation. Accepted cards link to their
+exact clinical record and distinguish questions from verified clinical facts.
+This is navigation, NOT automatic structured-section/referral materialization.
+That remains required follow-up: explicit destination, provenance, authorization,
+idempotency and no conversion of a question to a diagnosis/allergy fact.
+
+Verification: typecheck and focused ESLint passed; chooser SSR test passed;
+14 encounter-creation repository tests passed. New visual CSS not browser-QA'd yet;
+two-conversation microphone/UI isolation acceptance remains outstanding. No data
+deleted, no schema changes or service shutdown. Do not claim full integration done.
+
+### Legacy-like LIVE restored — 2026-09-16
+
+Owner requested legacy behavior. Automatic LIVE calls now use a dedicated light
+provider mode: summary + up to six hints only, 1800 max completion tokens, low
+reasoning/hidden reasoning for the unchanged GPT-OSS model. The response schema
+does not request sections; validated live output has sections=[] and cannot write
+clinical section drafts. Existing reviewed generation retains structured sections
+and a separate 4000-token limit. API derives provider mode from the existing
+reviewed/automatic command, so their idempotency hashes remain distinguished by
+acknowledgement. Manual refresh within LIVE uses the same light mode.
+
+Automatic timing now matches legacy constants: first 1200ms pause, subsequent
+starts >=12000ms apart, 80 characters during listening / 40 on stopping. Provider
+Retry-After takes precedence. Consent, assigned doctor authorization, versioned
+canonical DB sources and explicit approval of decisions remain unchanged.
+
+Verified: pnpm typecheck and focused ESLint pass; 9 provider tests pass including
+ONE opted-in real Groq call through the actual updated provider using only the
+synthetic text embedded in groq-live-mode.test.ts. Real output passed schema and
+exact-evidence validation. No clinical database content was sent by that test.
+Normal tests skip that network test unless ORION_LIVE_GROQ_CHECK=1. Full microphone
+-> DB -> API -> displayed cards remains unverified; provider success is not that
+end-to-end acceptance. No model/key change, data deletion, port shutdown or commit.
+
+### Groq 429 follow-up, 2026-09-16
+
+Owner screenshot now reports rate limiting, not a transcript conflict. Provider
+previously discarded Retry-After. Added numeric/HTTP-date parsing (60s fallback),
+process-local credential-scoped upstream cooldown, API 429 + Retry-After, and LIVE
+cooldown with up to three automatic retries. Manual refresh is blocked during the
+cooldown; model/keys unchanged. This cannot replenish provider quota. Process-local
+cooldown is not a distributed production limiter; restart loses its state.
+No live provider request was sent just to reproduce a known limit.
+Focused mocked-upstream tests verify no upstream call during cooldown and expiry;
+typecheck and focused lint/tests are the verification gate for this change.
+
+### LIVE snapshot conflict follow-up, 2026-09-16
+
+Owner reported TRANSCRIPT_SNAPSHOT_CHANGED. Found deterministic mismatch: client
+used last 24 transcript references while repository selected first 24, and its
+transaction guards compared selected length with unbounded transcript count.
+Changed canonical query to latest 24 in encounter order and bounded count checks.
+Persisted LIVE tokens now carry segmentIndex and prefer encounter ordering over
+recording-relative timestamps. Automatic snapshot conflicts refresh server data
+and reschedule under the existing 15-second throttle, without asking for manual
+acknowledgement. Other errors remain visible. Access/consent/source-version checks
+remain enforced. Long-transcript DB regression and existing repository tests pass;
+do not claim a real-microphone end-to-end success from those tests.
+
+### Owner change — automatic LIVE AI drafts, 2026-09-16
+
+Owner explicitly requested legacy-style automatic hints without per-turn clinician
+acknowledgement. LIVE now schedules analysis after 2.5 seconds of quiet in persisted
+transcript changes, at least 15 seconds between automatic request starts, and only
+after recording has been started in this view. Opening a saved encounter alone must
+not transmit its transcript. Same encounter's last 24 canonical persisted segments
+remain the server-selected context. Required consents, assigned-clinician access,
+snapshot/version checks and human approval of suggestions remain enforced.
+
+Automatic requests explicitly use `mode: automatic, acknowledged: false`.
+`analysis_runs.transcript_acknowledged_at` and audit acknowledgement time are NULL;
+timestamps for request/creation remain populated. Reviewed clients retain their
+existing explicit acknowledgement contract. No schema migration or fake review.
+Refreshing generated drafts no longer resets the recording UI or elapsed timer.
+
+The LIVE view now distinguishes continuing an existing encounter from a new visit:
+prior segment IDs are captured at recording start and hidden by default, with a
+reversible display toggle. Persistence, exports and AI input are not filtered.
+New-encounter link is offered before continuing a nonempty visit.
+
+Verification: typecheck passed; focused ESLint passed; live-recording-view and
+clinical-analysis repository tests passed (11 tests). Existing live-authoritative
+tests passed (5). Browser loaded the new automatic-mode copy on main port 3200.
+No new end-to-end microphone -> Groq -> visible draft run was performed; prior
+direct Groq connectivity probes are not evidence of that full workflow. On a
+failed automatic snapshot, UI shows the error; new text or manual retry is needed.
+Next: controlled synthetic microphone/AI acceptance, scheduling/component timer
+tests, and update screenshots/help to reflect the new LIVE behavior. Individual
+local-account integration and both offline scenarios below remain unfinished.
+
+### Latest owner request — local accounts, offline and Groq, 2026-09-16
+
+Owner requests individual local logins/passwords with DB permissions, and checks
+of both face-to-face recording and loss-of-internet behavior. Do not substitute
+the separate persona environment for the main platform. Web/STT listeners had
+stopped; launcher restarted them. Logs contain Network connection lost, but exact
+process-termination cause is unproven. Current web 3200 HTTP 200; STT 3101 and
+speaker model report ready. No actual microphone accuracy acceptance claimed.
+
+On explicit owner instruction, inspected only legacy ariaproject Groq settings,
+then copied Groq keys/model names into ignored `.dev.vars` without displaying keys.
+Real artificial-only provider probes returned HTTP 200/text for GPT-OSS 120B and
+Compound Mini. Added GROQ_API_KEY/GROQ_MODEL aliases needed by the new provider.
+Only web was restarted; startup confirms `.dev.vars` loaded. Fixed launcher's
+quoted-key detection. Git ignores the secret file; secret scan passes 544 files.
+This is provider connectivity/configuration evidence, NOT end-to-end clinical UI
+analysis. Preserve current local credentials; never print/copy them into docs.
+
+Started `scripts/local-account-auth.ts` and `lib/local-account-auth.test.ts`:
+loopback-only login/logout screens, scrypt, opaque HttpOnly sessions, input/header
+checks, expiry, credential-change invalidation and throttling. Two tests pass;
+provider/config suites combined 12 tests, fresh types and focused lint passed.
+IMPORTANT: middleware is NOT wired into Vite; no accounts provisioned or passwords
+chosen, and main login is still Sites. Do not claim the account-login request done.
+Next: complete local credential setup with owner-entered passwords, provision exact
+DB principals/assignments transactionally, wire explicit local-only mode without
+Sites identity fallback, add rate-limit/rotation/multiple-account negative tests,
+then browser-test login/logout and each role against the same DB. No ngrok exposure.
+
+Offline inspection so far: legacy-style LIVE history uses IndexedDB with 300ms
+debounce; clinical workspace reads/writes still depend on local server/D1. No
+verified offline queue or durable in-progress audio recovery yet. Both requested
+recording/network-loss scenarios remain pending behavioral acceptance.
+
+### Latest functional fix — dashboard worklist isolation, 2026-09-16
+
+Browser reproduced doctor dashboard 503: scheduling-only fixture has zero clinical
+section heads, while the ordinary UI-created encounter has all eight. The worklist
+was coupled to a full clinical-record load and selected the incomplete encounter.
+Added `view=worklist` to the existing authorized workspace GET and switched the
+dashboard to this summary. Each returned encounter gets an audit operation and
+exact-scope checks before audit and before publishing; only required table fields
+are returned. Full-record completeness remains enforced; no DB records were repaired
+or invented. Incomplete clinical records still cannot be opened as valid protocols.
+
+Browser reload now shows both persisted encounters; search for OR-ABC8C87C narrows
+to the ordinary encounter, whose Open action loads its saved eight-section record.
+Six added route tests cover incomplete resources, anonymous reads, failed audit,
+revocation during audit, empty assigned list and each record in a multiple list.
+Focused route/help: 13/13, types and focused lint pass. The last two tests were
+added after aggregate test collection; the aggregate covered 735 tests, not 737.
+Runtime four-persona checker now covers worklist permissions and logged-out cookie
+denial; passed for all four. `pnpm verify` finished with exit 0: lint, types,
+93 files / 735 tests (436.70 s test stage), schema check and production build.
+The two subsequently added empty/multiple-list tests passed in focused 13/13,
+with fresh types/lint. Known Vinext route-classification notice remains nonfatal.
+
+### Latest checkpoint — role handbook and release checks, 2026-09-16
+
+Three further actual isolated nurse captures now replace the old own-access,
+care and observations images through `docs/user-guide/current-captures.mjs`.
+The guide distinguishes future care tasks from recorded measurements and shows
+the nurse's denied protocol/admin permissions. Five of nineteen captures are
+current; fourteen older captures remain to be refreshed. No empty care result
+was replaced by fabricated UI data. Generated HTML: 19 screens / 75 markers /
+2221761 bytes. Desktop and 390x844 browser inspection of all three annotated
+chapters passed; care image zoom/close passed. Viewport restored afterwards.
+
+Verification: handbook build, focused ESLint, `pnpm typecheck`, persona-auth test
+(1/1), `pnpm security:dependencies` (no known vulnerabilities), and
+`pnpm security:secrets` (542 files) passed. The secret scanner initially mistook
+the computed local variable `token` for a literal assignment; renamed it to
+`sessionKey`, without weakening scanner rules or changing authentication behavior.
+`node scripts/check-persona-runtime.mjs 3213` passed for all four roles, including
+foreign-scope denial, administration denial and invalidated cookies after logout.
+First fresh `pnpm verify` failed: 730 passed / 1 failed because the handbook test
+still expected 17 screens / 67 markers. Updated `app/help/page.test.ts` to 19/75
+and added assertions for new role/measurement guidance and both access chapters.
+Focused help suite passed 2/2. Complete rerun subsequently passed; see latest fix above.
+
+`node scripts/local-backup-restore-drill.mjs --keep` passed (exit 0): 89 tables,
+161 rows, 48 migrations, 3 R2 objects, 572689 backup bytes, 100323 ms. Source
+destruction and restore occurred only inside the newly generated isolated drill.
+Evidence retained in `work/backup-restore-E4Pqud`; schema/data hashes, audit heads,
+cross-store references and clinician derivative recovery matched. This is not a
+production backup policy or a recovery test of the current operational database.
+
+Isolated server resumed on 3213 using existing `work/personas/run-ktJ4RX` state;
+fixtures were not reapplied. Port 3200 was not running and was not stopped here.
+No filesystem caches removed: deleting them cannot clear conversational context.
+No real patient/provider data, production readiness, commit or push claimed.
+
+### Latest handbook checkpoint — two current access captures, 2026-09-15
+
+Captured actual isolated administrator UI to access-revoked-current.png (overview)
+and access-history-current.png (revoked nurse assignment) in handbook image folder.
+Added two leading chapters with eight coordinate-validated SVG markers and role,
+department, version, revoke/resume explanations. Underlying captures unchanged.
+Handbook build: 19 screens / 75 markers / 2214447 bytes. Existing 17 screenshots
+remain older; help notice explicitly distinguishes the two refreshed captures.
+Browser visual check of annotated revoked page passed at default desktop viewport
+and 390x844; in-app /help also checked at 390x844. Mobile image zoom opened and
+closed correctly. Viewport override reset. Focused ESLint and diff check passed.
+Next: refresh own-role and remaining clinician/nurse/registrar screenshots; avoid
+claiming all handbook images updated. No ports stopped, commit/push or full verify.
+
+### Latest completed bounded acceptance — 2026-09-15 grant/revoke UI
+
+In isolated run-ktJ4RX, administrator granted only nurse role to artificial
+`Медсестра Б.` in `ui_acceptance_0915`. Browser reload retained active v1.
+Revoked this exact test assignment with reason; reload retained revoked v2 and
+the original five active assignments. No main database or persona roles changed.
+Found and fixed unsafe grant form default: legacy administrator/unknown mapped
+to prechecked doctor; switching employee carried roles and overrides forward.
+New grants now start with zero roles, block submit until explicit selection, and
+reset roles/overrides when employee changes. Existing edit/revoke roles preserved.
+Added four parameterized render tests (5 total in administration UI suite), passed;
+types/lint passed. Browser verified empty roles/disabled submit and switch reset;
+cancelled without a second grant. Updated shared administrator guide accordingly.
+This completes the bounded administrator grant/revoke navigation/persistence check.
+Next: refreshed annotated screenshots and desktop/mobile handbook acceptance;
+broader UX-R2/production release gates remain separate, not completed by this result.
+
+### Latest UI continuation — 2026-09-15 administrator department write
+
+Browser administrator created `ui_acceptance_0915` in isolated run-ktJ4RX only,
+with artificial-data reason; success showed D1 persistence. Reload retained v1.
+Edited its name to `Проверка администратора — версия 2`; saved v2 and reloaded.
+The department list retained the new name/version; existing five assignments were
+unchanged. This checks department writes, not grant/revoke of staff permissions.
+Added fifth shared help scenario for administrator, with this limitation explicit.
+Permission labels now match navigation: План наблюдения / Измерения пациента.
+Handbook regenerated: 17 existing screens, 67 markers, 2032744 bytes. No screenshot
+recapture claimed. Access UI suites 2 files / 9 tests passed; new terminology
+assertions then passed in the 8-test self-access suite. Focused lint, types,
+runtime four-persona checks including all five help scenarios, and diff check passed.
+
+### Latest continuation — administrator acceptance, 2026-09-15
+
+Extended `scripts/check-persona-runtime.mjs`: administrator gets D1 assignments
+and identical workspace on repeat GET; doctor/nurse/registrar GET and schema-valid
+grant POST return 403 ACCESS_ADMINISTRATION_FORBIDDEN. Negative POST uses nonexistent
+targets to check authorization before lookup. Wrong facility returns 403; all four
+logged-out cookies return 401 on administration API. Runtime checks passed on 3213.
+Repository grant/revoke test now reconstructs the repository after revoke and checks
+that stale v1 update cannot reactivate v2 or append an audit event. Focused 3 files /
+9 tests passed, ESLint and TypeScript passed. No live permissions changed.
+Browser recovered: administrator navigated My access -> Management, opened Grant
+form, inspected role/expiry/exceptions/reason controls and cancelled. This proves
+navigation/form opening, NOT browser grant/revoke persistence. Next: successful UI
+write/reload on a disposable isolated target, then annotated screenshot refresh.
+UX-R2 remains IN_PROGRESS.
+
+### Latest result — 2026-09-15 aggregate and integrated help
+
+This result supersedes pending-aggregate statements below. `pnpm verify` exited
+0: lint, TypeScript, 93 test files / 727 tests (391.67s), drizzle schema check,
+and production build passed. Log: ignored `.local-verify-latest.log`.
+Vinext still reports the known static route-classification notice; build succeeds.
+Four verified role workflows now share one source in
+`docs/user-guide/verified-workflows.mjs`, rendered in `/help` and the downloadable
+handbook. Generation reports 17 existing screens / 67 markers / 2031134 bytes.
+Screenshots have NOT been recaptured; the guide explicitly warns about old visuals.
+After the aggregate, the runtime script gained help HTTP/content checks. It passed
+for all four identities, together with existing scheduling/care denial and logout
+replay checks. Its focused ESLint and `git diff --check` also passed.
+Browser automation was unavailable in this continuation; no new visual acceptance
+is claimed. Listener 3213 is alive; no listener on 3200 was found. No ports stopped.
+UX-R2 remains IN_PROGRESS: next complete administrator access-management acceptance
+in the isolated database, then recapture annotated instructions for changed screens.
+Do not call all UX, security/recovery, microphone, external integrations or production
+release gates complete. No commit/push performed.
+
+### Latest override — 2026-09-15 UX-R2 isolated persona harness
+
+The harness is now implemented; older entries below describing it as not built
+are superseded. See `docs/PERSONA_TESTS.md`, `scripts/start-persona-tests.mjs`,
+`scripts/persona-auth.ts`, and `vite.personas.config.ts`. It uses separate D1/R2,
+loopback-only identity selection and no provider credentials. Resume accepts only
+a directory under `work/personas`, without reapplying fixtures or migrations.
+Doctor browser create-patient/create-encounter and reload persistence acceptance
+passed on 2026-09-15. Next bounded task: nurse write/denial acceptance.
+UX-R2 remains IN_PROGRESS. Nurse observation create/reload passed: OR-ABC8C87C,
+36.6 C, version 1, Test nurse, 2026-09-15 16:21. Unmeasured groups disabled.
+Corrected misleading empty-group copy; form now instructs deselecting groups.
+Focused command `pnpm exec vitest run app/api/care/plans/route.test.ts
+app/care/care-workspace.test.ts`: 2 files / 16 tests passed. Nurse plan denial
+is verified with mocked persistence, not yet live D1 POST. Next: live negative
+plan POST and nurse own-observation correction acceptance. No clinical decisions.
+
+Latest continuation: both checks above now passed. Actual isolated server POST
+`/api/care/plans` as nurse with `doctorConfirmed=true` returned 403 and
+`CHRONIC_CARE_FORBIDDEN`; check added to `scripts/check-persona-runtime.mjs`.
+The enrollment is deliberately nonexistent, testing role rejection before plan
+lookup, not enrollment or plan lifecycle. All four care/read/logout checks passed.
+Browser nurse correction for OR-ABC8C87C: 36.6 -> 36.7 C; reload showed version 2
+at 16:29 and expanded history retained version 1 at 16:21 with author Test nurse.
+Next bounded acceptance: registrar scheduling workflow with isolated database
+fixtures and authoritative availability; do not claim external booking integration.
+
+Registrar continuation (2026-09-15): runtime scheduling read matrix added to
+`scripts/check-persona-runtime.mjs` and passed: clinician/registrar 200,
+nurse/administrator 403. Browser registrar opened `/scheduling` under exact
+`persona-registrar-assignment`; current isolated DB has zero eligible referrals
+and zero windows. No browser booking was performed. Do not label this as complete.
+`pnpm exec vitest run lib/auth/scheduling-access.test.ts
+lib/repositories/scheduling-workflow.test.ts` passed 2 files / 15 tests, including
+real isolated database hold/confirmation/queue/cancellation/concurrency behavior.
+Next: create reproducible isolated scheduling fixtures with valid consent,
+approved referral, provider and slot, then registrar browser booking/reload.
+Do not weaken role or consent checks to make test setup easier. Main 3200 was
+not listening on inspection; isolated 3213 resumed without replacing its database.
+
+Registrar DB acceptance continuation: added a separate registrar user, membership
+and registrar-only assignment to an isolated migration-backed test fixture.
+No doctor rights were merged. Verified preference -> hold -> patient confirmation
+-> queue ticket -> arrive -> call; denied start_service specifically with
+SchedulingPermissionRequiredError. The failed clinical action leaves audit count,
+confirmed appointment and called queue head unchanged. Appointment attribution
+is registrar-assignment. Full scheduling repository suite: 7/7 passed (25.24s),
+ESLint and diff check passed. Initial test assertion typo ticket_id was corrected
+to queue_ticket_id. These fixtures are in test SQLite, NOT the browser D1 state;
+UI booking and portable browser fixture seeding remain the next unfinished task.
+
+Latest override: browser fixture seeding and booking now passed. Added
+`scripts/scheduling-persona-fixture.ts` and `scripts/seed-persona-scheduling.mjs`.
+Seed runs only against validated work/personas runtime via Wrangler --local;
+never application bootstrap. Applied once to run-ktJ4RX: TEST-SCHEDULE-01,
+test consent/referral, provider, two time-relative windows. No role guards disabled.
+Browser registrar saved preferences, held 17:54-18:24 slot, confirmed artificial
+appointment; reload showed confirmed/version2/slotVersion3 and no second reserve.
+ESLint on both scripts and diff check passed. Generated SQL remains ignored work
+artifact. Fixed fixture IDs mean seed must not be repeated on the same state;
+use a new isolated run for fresh windows. Next: browser ticket issue/queue actions.
+No external booking, patient messages or real clinical approvals occurred.
+
+Queue browser continuation: registrar issued A001 for TEST-SCHEDULE-01, marked
+arrival (v2), called to Test room 12 (v3). Reload preserved called status, version3
+and room. Start-service remains disabled for registrar. Added visible explanation
+that the physician performs start/completion; browser verified explanation.
+`pnpm exec vitest run app/scheduling/scheduling-workspace.test.ts`: 4/4 passed;
+ESLint and diff check passed. No physician start/completion performed in this run.
+Next: switch to isolated doctor, verify same ticket and physician transitions,
+including preservation of registrar attribution and persisted final queue status.
+
+Doctor queue browser checkpoint: same A001 opened with persona-doctor-assignment;
+start_service -> version4 in_service; complete -> version5 completed. Reload
+preserved completed ticket, Test room12 and completed appointment version3.
+This is queue-service completion, NOT signature/completion of a medical protocol.
+Registrar attribution was tested previously in repository tests; this browser
+turn did not inspect audit attribution. Fixed missing UI test-data gate on
+QueuePanel actions and added early guard in queueCommand; no server role checks
+relaxed. Existing scheduling UI tests 4/4, ESLint, diff check passed. New gate
+needs a dedicated regression test; do not infer it from the four existing tests.
+Next: dedicated queue acknowledgement regression and aggregate type/build checks,
+then update user handbook to match verified role workflows. UX-R2 remains open.
+
+Verification follow-up: QueuePanel now receives explicit testDataAcknowledged;
+both normal queue action and exception action use the same write-block condition.
+Added render regression for false/true acknowledgement with real registrar
+capabilities and a typed ticket fixture. No acknowledgement => both buttons
+disabled; acknowledged => both enabled when otherwise valid. queueCommand early
+guard remains. 6/6 scheduling UI tests passed; pnpm typecheck passed after fixing
+two test typing issues (incomplete fixture and nullable appointment read).
+pnpm build completed successfully (log .local-build-check.log); build emitted its
+existing static route classification notice. Focused ESLint and diff check passed.
+This is not a full verify/security/recovery run. Next: aggregate verification and
+refresh handbook role workflow instructions; production release gate remains open.
+
+- Latest UX-R2 care-specific API/action boundary verified: 137 focused tests plus
+  6 storage integration tests pass. Isolated persona browser sessions still pending;
+  mocked handler tests do not satisfy real login/role UI acceptance. Next bounded
+  task: create a reproducible isolated test-runtime persona harness (not edits to
+  current user's assignments), then verify nurse/doctor/admin screens and forbidden
+  requests end-to-end. Keep current live ports and data intact.
+
+- Cross-module scope transfer implemented and /care -> /orders browser-confirmed.
+  UX-R2 explanatory-role slice started: current bootstrap identity combines doctor
+  and administrator. Next: incompatible-assignment recovery UX and isolated role
+  UI/API acceptance without altering existing live assignments. UX-R1b not fully
+  closed (patient context/remaining prerequisites), UX-R2 not fully closed.
+
+- Aggregate `pnpm verify` now PASS (23567 exit 0; 90 files, 688 tests); previous
+  pending notes below are superseded. Mobile menu direction/labels/current-section
+  visibility fixed and browser-tested at 390x844. Next: cross-module selected
+  assignment/patient context and navigation transport audit. UX-R1b still open;
+  UX-R2 role acceptance and UX-R6 refreshed full handbook not completed.
+
+- Latest acceptance: browser existing-patient create/read/reload PASSED; shared
+  header dashboard return clicked successfully with workspace selection retained.
+  UX-R1b remains IN_PROGRESS: selected patient/assignment explanation across pages,
+  mobile navigation and remaining main-action prerequisites still require audit.
+  Aggregate re-run session 23567 is pending; use `.local-verify-latest.log` and
+  final process exit. UX-R2 actual role/access checks follow, not completed by labels.
+
+- Latest D-R1: existing-patient createEncounter now carries selected assignment,
+  checks actor/current rights before request/retry and inside write transaction,
+  attributes command/audit/hash and asserts publication inside batch. Focused
+  tests and browser creation pass; full CI pending. This is application transaction
+  hardening, not a claim that all direct-SQL/response/replay race gates are finished.
+
+- D-R1 started per owner clarification: verify actual persisted records independently
+  of seed patients. First acceptance adds a file-backed database close/reopen check
+  for new patient + encounter and exact retry. UX-R1b remains unfinished and follows
+  alongside data acceptance; existing patient writer hardening remains open.
+
+- Latest UX-R1b slice: encounter-specific shared header and visible order-action
+  prerequisites implemented and focused-tested. UX-R1b remains IN_PROGRESS.
+  Next: browser verify draft/active order explanations and encounter header,
+  then finish cross-page breadcrumbs, selected context and main-action audit.
+
+- Current priority: UX-R plan in section 1. UX-R1a is complete locally: navigation
+  names, care/measurements purpose panels, and truthful order confirmation label.
+  UX-R1b is next, followed by UX-R2 actual role/access diagnosis. Do not treat
+  renamed access links as fixed authorization. Screenshots in `/help` are marked
+  as the previous interface version; rebuild them in UX-R6 after UI stabilizes.
+  Existing-patient transaction authorization remains open, not superseded as a
+  security requirement. Existing owner-only standalone `a` in this plan is preserved.
 
 - 2026-09-15 user-requested UI acceptance slice: illustrated handbook is integrated
   into the authenticated shell at `/help`, with a public synthetic-only offline
@@ -1489,6 +3557,660 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST REQUEST — 2026-09-30, publish current checkpoint and Vercel.**
+
+Owner authorized push to the existing ORION Git remote and Vercel deployment.
+Preflight built the application but rejected its exact artifact. Owner now opened
+Cloudflare and requested the official agent setup:14global skills,5MCP entries,
+verified API/Bindings/Builds/Observability OAuth; Docs public.
+New MCPs require Codex restart. Do not confuse MCP account access with deployed
+D1/R2, Wrangler login or working public staff authentication. Preserve scans and
+implement the existing Vercel-readiness adapter/public staff-auth plan. Full main
+activation still needs production browser-material isolation (legacy unowned
+IndexedDB access remains open outside local credential mode), clinical principal
+adapters and exact origin/service authentication. Do not reinterpret a source
+push or auth-only Worker as a successful live clinical deployment.
+Current source publication excludes local logs/state/secrets and the unrelated
+owner `a`. The STT recommendation is separate persistent GPU compute behind the
+authorized API. Existing main data/migrations/ports remain unchanged.
+
+**LATEST FOLLOW-UP — 2026-09-28, CSS first-load fix and female silhouette.**
+
+The next two owner reports are addressed locally: dashboard/shell CSS now has
+server importer ownership instead of depending only on client hydration; female
+patient cards choose `public/patient-body/anatomy-female-v1.png` from the recorded
+sex. See the top of §13 for exact tests and browser proof. Preserve these explicit
+server CSS imports even though the client components also import the same modules.
+Unknown sex retains the generic drawing, so PAT-01 remains partially open for a
+distinct neutral illustration. No main data/session policy or runtime changed.
+The remaining-work plan is not fully completed by this bounded correction.
+
+**LATEST HANDOFF — 2026-09-28, five-part owner UI/login request.**
+
+Owner then requested finishing implementation and a plan of remaining tasks.
+Saved `docs/operations/remaining-work-plan-2026-09-28.md`: eight ordered stages,
+explicit acceptance criteria and three parallel work streams. It incorporates
+independent patient/event review. This is a planning deliverable, not execution
+of those stages or permission for deployment, migration, grants or new resources.
+
+Work only in canonical ORION-CLINIC; preserve the existing large dirty tree.
+Patient panel files: `app/patients/[patientId]/patient-vitals-panel.tsx`,
+`patient-detail.tsx`, patients CSS, `/api/observations/latest-vitals` and repository.
+Generated anatomical asset: `public/patient-body/anatomy-v1.png`; provenance/prompt
+in `design/patient-anatomy.md`. It is one neutral illustrative model, not separate
+sex-specific scans. Actual sex remains in the patient header, absent values stay absent.
+
+Root dashboard is a compact notification center using `dashboard-work-items` and
+`dashboard-events`, with selected-assignment links and abort/generation cleanup.
+Groq is explicit, aggregate-only and has a verified live response, not auto-clinical
+actions. Full event history/paginated whole-clinic coverage is not claimed.
+
+Root-layout `pathway-transition-layer` persists across route commit; reusable
+`PathwayLink` intercepts only opted-in links. Entry920ms/exit760ms plus actual target
+load wait; ordinary pages have no artificial navigation delay. Normal+hover theme
+contrast tests cover light and dark. Final desktop captures are in ignored
+`outputs/ui-2026-09-28/`: dashboard-light.png, patient-light-final.png,
+sign-in-final.png and pathway-exit.png. Current narrow-screen QA was inconclusive
+because viewport override did not apply; do not reuse older mobile proof as current.
+
+Local login is now ACTIVE, unlike older entries below. Six existing account IDs
+and their initial passwords are in the local-only handoff file named in §15.
+Middleware/store are `scripts/local-account-auth.ts` / `local-account-store.ts`;
+client generation guard is `app/local-account-boundary.tsx`. It is HttpOnly opaque
+session + hashed credential persistence, origin/loopback/header guards and no
+Seedy fallback. No main D1 migrations or role grants. Nurse Home goes to pathway,
+unassigned staff to own-access; explicit encounter URLs are still authorized normally.
+The old shared history is preserved but disabled in this mode; refresh old tabs.
+Do not activate online auth or claim encrypted durable recovery from this local gate.
+
+Final commands and browser evidence are at the TOP of §13 ledger: 1795 unit PASS,
+1 opt-in skip; 10 focused SQL PASS; full lint/types/build; source secret scan PASS.
+Readiness3200 and speech3101 returned200. No push/deploy or foreign-resource access.
+Next safe work is separate responsive/unsaved-work motion QA and protected durable
+recording integration, not reseeding the main DB or widening staff permissions.
+
+**LATEST UI HANDOFF — 2026-09-28.** The owner asked for an icon-only left rail,
+labels on hover, and a browser-like patient pathway with animated entry/exit.
+Implemented locally in `app/clinic-shell.tsx`, its CSS, and
+`app/pathway/pathway-workspace.tsx`/CSS. The owner then clarified that route
+entry should open a separate inner-platform screen, not the first form. New
+`app/pathway/pathway-overview.tsx` projects the patient picker and horizontal
+timeline from exact-scope server reads; browser selection and roundtrip were
+verified. New `/pathway` combines the four existing tools without changing
+their API authority. Scoped tests/types/lint/build, desktop/mobile browser
+checks and web/speech health passed as recorded in §13.
+The UI is not a production identity, a clinical decision engine or a cloud
+deployment. Preserve the dirty ORION tree and main D1/audio. Before further UX
+work, verify the user's next requested interaction in browser; before any online
+release, finish the ONLINE-1 gates. Do not touch DIR ECHOES resources.
+
+**RESUME HERE FIRST — 2026-09-28, owner-requested bounded continuation.**
+
+The previous stop was superseded by a new direct request. New queue board,
+server-side referral/patient filtering of scheduling rows, analysis-window
+warning and unmounted M1a self-link migration are described in
+the newest §13 and §15 entries. Final `pnpm test` 133 files/2235 passed/1
+opt-in skipped; lint, types, build, db-check and secret scan passed. Browser
+verified only the zero-ticket current board, not a populated queue or the
+long-conversation warning. Do not run ordinary local data initialization:
+main migrations0048–0052 have not been applied. Main web3200/speech3101 and
+synthetic records/audio were preserved. The new table is not a permission to
+serve patient data; M0's `actorId`/`identityVersion`, trusted patient session,
+adult-self verification, publication/audit and final recheck remain missing.
+No native package, mobile API or deployment was created. Continue with isolated
+M1 contract and D-R2 after final tests, not by exposing Sites dev auth.
+
+**RESUME HERE FIRST — 2026-09-24, owner-departure checkpoint D-R3.**
+
+STOP STATE: owner explicitly requested removal of the scheduled task and a final
+checkpoint. Automation `orion` deleted successfully at17:40UTC; wait for direct
+owner direction before further development. Latest packaging-only delta is in
+scripts/check-deployment-artifact.mjs, its46tests and two package commands.
+One preexisting large crypto assertion was made byte-exact but efficient after
+a reproduced timeout; no crypto product semantics changed. See latest ledger.
+No deployment occurred; neither a client-only artifact PASS nor build PASS
+permits exposure of the current dev identity/backend. All main data preserved.
+
+Newest mounted feature is accepted action recommendation → explicit order draft,
+not a broker endpoint or new login. Code/API/domain/UI/provenance and source
+guards are in order-workflow/orders/clinical-workspace/orion-workspace; no schema
+migration required for D-R3. The browser found and corrected missing /orders
+scope allowlist and a derivative-head column typo. Independent review found and
+fixed ignored audit-head publication and historical-source read denial. Source
+creation/restoration/consent/authority/fault/replay tests and actual isolated D1
+creation/reload passed; latest §13 owns exact final aggregate/build evidence.
+
+Fresh test origin3214 has only artificial data, run `work/personas/run-wAlSl2`;
+manifest `d-r3-fixture.json` and reusable `scripts/d-r3-persona-fixture.mjs`.
+Exactly one draft `service-request-1c362d7f-11ba-40d0-9dda-66f0497e34ed`, never
+approved/sent. Test role chooser is isolated only, NOT an individual-account login.
+Do not copy its auth mechanism to public/main deployment.
+
+Main listeners3200/21448 and3101/12948 replaced the earlier dead processes. Earlier
+PIDs/status notes below are HISTORICAL. Current sidecar loaded the SessionStore
+fix and passed actual synthetic6615ms audio→text probe (1990ms processing),8Python
+tests; not a clinical accuracy/long-session/Groq acceptance. Preserve main data.
+Restore using reviewed `-SkipDataInitialization`; normal launcher applies all
+pending migrations. Main0048–0051 remain intentionally unapplied.
+
+New0051 protects pending registry against org/facility/membership mutation ABA/
+REPLACE;80SQL +59 independent probes pass. This is partial invalidation only.
+Next1C2a2-coordinator needs actual injected wrapping dependency, action/consent
+checks INSIDE commit, remaining authority fences and preparation recovery. Do not
+mount registry directly or auto-read/adopt/delete legacy v1. Auth/STT/backend and
+native MOBILE application are still incomplete, despite foundation tests.
+
+Vercel attempt stopped at mandatory preupload artifact gate481files/private
+server/.dev.vars plus unported Workers bindings/trusted auth. CLI exact project
+orion-clinic/shadowocc not found; no broad inventory, resource creation or upload.
+No deployment URL exists. Never touch DIR ECHOES on any service. Only remote is
+shadowuneed/ORION-CLINIC; no commit/push/origin change in this turn. Before resuming,
+read latest docs and dirtytree; preserve all parallel/prior edits.
+
+Prior 10:35 UTC checkpoint (historical, not the active next task):
+
+Newest delta: `lib/repositories/local-material-registry.ts` +39 full-chain SQL
+tests, new0050/schema/snapshot/journal. INTERNAL storage only, no action authority,
+key issuance or wrapping invocation. Required config contains policy/provider IDs,
+not keys or approval. Receipt insert atomically publishes head/state/minimalevent;
+same-command replay, two-writer CAS, expiry/terminal states and publication rollback
+pass. Root repeated39/39; final unit102files/1618pass/1skip54.31s and fullDB
+27files/456pass539.99s, combined2074passed; newest section13 carries exact
+build/browser/limits. All51 migrations only in fixtures; main0048–0050 remain unapplied.
+Main3200/3101 preserve PIDs27128/5612; no legacy history/audio or foreign resources.
+**Next1C2a2:** trusted coordinator with explicit wrapping facility and authoritative
+action/consent checks INSIDE committing SQL; durable preparation/reconciliation,
+terminal revoke/ABA protection. Existing scope fingerprint is not a grant, and
+membership/org/facility epochs are not yet monotonic-enforced. Do not directly
+mount registry methods behind a login check. Do not claim full ONLINE-1C complete.
+Then real D1 registry acceptance, payload encryption integration, new isolated
+IndexedDB and two-tab ownership/logout/race tests. Vercel still blocked by known
+runtime/auth/backend/artifact gates; no repeated CF-login attempts needed.
+
+Prior 09:35 UTC checkpoint (historical, not the next task):
+
+Newest delta: ADR-0003 + `lib/local-materials/envelope.ts` real Web Crypto,
+62 tests after two independently reproduced defects were fixed; separate
+`lib/speech/remote-gigaam.ts`,165 mocked health/create tests after cancellation-race
+fix. Both remain unmounted. Final aggregate is in section13; earlier1612 count
+predates the six final regressions. Final102files/1618passed/1opt-inskipped53.89s;
+types/lint/secrets625/diff-checkPASS. Browser dashboard/LIVE/registry smoke and main
+healthPASS, not crypto/STT acceptance. BuildPASS followed final key-API tightening
+but preceded last unmounted STT cancellation fix; no new SQL added/run. Existing
+main migrations still unapplied. Independent final crypto9/9 + control4/4 probesPASS.
+**Next1C2a:** durable broker reservation/head/CAS/audit using disposable DB and
+explicit wrapping test dependency. No actual keycustody resource or approved
+retention/offline policy exists. Follow ADR, do not auto-adopt/read/delete v1.
+STT next: audio/delete transport + durable run/idempotency/orphan cleanup and
+approved dedicated gateway. Current3101 is NOT the new control protocol.
+
+1. Read the absolute resource restriction at the top: NO dir echoes resources on
+   ANY platform; only existing `shadowuneed/ORION-CLINIC` repository. Never change
+   origin or create another repo. Canonical checkout is ORION-CLINIC, not legacy
+   ariaproject cwd. Preserve the large dirty worktree and main DB/audio.
+2. Read newest section 13/15 and the requirement/Vercel/STT/mobile documents linked
+   there, then `docs/operations/online-staff-auth-handoff.md`. Do not treat older
+   "Newest"/"Resume" entries below as the active task.
+3. Newest 1C1c adds only the canonical binding codec: **94 new tests PASS**; final
+   all-unit gate **100 files / 1391 passed / 1 opt-in skipped**,51.77s. Full lint/
+   types/secrets620/diff-check pass; exact source boundaries in newest section13.
+   1C1b gate: **124 descriptor + 87 target-lifecycle tests PASS**; four-file
+   contract gate **354 PASS**. Root aggregate **125 files / 1714 passed / 1 opt-in
+   skipped**,567.46s,exit0; full lint/types/db-check/secrets618/build/diff-check pass.
+   Exact limits in newest section13. No runtime wiring. Main-navigation browser
+   smoke passes; artifact upload still blocked on `server/.dev.vars` pathname.
+   Prior 1C1a gate: **76 unit + 35 SQL tests PASS**. Prior aggregate:
+   **123 files / 1503 passed / 1 opt-in skipped**,587.02s; build, full lint/types,
+   db-check, secrets614 and diff-check pass. New context stays unmounted. Fresh
+   main navigation browser smoke passed; artifact scanner still blocks
+   `server/.dev.vars`. Exact limits in newest section13. Prior 1B3a aggregate:
+   **121 files / 1392 passed / 1 opt-in skipped**,508.09s;
+   build/lint/typecheck/db-check/secrets610 pass. New shared-principal/technical
+   transport has 149 overlapping focused tests and four actual loopback
+   HTTPS/workerd/D1 scenarios; exact limits in section 13. Earlier credential/mobile
+   aggregate was 117 files/1216 tests +1
+   opt-in skip, final 273-test postgate; do not treat it as today's aggregate. Earlier
+   UI/cache browser login/logout/navigation evidence is historical, not a browser
+   test of new credentials. Auth is STILL dev Sites, not per-staff passwords.
+   Main migrations 0048/0049 are not applied. Ports 3200/3101
+   kept running; no main DB reseed/migration or role grants performed.
+4. Additional speech SessionStore source fix passes 8 Python tests but running
+   PID 5612 has NOT loaded it. No restart solely to make a status look green.
+   Verify active sessions and schedule a controlled idle restart with health and
+   synthetic audio acceptance when implementing the next STT runtime checkpoint.
+5. ONLINE-1B3a shared resolver and isolated technical runtime are implemented on
+   1B2 credentials. Read newest ledger and `online-staff-auth-handoff.md`, including
+   exact 47-API/SSR/shared-helper migration map. Internal users.id is distinct from
+   external issuer/subject: no Sites-header emulation. Real TLS test is Node
+   manual-cookie traffic, NOT browser acceptance; no trusted browser test origin
+   available and shared dev CA must not enter system/browser trust. Next: safe
+   provisioning and 1B3b isolated clinical adapters/forms with browser gate, not
+   main auth replacement. Continue independent server contracts when gate blocked.
+   Neither 0048 nor 0049 is applied to the main DB. Patient mobile auth is a
+   separate capability domain; staff role selection is not patient onboarding.
+   ONLINE-1C0 is now implemented independently (67 helper tests, root final
+   four-file 232-test gate). Read `local-material-isolation-plan.md` before further
+   auth activation: v1 is unowned, hydration/autosave can overwrite local audio
+   at source level, and legacy old tabs need a controlled transition. No existing
+   audio loss was reproduced. The next metadata-only 1C1a slice is now implemented:
+   `server-context.ts` + `local-material-context.ts`, final coherent DB-clock
+   session/user/scope/head/consent SELECT, no material reads or key release.
+   Section 8 of the isolation plan records tests, current-profile archival guard,
+   version pins and observed-fingerprint limits. 1C1b now implements strict immutable
+   material/run/revision descriptor and composite publication fence without storage.
+   1C1c adds the canonical metadata codec. Newer1C1d/e adds ADR/isolatedcrypto;
+   next1C2a durable key state machine before v2/transactional fencing and
+   isolated two-tab tests still required. Never auto-migrate v1 or use metadata
+   as an action grant. Current consumers' source-level hazards are not fixed yet.
+6. Vercel is requested and CLI authenticated; Cloudflare CLI is not. Do not keep
+   retrying unchanged login or borrow unrelated resources. Continue safe local
+   foundation while dedicated backend/identity/deploy decisions remain. Current
+   `dist` scan intentionally fails on `server/.dev.vars`; never upload it wholesale.
+7. MOBILE-1 M0 is in progress: ADR-0002 plus pure released-protocol projection
+   and 87 unit tests. No patient API, DB relationship/release/audit or native app.
+   Real native client, accessible patient journeys and API/DB tests required. No store
+   publication/payment/permissions were granted by planning. Keep patient drafts,
+   self-reports and clinician-approved records distinct.
+8. Overnight task `orion` updated with all constraints and mobile addition. At each
+   bounded checkpoint record exact tests/limits here and continue the next safe
+   step. No external clinical/transactional automation, fake vendor integration,
+   real-patient data or paid/legal commitment without the required authority.
+
+**Historical handoff — ONLINE-1B session foundation, superseded above.**
+
+**Resume here first: ONLINE-1B session foundation, 2026-09-24.** Read section 1
+ONLINE-1, then newest sections 13/15 and `docs/operations/online-staff-auth-handoff.md`.
+Canonical repo is ORION-CLINIC, not legacy ariaproject cwd. Many older "Newest"
+entries below are historical. Preserve the large dirty worktree; do not reset,
+indiscriminately stage, change data mode or publish the dev-auth stub.
+
+Implemented server-only cookie/identity/logout module, durable D1 session repository,
+0048 additive schema/migration and tests. Three agents reviewed parallel areas.
+Focused gate: 77 PASS (44 HTTP/crypto + 33 real SQL), including two individual doctors
+of the same role, file reopen, logout invalidation and no REPLACE resurrection.
+Types/full lint/schema/build/secret scan (567 files)/dependency audit/diff-check PASS.
+Isolated backup drill PASS: 90 tables, 162 rows, 49 migrations, 3 R2 objects. Full
+`pnpm test` PASS: 105 files / 921 passed / 1 skipped (opt-in Groq), 453.86 s, exit 0.
+
+**Not mounted:** main UI/SSR/API still use Sites development identity; no individual
+password verifier, staff provisioning, reset, shared principal middleware, login
+throttling or browser/logout acceptance yet. 0048 was not applied to main D1.
+Session-bearing backup restoration/retention are also unimplemented. Do not claim
+ONLINE-1B complete or modify main accounts to simulate browser acceptance.
+
+Do next: individual credentials and guarded login/logout in an isolated HTTPS runtime
+with separate D1/R2/no provider keys; use this foundation rather than role buttons or
+process Map. Then ONLINE-1C owner-scoped local recordings and legacy recovery.
+Hosting decision is still needed for ONLINE-1D. No public resources or real data
+approved. Keep web 3200 and speech 3101 running; health is recorded in section 13.
+Non-STT follow-ons remain in section 1: explicit draft orders, cumulative notes,
+rescheduling and operational readiness; vendor integrations need actual contracts.
+
+**Newest: persisted document view (2026-09-17).** See section 15. Web 3200 and
+speech 3101 are running; preserve them. Do not confuse saved note sections with
+an assembled/signed protocol. New protocolPreview is an audited, scoped projection
+of immutable content, not a rebuild from current editor heads. Browser proof uses
+existing synthetic encounter-3695d35a-a30f-43e9-9f9c-cc330ce36bbc; PDF HTTP 200.
+Isolated 8-section->draft->sign->artifact generation and negative preview access
+checks passed in six-file 42-test gate. Remaining: new full browser creation/sign
+scenario in a separate artificial fixture, updated screenshots, longer speech/AI
+soak and cumulative notes beyond 24 turns, explicit orders materialization,
+account/offline gaps. Existing owner's records were not approved to fake progress.
+Final UI/API/help/UX gate: 29 PASS; typecheck and focused ESLint PASS. Browser
+Check record CTA verified on owner's unfinished record: 1/8 reviewed, two unknown
+speaker segments. No approvals made. DB quick_check ok; PDF download HTTP 200.
+
+**Newest: review unlock/storage UX (2026-09-16).** Resume now offered at blocked
+editor/right panel; verified browser enabled controls after exact saved-state
+reload. Three-step guide explains sections vs hints vs signed document; patient
+history path preserves assignment. Do not equate persistenceState=saved with a
+signed protocol. Tests: 38 repository/UI, then 55 final UI/scope/help, types/lint.
+Remaining acceptance: isolated artificial full 8-section review -> protocol draft
+-> explicit sign -> artifact generation/download/reopen via patient history.
+Do not approve the owner's saved clinical text to fake this acceptance. Earlier
+long-context, orders materialization, account/offline gaps remain open.
+
+**Resume here first (2026-09-16):** automatic LIVE now returns evidence-backed
+clinical section drafts alongside hints; see newest section 15. Do not restore
+the older hints-only schema. Existing guarded D1 writer and clinician review are
+retained. Latest focused gate: 91 tests, types/lint and one synthetic real Groq
+probe passed. Services were not stopped; no saved patient transcript transmitted
+for testing. Guide wording rebuilt, screenshots remain explicitly older.
+Next acceptance: isolated synthetic new encounter -> speech -> automatic AI ->
+reopen eight sections -> doctor edit/review -> rerun AI without overwrite. Test
+long conversations and cumulative note retention beyond the rolling 24-turn
+window; this is not solved by the current connection. Explicit accepted-hint
+materialization into orders/referrals, local accounts and offline work remain
+separate unfinished tasks, not completed by generating note drafts.
+
+Latest checkpoint is speech empty-result handling and AI contract alignment.
+Next: test queued speech -> silence -> speech through actual ingestion; investigate
+intermittent SPEECH_UNAVAILABLE separately. Synthetic real Groq probe passed after
+schema correction. Do not auto-replay private recording to a third-party service.
+
+Latest priority: verify new-visit consent -> activate -> microphone in browser.
+Startup deadlock fixed in LIVE controls; profile errors made field-specific.
+Keep source data synthetic; do not grant patient consent on user's behalf for a
+real encounter during testing. See newest section 15 for changes/limitations.
+
+Latest: new-conversation chooser and save-then-leave action implemented, compact
+LIVE styling added. Next is browser QA of two separate conversations and completing
+explicit accepted-suggestion transfer into structured sections/referrals with
+provenance; currently only an exact encounter link exists. See section 15.
+
+Newest checkpoint: legacy-like lightweight LIVE provider and timing implemented;
+real synthetic provider call PASSED (see section 15). Continue with end-to-end
+microphone/UI acceptance and then remaining local account/offline work. Do not
+claim whole platform complete. Earlier 15-second timing notes are superseded.
+
+Latest report is provider 429: Retry-After now propagated and respected in LIVE.
+Verify actual quota recovery and full synthetic speech-to-draft flow next; do not
+claim production readiness or provider success from mocked cooldown tests.
+
+Latest follow-up: see LIVE snapshot conflict section 15. Longer-than-24 transcript
+selection/count defect fixed; automatic 409 refresh/retry added. Continue with
+controlled end-to-end recording/AI acceptance; do not transmit existing patient
+text merely to test connectivity. Main web and STT remain running.
+
+### Latest delta — LIVE automatic hints
+
+Read section 15 owner change first: automatic LIVE drafts are now intentionally
+unacknowledged input, never clinician-approved output. Main runtime kept running.
+Do not restore the old per-replica checkbox or populate fake acknowledgement times.
+Focused tests/typecheck passed; full aggregate and real microphone round trip are
+not rerun. Local account provisioning/auth integration is still incomplete.
+
+### Resume here — local login implementation is incomplete
+
+- Highest priority is the owner's local login/logout + both offline scenarios.
+  Read latest section 15. New auth middleware is intentionally not activated yet;
+  account provisioning/configuration and main-app integration are still required.
+- Groq credentials were restored from legacy at owner's explicit request; keys
+  remain solely in ignored local config. Both provider probes succeeded. Main web
+  restarted with config; web.pid updated, logs web-groq.out/err.log. No provider
+  patient data used. Do not repeat the earlier claim that keys are unavailable.
+- Current startup works (3200 and 3101 ready). Need actual end-to-end synthetic
+  analysis and recording tests, not only provider tests/health. Keep main DB intact.
+- Latest focused auth test 2/2, type/lint pass; no fresh aggregate after these new
+  unactivated files. Do not use the prior 735-test aggregate as coverage of this code.
+
+### Resume here — 2026-09-16 current acceptance gate
+
+- This entry supersedes screenshot counts and next-task pointers below.
+- Reproduced and fixed blocker (see section 15): doctor `/`
+  loads `/api/workspace` and receives 503 WORKSPACE_UNAVAILABLE in run-ktJ4RX.
+  Read-only D1 inspection confirms normal user-created encounter has 8 section
+  heads but `persona-schedule-encounter` has 0. The scheduling fixture creates
+  this in_progress encounter without clinical sections; resolver selects it first,
+  and the full workspace endpoint rejects the incomplete set. Dashboard currently
+  couples its worklist to loading a complete clinical record. Do not conceal the
+  error with fake cards or disable the eight-section invariant. Scoped/audited
+  `view=worklist` is now implemented and browser-tested without changing the DB.
+  Empty/multiple worklist cases are now tested. Next bounded follow-up: correct
+  future fixture construction without reseeding the existing DB. Refresh
+  dashboard illustration only after those tests and aggregate verification.
+- Five current / fourteen older handbook captures; three newly refreshed pages:
+  own access, care plan and patient measurements. Update the remaining role-specific
+  clinician/registrar captures after the dashboard blocker, from actual DB UI only.
+- Four-persona runtime checks, dependency and secret gates passed. Aggregate
+  `.local-verify-latest.log` ended with exit 0 (735 tests plus successful build);
+  two later added cases are covered by focused 13/13 and fresh types/lint.
+  Tests/build do not establish actual speech or AI.
+- Continue server 3213 on `work/personas/run-ktJ4RX`; preserve revoked assignment v2
+  and original five assignments. Do not reseed, clear DB, delete models or stop ports.
+- No cache deletion performed. Keep this exact handoff instead of pretending that
+  disk cleanup resets the assistant's context. Working changes remain uncommitted.
+- Fresh isolated recovery drill passed; evidence: `work/backup-restore-E4Pqud`.
+  Do not rerun it solely to rediscover this result. Operational backup scheduling,
+  production data/residency decisions and remaining UI acceptance remain separate.
+
+### Resume here — handbook refresh in progress
+
+- New leading chapters access-current and access-revoked-current use real current
+  screenshots; 8 markers visually verified in generated HTML.
+- 19 screens / 75 markers total, but 17 older screenshots still await refresh.
+- Mobile /help, standalone annotated page and zoom/close checked at 390x844;
+  viewport reset. Browser tab 3 left on standalone updated chapter as deliverable.
+- Next bounded task: update own-role screenshot then care-versus-measurements
+  illustrations, preserving truthful role and external-integration limitations.
+
+### Resume here — administrator grant/revoke acceptance completed
+
+- Artificial nurse assignment in ui_acceptance_0915 is revoked v2; keep history.
+  Do not repeat grant or modify original five active assignments.
+- New-grant roles are now empty by default; employee change clears role/overrides.
+  Browser and 5-test render suite, types/lint passed. Full verify not rerun yet.
+- Administrator shared instructions updated to reflect actual browser acceptance.
+- Next bounded deliverable: refreshed annotated screenshots for changed role/access
+  screens and help layout QA, not another repetition of grant/revoke acceptance.
+- Test server 3213 left running, tab 3 marked handoff. No commit/push.
+
+### Latest UI checkpoint — administrator department create/edit/reload
+
+- Existing isolated department `ui_acceptance_0915` is now v2. Do not recreate it
+  or touch main working memberships. No grant/revoke submitted via browser.
+- Administrator guide is now fifth scenario in shared workflow module and handbook.
+- Current bounded gap remains browser assignment grant/revoke/reload, distinct from
+  the successful department scenario. Then refresh annotated screenshots.
+- No ports stopped; no full aggregate rerun, commit or push in this continuation.
+
+### Latest continuation — administrator checks
+
+- Runtime role/foreign-facility/logout denials now cover `/api/access/admin`.
+- Isolated repository test covers stale reactivation after revoke, persisted head
+  and unchanged audit on rejection. 3 files / 9 tests, focused lint and types passed;
+  full verify was not rerun after these test edits.
+- Browser recovered as browser 2, tab 3, administrator on `/access/manage` at 3213.
+  Open/cancel grant form succeeded; no live assignment changes. Tab marked handoff.
+- Next: finish administrator UI write/reload on isolated test target, then screenshot
+  refresh. Main DB untouched, no ports stopped, no commit/push.
+
+### Resume here — 2026-09-15 help and aggregate checkpoint
+
+- Full verification is now confirmed: 93 files / 727 tests and build, exit 0.
+- `/help` has four shared step-by-step role workflows; downloadable guide rebuilt.
+- `node scripts/check-persona-runtime.mjs 3213` passed help HTML delivery for all
+  personas, actual role restrictions and logout replay. This is not visual QA.
+- Keep `work/personas/run-ktJ4RX` and its database; do not repeat scheduling seed.
+- Next bounded task: administrator access-management UI acceptance, including
+  permission denials and reload persistence, only in isolated persona data. Inspect
+  existing access capabilities before any write; do not alter main memberships.
+- Then replace outdated annotated screenshots and verify both `/help` and standalone
+  handbook at desktop/mobile sizes. Browser control currently unavailable; retry
+  inventory when tool connection returns, not guessed stale tab IDs.
+- Main 3200 was not listening; isolated 3213 remained alive. Nothing stopped or pushed.
+
+### Latest override — 2026-09-15 persona acceptance evidence
+
+- Implemented four isolated identities (doctor, nurse, administrator, registrar).
+- Actual runtime API matrix passed: care reads 200 for doctor/nurse, 403 for
+  administrator/registrar; logout replay returned 401 for all four.
+- Browser verified nurse/admin role pages, admin denial on care, and logout.
+- Fixed non-clinician brand destination to `/access`; neutral workspace title.
+- Focused suite: 20 files / 141 tests passed, types/lint and diff check passed
+  before the subsequent resume-script addition. Full production build result was
+  not captured; do not claim a fresh full verification pass.
+- Existing isolated state: `work/personas/run-ktJ4RX`; earlier failed fixture
+  setup is `run-wRSX3S`, not the successful state. No main roles were modified.
+- At continuation both 3200 and 3213 had no listener. Restart of isolated 3213
+  completed with the same state after 44 seconds. Repeated runtime matrix passed
+  all four roles and logout replay checks. Resume script lint, Node syntax and
+  diff check passed. Refresh readiness before browser work; do not claim the main
+  project is running.
+- Doctor browser acceptance passed: created patient
+  `patient-2e15b8fb-e37c-45f5-b08c-a89f258a83c9` (OR-ABC8C87C) and encounter
+  `encounter-a35704b6-3749-41fd-980a-e90a76cc213e` using normal UI forms under
+  `persona-doctor-assignment`. Reload restored the exact name, reason, draft
+  status and eight empty sections with server-saved status. No consent, AI call,
+  recording or clinical approval was submitted. This proves this creation/read
+  scenario, not all encounter lifecycle operations or nurse writes.
+- No commit/push; preserve existing owner changes, including the standalone `a`.
+
+### 2026-09-15 — isolated login prerequisite identified
+
+- Current Sites development plugin hardcodes local_seedy and strips caller identity
+  headers. Nurse/registrar fixture issuer differs from real app issuer. These facts
+  explain why current single browser login cannot establish separate-persona proof.
+- Next harness requirements: isolated temporary D1/R2 state, free loopback-only port
+  (never 3200/current runtime), explicit fixed test personas with matching issuer,
+  no Groq/STT credentials copied, no external exposure, reject non-loopback/forged
+  Host and cross-origin persona selection; no test auth in production build.
+- Acceptance: doctor creates/checks plan; nurse records own task response/escalates,
+  cannot enroll/sign/resolve; admin manages permitted employee access but cannot
+  obtain clinical actor rights; signout removes persona and subsequent API is 401;
+  cross-facility/other-assignment commands denied without writes. Verify persisted
+  results and audit, not just UI visibility. Existing live DB remains untouched.
+- This harness is NOT implemented. Latest completed checkpoint is API/UI-action
+  role tests and 6 care repository tests recorded above. Continue from that fact.
+
+### 2026-09-15 — care API role checkpoint
+
+- Added explicit requireChronicCarePermission in API care/plans and enrollments,
+  using role from resolved server assignment. No role, permission matrix or DB
+  authorization changes. Repository still independently guards writes.
+- New app/api/care/plans/route.test.ts exercises both endpoints with actual schema
+  and mocked identity/resolver/storage: nurse denied before write despite doctor
+  confirmation flag; clinician reaches repository. Not persistence or live login proof.
+- app/care/care-workspace.test.ts now uses actual server capability map for all
+  nurse task states/owner mismatch. chronic-care-access.test.ts rejects unrelated
+  administrator/auditor/medical-lead/registrar grants as clinical actors.
+- 137 focused tests, 6 DB integration tests, typecheck/lint/diff-check PASS.
+- Next: isolated persona browser harness/acceptance. Do not mark UX-R2 complete;
+  no separate live nurse/admin credentials were used. Current user rights, ports,
+  STT/provider configuration unchanged; code is local, not committed/pushed.
+
+### 2026-09-15 — explicit scope recovery browser-tested
+
+- Follow-up to cross-module changes: shared header reset uses native anchor to
+  current pathname, intentionally clears resource/scope query and fully reloads
+  module state. Client Link was tested and failed by preserving stale forbidden
+  state, hence native anchor is required. Care/communications denial copy updated.
+- Browser /care?accessAssignmentId=missing-test-assignment&facilityId=fac-a denied;
+  explicit reset then loaded authorized care/tasks. No automatic privilege fallback
+  on denial and no changes to live assignments. Add this regression to future E2E.
+- Next remaining work: selected patient context and isolated role UI/API acceptance;
+  test scope reset on other modules, unsaved-form navigation behavior, and refresh
+  handbook only after UX stabilizes. Latest source uncommitted; ports preserved.
+
+### 2026-09-15 — cross-module scope and role clarity
+
+- lib/workspace-access-url.ts now preserves exact assignment/facility between
+  allowlisted clinical pages; does not transfer encounter to orders/care etc.
+  Tests cover duplicates, patient detail, unrelated/API/external destinations.
+  Browser care -> orders passed with same assignment/facility and loaded data.
+- app/access/access-workspace.tsx explains each role and explicitly identifies
+  multi-role assignments. Current browser user is doctor+administrator (server
+  rendered). Do not treat that account as isolated nurse/admin role validation.
+- 160 tests across 17 files plus typecheck/focused lint/diff-check passed. Full
+  aggregate 688-test result is prior to these latest changes; no new full CI claim.
+- Next exact task: assess incompatible selected assignment recovery on clinical
+  pages and implement a safe explicit re-selection route where missing; then
+  isolated role acceptance with test-only fixtures. Do not modify real/current
+  assignments to simulate roles. No commit/push, no external actions, ports intact.
+
+### 2026-09-15 — mobile menu fixed and aggregate recovered
+
+- Session 23567 finished exit 0: pnpm verify passes (90 files, 688 tests, schema
+  check and build). No need to recover/re-run it; ignored local log retains output.
+- app/clinic-shell.module.css: mobile context remains visible; bottom navigation
+  explicitly flex-direction: row (previously inherited column), full text labels
+  and horizontal scrolling. Browser 390x844 screenshots and actual click to care
+  passed. Focused helper/shell tests 7/7, diff-check passed.
+- Next: audit context transport between modules. Observed /care with explicit
+  assignment/facility has dashboard link `/` (scope dropped by existing helper).
+  Determine module permission compatibility before changing it; do not invent
+  role labels from URL or expand authorization. Then UX-R2 actual role acceptance.
+- Changes still local/uncommitted. Ports preserved. No real patients, mic, Groq,
+  clinical decision, or external communications performed in this slice.
+
+### 2026-09-15 — dashboard breadcrumb acceptance
+
+- Shared shell breadcrumb is implemented and browser-clicked; doctor returns to
+  dashboard preserving assignment/facility. No data mutation and no role widening.
+- Added app/clinic-shell.test.ts (3 rendered-shell cases); combined helper/shell
+  run 7/7 passed, focused lint/typecheck/diff-check passed.
+- Old aggregate output was lost; replacement session 23567 writes ignored log
+  .local-verify-latest.log. Collect final exit and fix any failures before claiming
+  aggregate success. Keep focused breadcrumb test evidence because it was added
+  after aggregate start. Do not start a duplicate run while this session exists.
+- Next bounded task: UX-R1b selected assignment/patient context and mobile context,
+  then UX-R2 role acceptance. Existing security backlog remains. No commit/push.
+  Web 3200 remains running; no unrelated ports, STT, or ngrok were stopped.
+
+### 2026-09-15 — browser persistence and editor guidance
+
+- Actual existing-patient create/reload passed; exact new encounter ID and limits
+  recorded in ledger. Data is persisted in live local D1, not only the test adapter.
+- Fixed contradictory disabled-editor instructions with clinicalEditorBlocker in
+  lib/workspace-ux.ts and app/clinical-workspace.tsx. Tests cover read-only,
+  loading, recovery, draft, ready, editable and final states. Browser confirms copy.
+- Current aggregate verification session 48719 still requires final output; started
+  before this small editor change, so retain focused post-change test evidence.
+  Next: collect aggregate exit, remedy failures, then continue remaining UX-R1b
+  breadcrumbs/selected assignment and role audit UX-R2. Nothing is committed yet.
+
+### 2026-09-15 — existing-patient transaction boundary
+
+- Changed FacilityAccessScope and patient-directory resolver to retain assignment;
+  patient-registry.createEncounter now checks current exact creator, scopes replay
+  hash to actor/assignment, records assignment on command/audit, checks current
+  permission inside D1 batch, and aborts incomplete section/audit publication.
+- 20 focused tests passed plus types/lint. Active application data not reseeded.
+  Port 3200 was absent; restarted web only (`pnpm dev --host 127.0.0.1 --port 3200`,
+  exec session 17419). STT/other ports not touched. Browser connection-error page
+  prevented UI create/reload acceptance; do not claim that scenario passed.
+- Next immediately: complete browser existing-patient create/reload and aggregate
+  regression; inspect authoritative replay/current access at response boundary and
+  database-level direct-write guards before marking all D-R1 hardening complete.
+  Continue UX-R1b afterwards. Preserve all uncommitted UX work and owner `a`.
+
+### 2026-09-15 — real data operations, artificial inputs (D-R1 start)
+
+- Owner clarified that artificial patient values are acceptable, but all workflows
+  must operate on durable data rather than painted fixture outcomes. Added mandatory
+  cross-phase acceptance and D-R1–D-R5 sequence under Outcome and boundaries.
+- `lib/repositories/encounter-creation.test.ts` now proves disk persistence across
+  closing/reopening an isolated DB with only schema/identity bootstrap, selected
+  assignment read and exact retry without duplicate patient, encounter or audit.
+- New-patient form links directly to the scoped patient registry for an existing
+  patient workflow. No backend runtime behavior or production data gate changed.
+- 14 repository tests, typecheck and focused lint passed. Next: D-R1 existing-patient
+  create-encounter transaction hardening already tracked in the security backlog,
+  then UI create/read/reload acceptance and continue UX-R1b. Do not call the whole
+  D-R1 complete from the file-adapter test. No real D1 restart/browser/production proof.
+- All current changes remain local/uncommitted. Preserve prior UX work and owner `a`.
+
+### 2026-09-15 — UX-R1b initial context and blocked-action slice
+
+- Added `lib/workspace-ux.ts` and tests; wired into ClinicShell and orders detail.
+  Root with encounter now says «Приём и протокол», dashboard remains «Рабочий день».
+  Order actions display missing reason / pending-save guidance; incomplete result
+  explains upload and physician review. Guidance is linked with aria-describedby.
+  Server authorization and clinical transition conditions are unchanged.
+- Verified 12 focused tests, typecheck and focused ESLint. No browser acceptance,
+  full build/CI, role changes, DB writes, STT changes or port shutdown this slice.
+- Continue UX-R1b as listed in section 15. Do not mark UX-R2 roles complete from
+  these presentation changes. Prior UX-R1a and owner standalone `a` remain intact.
+  Changes remain local/uncommitted, including the prior turn's UX-R1a files.
+
+### 2026-09-15 — UX-R canonical plan and first implementation slice
+
+- User explicitly requested a detailed main plan another agent can continue and
+  implementation to start. The authoritative ordered UX-R1–UX-R6 checklist is in
+  section 1; it takes priority over historical "next" entries below.
+- Implemented UX-R1a in `app/clinic-shell.tsx`, `app/section-purpose.tsx` and its
+  CSS/test, care/observations workspaces, orders action label and help version notice.
+- Verified 14 focused tests, types and focused ESLint; browser read-only inspected
+  care and measurements, including actual menu navigation and retained synthetic
+  records. No backend capability, consent, STT, model, port or database changes.
+- Next exact task: UX-R1b — make page context and primary action explicit, retain
+  selected scope and explain blocked controls. Then UX-R2 — reproduce and fix access
+  defects using separate doctor/nurse/registrar/access-admin identities. Current
+  combined-role local account is not evidence that all roles work.
+- Guide screenshots are deliberately NOT recaptured yet. UX-R6 must replace them
+  after the layouts and role workflows pass. These changes are local/uncommitted;
+  base commit is `5489c18`. Preserve the owner's unrelated standalone `a` edit.
 
 ### 2026-09-15 — in-app handbook and hands-on interface acceptance
 
@@ -3308,3 +6030,281 @@ the named open decisions. This is the current canonical continuation point.
 - Next: Phase 2G migrates only `/api/care`, care-task commands and `/care` to one
   selected assignment plus effective `care.manage`, preserving clinician/nurse
   semantics. Communications stays outside that checkpoint.
+
+### 2026-09-24 — ONLINE-1B individual staff-session foundation
+
+- Owner approved beginning online-readiness implementation. Added a hosting-neutral
+  server session contract, durable D1 repository and additive migration 0048,
+  independently reviewed by three agents. Identity is per employee, not per role.
+- Protected cookie and POST logout helpers, exact current-user checks, idle/absolute
+  deadlines and irreversible durable revocation are implemented. The auth module
+  is not a credential verifier and is not mounted into the Sites development app.
+- 77 focused tests cover cookie/CSRF/crypto and real SQL with reopen/two connections,
+  SQL REPLACE, concurrency and failed-publication rollback. Aggregate/recovery
+  evidence and its limitations are recorded in the latest section 13 ledger.
+- Next remains individual credentials, shared SSR/API identity and browser login/
+  logout acceptance in an isolated HTTPS runtime, then owner-scoped local recordings.
+  Main 3200/3101 and patient records preserved. No public/clinical deployment claimed.
+
+### 2026-09-24 — UI/runtime recovery, online audits and MOBILE-1 scope
+
+- Corrected Vite optimizer collision and React import hash isolation, verified
+  after full tests/build and actual browser reload/navigation. Reworked public
+  entry/logout and LIVE start screens without pretending shared dev auth is an
+  individual staff login. Updated guide text; old captures remain labelled.
+- Added original-requirement coverage matrix, Vercel and online-STT audits,
+  `.vercelignore` and a tested read-only deployment artifact guard. Current dist
+  correctly fails on `.dev.vars`; no deployment or external data migration.
+- Source-only speech fix separates expired-session pruning from insertion
+  capacity eviction; eight Python tests pass. Running speech remains unchanged.
+- Owner's Vercel/night-work request added with exact release gates; seven bounded
+  hourly continuations scheduled. Owner then prohibited EVERY dir echoes resource
+  including GitHub/Vercel/Neon, and required only the existing ORION Git repo.
+  Recorded in AGENTS, plan, deployment audit and scheduled prompt; no such resource
+  data/configuration/credentials/code was opened or changed.
+- Added MOBILE-1 for a genuine connected Android/iOS app with patient/caregiver
+  separation and first-class disability accessibility. M0–M6 planning is not app
+  implementation or store acceptance. Same ORION repo; existing online safety
+  prerequisites and clinical/vendor decisions remain mandatory.
+
+### 2026-09-24 — ONLINE-1B2 credentials and MOBILE-1/M0 executable boundary
+
+- Added credential provisioning/reset/disable with immutable identity, monotonic
+  versions, sanitized append-only audit and revocation of older sessions/grants;
+  0049 is additive and remains unapplied to the owner's main D1.
+- Added fixed-cost server password hashing and unmounted same-origin HTTPS login,
+  bounded streaming input, pre-verification durable attempt reservations and
+  generic failure paths. No role selection, credential grant or identity accepted
+  from client input. Runtime-wide abuse controls, administrative provisioning
+  authorization, recovery/MFA and public hosting acceptance are still open.
+- Independent review fixed D1 trigger-inclusive receipt handling and user-ID
+  displacement; actual disposable local D1 smoke and final SQL/HTTP tests passed.
+  Exact aggregate, focused, build and runtime results are in section 13.
+- Mobile ADR-0002 and pure patient-protocol release projection are implemented;
+  87 tests exercise strict identity/release/version/source boundaries and deny
+  staff/private AI/transcript fields. This is no mounted API or native application.
+- New read-only local-material audit found unowned v1 storage and source-level
+  overwrite/late-callback hazards. Preserve legacy data and isolate the next
+  runtime; see `docs/operations/local-material-isolation-plan.md`. Do not switch
+  main authentication before the required per-owner browser acceptance.
+- The current Vercel artifact remains blocked on a private generated file. No
+  deployment, external-resource access, provider calls, main migrations or
+  clinical data mutation. Existing read endpoints keep their normal audit behavior.
+
+### 2026-09-24 — ONLINE-1C0 local-material lifecycle foundation
+
+- Added a pure immutable staff-scope context and generation-bound operation lease,
+  synchronous publication and registered resource cleanup. Scope/account/consent
+  changes retire prior work; late promises cannot publish into the next owner.
+- Root/peer review corrected reentrant cleanup and Proxy validation edge cases;
+  67 helper tests and the final 232-test overlapping contract gate pass. Exact
+  validation evidence and limitations are in the latest section 13 entry.
+- No app wiring, IndexedDB migration, encryption implementation, recording change
+  or login activation. Existing DB/audio and web/speech processes preserved.
+  Next gates: isolated same-principal staff runtime, server access/key policy and
+  v2 storage; never silently adopt or delete the legacy shared history.
+
+### 2026-09-24 — ONLINE-1B3a common principal and actual isolated TLS transport
+
+- Added a strict shared server identity resolver and fixed-route unmounted
+  verification runtime; SSR/API preserve the distinction between internal user
+  ID and external subject. They do not emulate Sites or grant clinical roles.
+- Reproducible actual loopback HTTPS/workerd/D1 test covers independent staff,
+  default KDF, wrong/unknown credentials, logout, sequential restart, password
+  reset and credential disable. Scoped test CA is not a trusted browser origin;
+  browser auth/clinical integration/replica/load/restore remain separate gates.
+- Added independent adversarial unit/safety review and updated the exact 47-API
+  and shared SSR migration map. Main 3200/3101, credentials/roles, schema and
+  audio unchanged; new migrations still only in synthetic disposable databases.
+- Build, browser main-navigation smoke and final regression evidence are in
+  section 13. Artifact scan still blocks private generated `.dev.vars`; no
+  publication or foreign resources. Next 1B3b/1C1 work and blockers are explicit
+  in the current checkpoint and operational handoff.
+
+### 2026-09-24 — ONLINE-1C1a exact server metadata context
+
+- Added unmounted common-principal/exact-scope resolver and one-statement
+  DB-clock session, assignment, patient-profile and separate-consent snapshot.
+  No material/audio/key/v1 access, persistence or main runtime activation.
+- Independent review caught profile archival semantics and added existing
+  membership/org/facility version pins. Metadata is not an action grant; the
+  observed-state fingerprint cannot replace reauthorization or key policy.
+- 76 unit and 35 full-migration SQLite tests passed, including cross-connection
+  revocation/reset/regrant races; full aggregate and runtime evidence in section
+  13. Prepared the next material/run/revision descriptor audit and exact consumer
+  hazards; those legacy consumers are not fixed by this metadata-only checkpoint.
+- Main DB/audio/ports and migrations preserved. Browser main-navigation smoke
+  is separate from blocked trusted-HTTPS staff acceptance. No deployment,
+  provider call, foreign resource access or mobile-app completion claimed.
+
+### 2026-09-24 — ONLINE-1C1b exact local material target
+
+- Added strict copied/frozen material/run/revision descriptor and a target-aware
+  publication lifecycle, separate from current server authority/consent pins.
+  Same-encounter recordings, revisions and local A→B→A are no longer conflated
+  by this new contract. Legacy consumers are NOT yet using it.
+- Independent tests and reentrancy review; context exception normalization fixed.
+  211 new tests; aggregate/final checks and limitations are in section13.
+- Updated continuation docs with 1C1c envelope/key and storage gates. No existing
+  history/DB/audio changes, no auth activation or deployment claim.
+
+### 2026-09-24 — ONLINE-1C1c canonical metadata binding
+
+- Followed 1C1b with a pure, domain/version/kind-separated metadata codec and
+  independent tests/review. Scope IDs remain private; no cryptographic guarantee,
+  server key service or storage was added. Final gates recorded in section13.
+- Next 1C1d key/envelope/action/retention/restore architecture remains distinct
+  from approved clinical policy. Main UI, DB, recordings and ports unchanged.
+
+### 2026-09-24 — ONLINE-1C1d/e and remote STT control foundation
+
+- Recorded ADR-0003, built real bounded AEAD for isolated payloads and fixed two
+  independent adversarial review findings, with regression tests. This does not
+  turn existing local history into encrypted storage or implement key custody.
+- Added authenticated remote-control contract health/create with mocked network,
+  no audio adapter or actual remote gateway. Cancellation-race review is included
+  in the newest ledger; no current sidecar/clinical API was switched.
+- Updated active checkpoint and handoff to 1C2a durable broker/CAS/audit, preserving
+  unresolved clinical/retention/hosting decisions and all legacy/main resources.
+
+### 2026-09-24 — ONLINE-1C2a1 durable internal registry
+
+- Added forward migration0050 and internal reservation/preparation/receipt/head/
+  event storage, with atomic CAS/publication and durable terminal states. New39
+  full-chain SQL tests and independent schema/adapter review; final evidence in
+  section13. No main migration or browser-history wiring.
+- Explicitly separated storage from authorization and actual wrapping/key release.
+  Next1C2a2 must enforce current action/consent in committing SQL and solve pending
+  revocation/reconciliation; observed fingerprints do not solve authority ABA.
+- Updated ADR0003, isolation/auth/requirements handoffs and active resume point.
+  Main resources, local recordings and unrelated work preserved; no deployment.
+
+### 2026-09-24 — recovered local runtime and delivered D-R3 before departure
+
+- Recovered web3200 and local speech3101 without migrations/bootstrap; added
+  tested opt-in safe launcher mode and recovery runbook. Actual synthetic STT
+  audio→text probe passed; not a long-session or clinical-quality claim.
+- Added partial0051 pending-material authority invalidation, only isolated tests;
+  main DB migrations and browser history remain unchanged.
+- Completed accepted action recommendation → explicit durable draft order with
+  immutable source, current authority/consent checks, atomic audit publication,
+  retry protection and scope-preserving links from clinical and Live interfaces.
+  Real browser create/reload/reopen plus independent D1 review verified one draft.
+- Updated in-app/offline instructions and final ledger: 2183 tests passed with
+  one opt-in skip, application build passed. This is one completed product slice,
+  not completion of staff login, online storage, cumulative record or mobile app.
+- Tried exact ORION Vercel preflight; blocked unsafe artifact and unported runtime.
+  No upload, new cloud resource, commit or push; DIR ECHOES remained out of scope.
+
+### 2026-09-24 — artifact gate hardening and owner-requested stop
+
+- Closed uninspected NUL/binary/container/private-copy/link-ancestor paths in the
+  existing predeploy guard;46focused tests and20independent review probes passed.
+  Added local `build:deploy-check`; current artifact is deliberately blocked.
+- Kept application services and data unchanged; browser /help reload remained
+  healthy. Fixed only a slow byte-comparison assertion after a regression timeout.
+- Deleted exact `orion` heartbeat schedule on explicit owner request. No new
+  phase, cloud deployment, commit or push. Resume only after a new owner request.
+
+### 2026-09-24 — owner-requested logo concepts only
+
+- New direct request: delivered five ImageGen raster logo concepts plus one
+  comparison sheet in `design/logo-concepts/2026-09-24/`; prompts and limits are
+  recorded there. Visually inspected all five original boards and the composite.
+- Added a standalone HTML catalogue; automated file-URL preview was policy-blocked,
+  not worked around. HTML browser acceptance is not claimed; image assets are shown
+  directly. No production logo replacement, vector-master or trademark-clearance claim.
+- Follow-up: the owner selected Orbit; implementation is recorded below. This
+  scoped design request does not restart the deleted schedule or paused deployment.
+
+### 2026-09-24 — selected Orbit identity and depth-aware motion
+
+- Delivered separate transparent PNG and SVG symbol/wordmark assets in
+  `public/brand/`, with light/dark variants, prompt record and font license.
+  The original raster iterations are retained; SVG exports use clean geometry
+  and outlined Golos Text, while the application wordmark remains accessible text.
+- Added shared OrionMark/OrionBrand/OrionLoading components. Updated shell and
+  sign-in branding, favicon, route loading and existing real workspace loading
+  states without changing authentication, clinical actions, recording or data.
+- Applied owner's depth correction: far arc/satellite are occluded behind the O;
+  near arc/satellite render in front. Decorative orbit is 14 seconds; active
+  loading is 3.6 seconds. Reduced-motion/unsupported-path static fallback included.
+- Verification: 107 tests across 11 files passed, including 11 brand tests;
+  scoped ESLint, full typecheck and diff whitespace check passed. Browser checked
+  light/dark gallery, synchronized motion, pause state, app header, desktop name
+  and narrow-width symbol-only layout. OS reduced-motion setting was not changed.
+- Interactive preview/downloads: `http://127.0.0.1:3200/brand/index.html`.
+  Last handoff: requested branding is implemented locally. Web/STT processes,
+  patient data and database are preserved. No cloud deployment, commit, push or
+  schedule restart; production blockers in the earlier checkpoint still apply.
+
+### 2026-09-28 — patient-route workspace and actionable overview UI
+
+- Replaced the route's three duplicate navigation surfaces with one inner tab bar.
+  The route opens on a dedicated overview; its chronology stays empty until a
+  specific accessible patient is selected. Removed bottom section shortcuts,
+  per-event section links and the duplicate stage rail/back button. Source
+  counts are read-only context, not additional navigation. Existing authorized
+  D1-backed orders/care/observation queries remain separate and failures are
+  shown as partial data; no new clinical action or external exchange was added.
+- Visited tool panes remain mounted while switching the inner tabs, including
+  a return to the overview. Other tabs use a short transition without a route
+  delay. Entering `/pathway` uses a distinct rocket-launch curtain; leaving it
+  is brief. Reduced-motion setting bypasses these transitions.
+- Changed the main rail to fixed-position icons with per-item hover/focus labels
+  so its targets do not shift under the pointer. Top and left chrome use a
+  translucent surface with backdrop blur. Redesigned the dashboard around a
+  real scoped priority state, encounter summary, searchable/filterable worklist
+  and separately loaded queue/orders/care flow cards; removed repeated bottom
+  shortcuts. Counts are not labelled as today's when they cover all dates.
+- Verified 11 focused tests, TypeScript, scoped ESLint and a full vinext build.
+  Browser acceptance covered desktop and narrow layouts, patient-only timeline,
+  tab/return navigation, launch/exit motion and no document overflow. The build
+  interrupted the running dev client; only the verified ORION web PID on 3200
+  was restarted using recovery mode, without migrations or bootstrap. Existing
+  local STT on 3101 was reused. A fresh browser tab proved mouse navigation.
+- This is a local UI checkpoint, not a Vercel deployment, mobile-app completion,
+  medical approval or proof that all previously listed requirements are closed.
+  Earlier online identity, persistence, provider and production blockers remain.
+
+### 2026-09-28 — event center, measured patient context and bounded Groq briefing
+
+- Promoted the dashboard to a notification center: urgent orders, overdue or
+  near-due care tasks, manual contact tasks and queue exceptions come from the
+  existing scoped APIs. Recent items show the latest saved state, not a fabricated
+  audit stream. Encounter and module worklists remain lower on the page; charts
+  open only by the separate Analytics button. A transient module failure gets
+  one retry, and a persistent failure is shown rather than silently counted as 0.
+- Added a read-only latest height/weight query constrained to the exact patient
+  and observation assignment. The patient card shows a full-body schematic,
+  recorded sex or neutral silhouette, available measurements and source/date;
+  missing values stay empty. No health score or diagnosis is inferred.
+- Replaced the literal rocket graphic with a short medical pulse transition on
+  entry/exit of the route. Lazily loaded route panes stay mounted once visited;
+  reduced-motion remains supported.
+- Connected an explicitly triggered Groq operational briefing boundary. The API
+  requires same-origin, a valid clinician assignment and synthetic mode; its
+  strict payload accepts only six bounded integer aggregate counts. No patient
+  identifiers, clinical notes or call audio enter the provider request. The UI
+  labels output as a draft for staff review and disables the action when source
+  data is incomplete. This is not a clinical AI decision or auto-notification.
+- Verification: 27 focused tests across 7 files, TypeScript, scoped ESLint and
+  full vinext build passed. Browser acceptance saw two actual overdue care tasks
+  in the center, a recorded 172.4 cm / 71.8 kg pair in the synthetic patient card,
+  analytics toggling separately and the ECG entry/exit transitions. Web 3200
+  and speech 3101 health returned 200.
+  The live Groq provider call was deliberately not made; only mocked request
+  boundary tests prove the payload. No deploy, migration, DB reset, audio change,
+  commit or push. The main entry still uses the local development identity;
+  personal staff auth remains gated by ONLINE-1C and the online rollout plan.
+
+### 2026-09-28 — compact patient/event UI and active local staff credentials
+
+Latest owner request implemented in parallel: real stored vital overlays on a
+generated neutral anatomical illustration, compact event-center cards, optional
+analytics, aggregate-only Groq briefing, persistent medical entry/exit, light-theme
+contrast and personal local staff login. Current evidence is at the top of §13,
+with active implementation and handoff in §15–16. This supersedes earlier shared
+local-login UI notes, not ONLINE-1 public-release or durable recording gates.
+Owner subsequently requested finishing the current work; no further scope added,
+no recurring task created, no deploy/push or main clinical-data initialization.

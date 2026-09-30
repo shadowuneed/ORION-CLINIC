@@ -48,8 +48,8 @@ const permissionLabels: Record<ClinicPermission, string> = {
   'encounter.manage': 'Ведение приёма',
   'orders.manage': 'Направления',
   'scheduling.manage': 'Запись и очередь',
-  'care.manage': 'Наблюдение',
-  'observations.manage': 'Показатели',
+  'care.manage': 'План наблюдения',
+  'observations.manage': 'Измерения пациента',
   'communications.manage': 'Связь с пациентом',
   'access.self.read': 'Собственные права',
   'access.manage': 'Управление доступом',
@@ -374,7 +374,7 @@ function DepartmentDialog({
   );
 }
 
-function AssignmentDialog({
+export function AssignmentDialog({
   assignment,
   busy,
   department,
@@ -395,13 +395,8 @@ function AssignmentDialog({
   onClose: () => void;
   onSubmit: (payload: Record<string, unknown>) => void;
 }) {
-  const defaultRole = memberships[0]?.legacyRole === 'nurse'
-    ? 'nurse'
-    : memberships[0]?.legacyRole === 'registrar'
-      ? 'registrar'
-      : 'doctor';
   const [membershipId, setMembershipId] = useState(assignment?.membershipId ?? memberships[0]?.id ?? '');
-  const [roles, setRoles] = useState<OrganizationRole[]>(assignment?.roles ?? [defaultRole]);
+  const [roles, setRoles] = useState<OrganizationRole[]>(assignment?.roles ?? []);
   const initialOverrides = useMemo(() => Object.fromEntries(clinicPermissions.map((permission) => [permission, assignment?.allowPermissions.includes(permission) ? 'allow' : assignment?.denyPermissions.includes(permission) ? 'deny' : 'inherit'])) as Record<ClinicPermission, 'inherit' | 'allow' | 'deny'>, [assignment]);
   const [overrides, setOverrides] = useState(initialOverrides);
   const [effectiveFrom, setEffectiveFrom] = useState(
@@ -412,6 +407,7 @@ function AssignmentDialog({
   const title = mode === 'grant' ? 'Выдать доступ' : mode === 'revoke' ? 'Отозвать доступ' : assignment?.status === 'revoked' ? 'Возобновить доступ' : 'Изменить доступ';
   function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy || roles.length === 0 || !membershipId) return;
     const allowPermissions = clinicPermissions.filter((permission) => overrides[permission] === 'allow');
     const denyPermissions = clinicPermissions.filter((permission) => overrides[permission] === 'deny');
     onSubmit({
@@ -432,7 +428,8 @@ function AssignmentDialog({
         {error ? <ErrorMessage error={error} /> : null}
         {mode === 'revoke' ? <div className={styles.revokeNotice}><CircleAlert size={20} /><div><strong>Сотрудник сразу потеряет эти полномочия</strong><p>История и предыдущие версии останутся в D1. Само назначение не удаляется.</p></div></div> : (
           <div className={styles.formGrid}>
-            <label className={styles.fullField}><span>Сотрудник</span><select disabled={mode !== 'grant'} onChange={(event) => setMembershipId(event.target.value)} required value={membershipId}>{memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.displayName} · {membership.legacyRole}</option>)}</select></label>
+            <label className={styles.fullField}><span>Сотрудник</span><select disabled={mode !== 'grant'} onChange={(event) => { setMembershipId(event.target.value); setRoles([]); setOverrides(initialOverrides); }} required value={membershipId}>{memberships.map((membership) => <option key={membership.id} value={membership.id}>{membership.displayName} · {membership.legacyRole}</option>)}</select></label>
+            {mode === 'grant' ? <p className={styles.fullField}>Выберите роли явно. При смене сотрудника роли и исключения сбрасываются, чтобы не перенести чужие полномочия.</p> : null}
             <fieldset className={styles.fullField}><legend>Роли организации</legend><div className={styles.roleGrid}>{organizationRoles.map((role) => <label key={role}><input checked={roles.includes(role)} onChange={(event) => setRoles((current) => event.target.checked ? [...current, role] : current.filter((item) => item !== role))} type="checkbox" /><span>{roleLabels[role]}</span></label>)}</div></fieldset>
             <label><span>Действует с</span><input onChange={(event) => setEffectiveFrom(event.target.value)} required type="datetime-local" value={effectiveFrom} /></label>
             <label><span>Действует до</span><input min={effectiveFrom} onChange={(event) => setEffectiveUntil(event.target.value)} type="datetime-local" value={effectiveUntil} /></label>

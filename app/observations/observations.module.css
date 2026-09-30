@@ -5,6 +5,24 @@
   padding: 32px 32px 54px;
 }
 
+.careTaskNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border-left: 3px solid var(--brand);
+  color: var(--ink);
+  background: var(--brand-soft);
+  line-height: 1.5;
+}
+.careTaskNotice > div { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.careTaskNotice p { margin: 6px 0 0; color: var(--ink-soft); }
+.careTaskNotice a { text-decoration: none; }
+.careTaskNotice a[aria-disabled='true'] { opacity: .5; cursor: not-allowed; transform: none; }
+
 .pageHeader,
 .sourceBadge,
 .stats article,
@@ -309,8 +327,7 @@
   cursor: pointer;
 }
 
-.primaryButton { background: var(--brand-strong); color: white; }
-html[data-theme='dark'] .primaryButton { color: #13231f; }
+.primaryButton { background: var(--brand-strong); color: var(--on-brand); }
 .secondaryButton { border-color: var(--line-strong); background: var(--surface-strong); color: var(--ink); }
 .primaryButton:hover:not(:disabled),
 .secondaryButton:hover:not(:disabled) { filter: brightness(.97); transform: translateY(-1px); }

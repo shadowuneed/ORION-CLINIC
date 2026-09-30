@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { OrderWorkflowAccessScope } from '@/lib/auth/order-workflow-access';
+import { D1SuggestionReviewRepository } from './suggestion-review';
 import {
   D1OrderWorkflowRepository,
   OrderWorkflowAuditUnavailableError,
@@ -43,7 +44,7 @@ function d1Result<T>(results: T[], changes = 0) {
   return { success: true, results, meta: { changes } } as unknown as D1Result<T>;
 }
 
-function createD1Adapter(target: DatabaseSync): D1Database {
+function createD1Adapter(target: DatabaseSync, beforeBatch?: () => void | Promise<void>): D1Database {
   const prepareBound = (
     sql: string,
     bindings: SQLInputValue[] = [],
@@ -78,6 +79,7 @@ function createD1Adapter(target: DatabaseSync): D1Database {
       return prepareBound(sql) as unknown as D1PreparedStatement;
     },
     async batch<T = unknown>(statements: D1PreparedStatement[]) {
+      await beforeBatch?.();
       target.exec('begin immediate');
       try {
         const results: D1Result<T>[] = [];
@@ -261,11 +263,164 @@ const artifact = {
   byteSize: 128,
 };
 
+async function acceptedRecommendation(f: ReturnType<typeof fixture>, options: { category?: string; edited?: boolean } = {}) {
+  f.database.prepare(`insert into analysis_runs
+    (id,organization_id,facility_id,encounter_id,kind,provider,model,model_version,policy_version,input_hash,source_record_ids_json,status,started_at,completed_at)
+    values ('order-analysis','org-a','fac-a','encounter-a','suggestions','synthetic','fixture','1','synthetic-policy','synthetic-input','[]','succeeded',?,?)`)
+    .run(Date.now() - 2000, Date.now() - 1000);
+  f.database.prepare(`insert into clinical_suggestions
+    (id,organization_id,facility_id,encounter_id,analysis_run_id,category,title,original_content,evidence_json)
+    values ('order-recommendation','org-a','fac-a','encounter-a','order-analysis',?,'Проверить HbA1c','Рассмотреть контроль HbA1c при следующем обследовании','[]')`)
+    .run(options.category ?? 'action');
+  f.database.exec(`insert into suggestion_review_heads
+    (id,organization_id,facility_id,encounter_id,suggestion_id,state,lock_version)
+    values ('order-recommendation-head','org-a','fac-a','encounter-a','order-recommendation','proposed',1)`);
+  const recommendations = new D1SuggestionReviewRepository(f.d1, {
+    organizationId: 'org-a', facilityId: 'fac-a', encounterId: 'encounter-a',
+    reviewerMembershipId: 'membership-a', accessAssignmentId: 'assignment-a', accessPermission: 'encounter.manage',
+  });
+  let expectedVersion = 1;
+  let derivativeVersionId: string | null = null;
+  if (options.edited) {
+    const edited = await recommendations.createDerivative({
+      recommendationId: 'order-recommendation', title: 'Контроль HbA1c по решению врача',
+      content: 'Контроль HbA1c после уточнения анамнеза врачом', reason: 'Уточнено врачом',
+      expectedVersion, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: 'synthetic-edit-source',
+    });
+    expectedVersion = edited.version;
+    derivativeVersionId = edited.currentDerivative!.id;
+  }
+  const accepted = await recommendations.recordDecision({
+    recommendationId: 'order-recommendation', derivativeVersionId, decision: 'accept',
+    expectedVersion, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: 'synthetic-accept-source',
+  });
+  return { recommendations, accepted, selection: { recommendationId: accepted.id, recommendationVersion: accepted.version } };
+}
+
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();
 });
 
 describe('D1 order workflow', () => {
+  it.each([false, true])('creates a separate draft from the exact accepted source, edited=%s, and reloads immutable provenance', async edited => {
+    const f = fixture();
+    const { accepted, selection, recommendations } = await acceptedRecommendation(f, { edited });
+    const source = await f.repository.getRecommendationSource({ ...selection, encounterId: 'encounter-a' });
+    expect(source.title).toBe(accepted.effectiveTitle);
+    expect(source.medicalJustification).toBe(accepted.effectiveContent);
+    expect(source.existingOrderId).toBeNull();
+    const order = await f.repository.createDraft({ ...createInput, recommendationSource: selection });
+    expect(order.current.status).toBe('draft');
+    expect(order.current.approvedAt).toBeNull();
+    expect(order.current.requestedService).toBe(createInput.requestedService);
+    expect(order.recommendationSource).toMatchObject({ ...selection, title: accepted.effectiveTitle,
+      medicalJustification: accepted.effectiveContent, reviewDecisionId: accepted.review.currentDecisionId });
+    const metadata = JSON.parse(f.database.prepare("select metadata_json from audit_events where action='service_request.create_draft'").get()!.metadata_json as string);
+    expect(metadata.recommendationSource).not.toHaveProperty('medicalJustification');
+    expect(metadata.recommendationSource).not.toHaveProperty('title');
+    expect((await f.repository.getRecommendationSource({ ...selection, encounterId: 'encounter-a' })).existingOrderId).toBe(order.id);
+    const restored = await recommendations.recordDecision({ recommendationId: accepted.id,
+      derivativeVersionId: accepted.currentDerivative?.id ?? null, decision: 'restore',
+      expectedVersion: accepted.version, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: 'synthetic-restore-later' });
+    await recommendations.recordDecision({ recommendationId: accepted.id,
+      derivativeVersionId: restored.currentDerivative?.id ?? null, decision: 'reject',
+      expectedVersion: restored.version, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: 'synthetic-reject-later' });
+    const reopened = await new D1OrderWorkflowRepository(f.d1, f.scope).get(order.id);
+    expect(reopened?.recommendationSource).toEqual(order.recommendationSource);
+    expect(reopened?.current.status).toBe('draft');
+    await expect(f.repository.createDraft({ ...createInput, recommendationSource: selection })).rejects.toBeInstanceOf(OrderWorkflowConflictError);
+  });
+
+  it('replays the exact key and rejects any other key for the same accepted decision', async () => {
+    const f = fixture(); const { selection } = await acceptedRecommendation(f);
+    const command = { ...createInput, recommendationSource: selection };
+    const first = await f.repository.createDraft(command);
+    expect((await f.repository.createDraft(command)).id).toBe(first.id);
+    await expect(f.repository.createDraft({ ...command, idempotencyKey: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(OrderWorkflowConflictError);
+    await expect(f.repository.createDraft({ ...command, idempotencyKey: crypto.randomUUID(), requestedService: 'Другое обследование' }))
+      .rejects.toBeInstanceOf(OrderWorkflowConflictError);
+    expect(f.database.prepare('select count(*) n from service_requests').get()!.n).toBe(1);
+  });
+
+  it.each([false, true])('gates historical source text on current encounter read, not manage: read=%s', async canRead => {
+    const f = fixture(); const { selection } = await acceptedRecommendation(f);
+    const order = await f.repository.createDraft({ ...createInput, recommendationSource: selection });
+    const now = Date.now();
+    const denied = JSON.stringify(canRead ? ['encounter.manage'] : ['encounter.read', 'encounter.manage']);
+    f.database.prepare(`insert into department_access_assignment_versions
+      (id,organization_id,facility_id,assignment_id,department_id,membership_id,version,supersedes_version_id,
+        status,source_type,roles_json,allow_permissions_json,deny_permissions_json,effective_from,effective_until,
+        change_reason,changed_by_membership_id,changed_at,created_at)
+      select 'assignment-a-v2-denied',organization_id,facility_id,assignment_id,department_id,membership_id,2,id,
+        status,source_type,roles_json,allow_permissions_json,?,effective_from,effective_until,
+        'Synthetic source-read denial',changed_by_membership_id,?,?
+      from department_access_assignment_versions where id='assignment-a-v1'`).run(denied, now, now);
+    f.database.prepare(`update department_access_assignment_heads set current_version_id='assignment-a-v2-denied',
+      lock_version=2,updated_at=? where assignment_id='assignment-a'`).run(now);
+    const reopened = await new D1OrderWorkflowRepository(f.d1, f.scope).get(order.id);
+    expect(reopened?.current.status).toBe('draft');
+    expect(reopened?.recommendationSource).toEqual(canRead ? order.recommendationSource : null);
+    await expect(f.repository.getRecommendationSource({ ...selection, encounterId: 'encounter-a' }))
+      .rejects.toBeInstanceOf(OrderWorkflowConflictError);
+  });
+
+  it.each(['medication', 'clarification', 'safety', 'clinical_section'])('does not turn an accepted %s into a service order source', async category => {
+    const f = fixture(); const { selection } = await acceptedRecommendation(f, { category });
+    await expect(f.repository.createDraft({ ...createInput, recommendationSource: selection })).rejects.toBeInstanceOf(OrderWorkflowConflictError);
+    expect(f.database.prepare('select count(*) n from service_requests').get()!.n).toBe(0);
+  });
+
+  it('rejects changed version, wrong encounter and the other doctor without disclosing the source', async () => {
+    const f = fixture(); const { selection } = await acceptedRecommendation(f);
+    await expect(f.repository.getRecommendationSource({ ...selection, recommendationVersion: 1, encounterId: 'encounter-a' })).rejects.toBeInstanceOf(OrderWorkflowConflictError);
+    await expect(f.repository.getRecommendationSource({ ...selection, encounterId: 'other-encounter' })).rejects.toBeInstanceOf(OrderWorkflowConflictError);
+    const other = new D1OrderWorkflowRepository(f.d1, { ...f.scope, userId: 'user-b', membershipId: 'membership-b', accessAssignmentId: 'assignment-b' });
+    await expect(other.getRecommendationSource({ ...selection, encounterId: 'encounter-a' })).rejects.toBeInstanceOf(OrderWorkflowConflictError);
+  });
+
+  it.each(['revoke', 'consent', 'source'])('rechecks %s inside the committing transaction after source preflight', async reason => {
+    const f = fixture(); const { selection, recommendations, accepted } = await acceptedRecommendation(f);
+    let batchReached = false;
+    const raced = new D1OrderWorkflowRepository(createD1Adapter(f.database, async () => {
+      batchReached = true;
+      if (reason === 'revoke') f.database.exec("update memberships set status='disabled' where id='membership-a'");
+      if (reason === 'source') {
+        await recommendations.recordDecision({ recommendationId: accepted.id, derivativeVersionId: null,
+          decision: 'restore', expectedVersion: accepted.version, idempotencyKey: crypto.randomUUID(),
+          actorId: 'user-a', requestId: 'synthetic-source-race' });
+        expect(f.database.prepare("select state from suggestion_review_heads where suggestion_id='order-recommendation'").get()!.state).toBe('proposed');
+      }
+      if (reason === 'consent') f.database.exec(`insert into consent_events
+        (id,organization_id,facility_id,patient_id,encounter_id,version,supersedes_consent_event_id,
+          consent_type,decision,captured_by_membership_id,policy_version,policy_hash,notice_language,source,occurred_at,effective_at)
+        select 'consent-care-withdrawn',organization_id,facility_id,patient_id,encounter_id,2,id,
+          consent_type,'withdrawn',captured_by_membership_id,policy_version,policy_hash,notice_language,source,
+          cast(unixepoch('subsec')*1000 as integer),cast(unixepoch('subsec')*1000 as integer)
+        from consent_events where id='consent-care-v1';
+        update consent_heads set current_consent_event_id='consent-care-withdrawn',lock_version=2 where id='consent-head-care'`);
+    }), f.scope);
+    await expect(raced.createDraft({ ...createInput, recommendationSource: selection })).rejects.toThrow();
+    expect(batchReached).toBe(true);
+    expect(f.database.prepare('select count(*) n from service_requests').get()!.n).toBe(0);
+    expect(f.database.prepare("select count(*) n from audit_events where action='service_request.create_draft'").get()!.n).toBe(0);
+  });
+
+  it.each(['audit', 'audit_head', 'order_head', 'command'])('rolls back the complete source draft if %s is silently ignored', async fault => {
+    const f = fixture(); const { selection } = await acceptedRecommendation(f);
+    const before = f.database.prepare('select * from audit_stream_heads').get();
+    if (fault === 'audit') f.database.exec("create trigger synthetic_skip_source_audit before insert on audit_events when NEW.action='service_request.create_draft' begin select raise(ignore); end");
+    if (fault === 'audit_head') f.database.exec("create trigger synthetic_skip_source_audit before update on audit_stream_heads begin select raise(ignore); end");
+    if (fault === 'order_head') f.database.exec("create trigger synthetic_skip_source_audit before insert on service_request_heads begin select raise(ignore); end");
+    if (fault === 'command') f.database.exec("create trigger synthetic_skip_source_audit before update on command_idempotency when NEW.operation='order.create' begin select raise(ignore); end");
+    await expect(f.repository.createDraft({ ...createInput, recommendationSource: selection })).rejects.toThrow();
+    expect(f.database.prepare('select count(*) n from service_requests').get()!.n).toBe(0);
+    expect(f.database.prepare('select count(*) n from service_request_heads').get()!.n).toBe(0);
+    expect(f.database.prepare('select count(*) n from service_request_versions').get()!.n).toBe(0);
+    expect(f.database.prepare("select count(*) n from audit_events where action='service_request.create_draft'").get()!.n).toBe(0);
+    expect(f.database.prepare('select * from audit_stream_heads').get()).toEqual(before);
+    expect(f.database.prepare("select count(*) n from command_idempotency where operation='order.create'").get()!.n).toBe(0);
+  });
   it('creates a draft, requires separate approval, reviews a result and completes', async () => {
     const { database, repository } = fixture();
     const draft = await repository.createDraft(createInput);

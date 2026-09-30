@@ -47,6 +47,10 @@ import {
   type SuggestionLedgerEntry,
 } from '../lib/encounter-history';
 import { EncounterHistoryPanel } from './encounter-history-panel';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
+import { OrionMark } from './brand/orion-brand';
+import { recordingViewTokens } from '../lib/live-recording-view';
+import { clinicalAnalysisWindow } from '../lib/domain/analysis-window';
 
 type WorkspaceProps = {
   clinicianName: string;
@@ -344,6 +348,16 @@ export function OrionWorkspace({
   const [persistedSpeechTokens, setPersistedSpeechTokens] = useState<
     LocalSpeechToken[]
   >([]);
+  const [recordingBaselineIds, setRecordingBaselineIds] = useState<string[]>([]);
+  const [showEarlierTranscript, setShowEarlierTranscript] = useState(false);
+  const [startingEncounter, setStartingEncounter] = useState(false);
+  const encounterStartKeys = useRef<Record<string, string>>({});
+  const automaticAnalysisBusy = useRef(false);
+  const automaticAnalysisLastKey = useRef('');
+  const automaticAnalysisLastStarted = useRef(0);
+  const automaticRecordingStarted = useRef(false);
+  const [analysisRetryAt, setAnalysisRetryAt] = useState(0);
+  const rateLimitRetries = useRef(0);
   const [serverRecommendationReferences, setServerRecommendationReferences] =
     useState<Record<string, LiveRecommendationReference>>({});
   const [acknowledgedTranscriptKey, setAcknowledgedTranscriptKey] = useState<
@@ -391,8 +405,8 @@ export function OrionWorkspace({
     });
   };
 
-  const loadAuthoritativeWorkspace = useCallback(async (encounterId?: string) => {
-    setAuthoritativeLoadState('loading');
+  const loadAuthoritativeWorkspace = useCallback(async (encounterId?: string, preserveRecording = false) => {
+    if (!preserveRecording) setAuthoritativeLoadState('loading');
     setAuthoritativeMessage(null);
     try {
       const query = encounterId
@@ -442,7 +456,7 @@ export function OrionWorkspace({
 
       setAuthoritativeEncounterId(resolvedEncounterId);
       setAuthoritativeSnapshot(snapshot);
-      setPersistedSpeechTokens(persistedTokens);
+      setPersistedSpeechTokens((current) => preserveRecording ? mergeLiveTokens(persistedTokens, current) : persistedTokens);
       setPatientName(snapshot.encounter.patient.displayName);
       setConsentConfirmed(consent.speechReady);
       setAudioConsentConfirmed(consent.audioRetention);
@@ -452,7 +466,7 @@ export function OrionWorkspace({
       setConfirmAudioConsentWithdrawal(false);
       setEncounterId(resolvedEncounterId);
       setEncounterStartedAt(startedAt);
-      setEncounterEndedAt(null);
+      if (!preserveRecording) setEncounterEndedAt(null);
       setAnalysis(mappedRecommendations.analysis);
       setSuggestionLedger(mappedRecommendations.ledger);
       setCurrentSuggestionIds(mappedRecommendations.suggestionIds);
@@ -465,14 +479,14 @@ export function OrionWorkspace({
       setEditingSuggestionId(null);
       setServerEditReasons({});
       setAuthoritativeLoadState('ready');
-      setSessionState(
+      if (!preserveRecording) setSessionState(
         ['review', 'finalized', 'amended', 'cancelled'].includes(
           snapshot.encounter.status,
         )
           ? 'review'
           : 'ready',
       );
-      setElapsedSeconds(0);
+      if (!preserveRecording) setElapsedSeconds(0);
 
       const currentUrl = new URL(window.location.href);
       if (currentUrl.searchParams.get('encounterId') !== resolvedEncounterId) {
@@ -535,7 +549,7 @@ export function OrionWorkspace({
 
       if (response.status === 409) {
         delete consentCommandKeys.current[fingerprint];
-        await loadAuthoritativeWorkspace(authoritativeEncounterId);
+        await loadAuthoritativeWorkspace(authoritativeEncounterId, sessionState === 'listening');
         setConsentActionMessage(
           payload?.error?.message ??
             'Решение изменилось в другой вкладке. Загружена актуальная версия.',
@@ -554,7 +568,10 @@ export function OrionWorkspace({
       }
 
       delete consentCommandKeys.current[fingerprint];
-      await loadAuthoritativeWorkspace(authoritativeEncounterId);
+      await loadAuthoritativeWorkspace(authoritativeEncounterId, sessionState === 'listening');
+      if (consentType === 'external_ai_processing' && decision === 'granted' && sessionState === 'listening') {
+        automaticAnalysisLastKey.current = '';
+      }
       setConsentActionMessage(
         decision === 'granted'
           ? `Согласие «${
@@ -583,30 +600,35 @@ export function OrionWorkspace({
   }, [loadAuthoritativeWorkspace, requestedEncounterId]);
 
   useEffect(() => {
-    if (sessionState !== 'listening') return;
+    if (sessionState !== 'listening' || speech.status === 'error') return;
     const timer = window.setInterval(() => {
       setElapsedSeconds((current) => current + 1);
     }, 1_000);
     return () => window.clearInterval(timer);
-  }, [sessionState]);
+  }, [sessionState, speech.status]);
 
   const statusLabel = useMemo(() => {
+    if (sessionState === 'listening' && speech.status === 'error') return 'Запись прервана';
     if (sessionState === 'listening') return 'Приём идёт';
     if (sessionState === 'review') return 'Проверка решений';
     return 'Готов к приёму';
-  }, [sessionState]);
+  }, [sessionState, speech.status]);
 
   const finalSpeechTokens = useMemo(
     () => mergeLiveTokens(persistedSpeechTokens, speech.finalTokens),
     [persistedSpeechTokens, speech.finalTokens],
   );
 
+  const visibleFinalTokens = useMemo(
+    () => recordingViewTokens(finalSpeechTokens, recordingBaselineIds, showEarlierTranscript),
+    [finalSpeechTokens, recordingBaselineIds, showEarlierTranscript],
+  );
   const transcriptTurns = useMemo(
     () => [
-      ...groupTokens(finalSpeechTokens, false),
+      ...groupTokens(visibleFinalTokens, false),
       ...groupTokens(speech.provisionalTokens, true),
     ],
-    [finalSpeechTokens, speech.provisionalTokens],
+    [visibleFinalTokens, speech.provisionalTokens],
   );
 
   const detectedSpeakers = useMemo(
@@ -661,6 +683,9 @@ export function OrionWorkspace({
     () => JSON.stringify(authoritativeTranscriptSnapshot),
     [authoritativeTranscriptSnapshot],
   );
+  const analysisWindow = clinicalAnalysisWindow(
+    finalSpeechTokens.filter((token) => token.isFinal && token.sourceId).length,
+  );
   const transcriptAcknowledged = Boolean(
     authoritativeTranscriptSnapshot.length > 0 &&
       acknowledgedTranscriptKey === authoritativeTranscriptKey,
@@ -693,8 +718,10 @@ export function OrionWorkspace({
   }, [analysisKey]);
 
   const runAnalysis = useCallback(
-    async (mode: 'live' | 'final', force = false) => {
+    async (mode: 'live' | 'final', force = false, automatic = false) => {
       if (authoritativeEncounterId) {
+        if (Date.now() < analysisRetryAt) return;
+        if (automaticAnalysisBusy.current) return;
         if (
           !authoritativeSnapshot ||
           authoritativeSnapshot.encounter.status !== 'in_progress'
@@ -713,7 +740,7 @@ export function OrionWorkspace({
           );
           return;
         }
-        if (!transcriptAcknowledged || authoritativeTranscriptSnapshot.length === 0) {
+        if ((!automatic && !transcriptAcknowledged) || authoritativeTranscriptSnapshot.length === 0) {
           setAnalysisStatus('error');
           setAnalysisError(
             'Сначала сверьте текст, язык и роли говорящих в текущей версии расшифровки.',
@@ -724,12 +751,16 @@ export function OrionWorkspace({
         const commandFingerprint = JSON.stringify({
           encounterId: authoritativeEncounterId,
           snapshot: authoritativeTranscriptSnapshot,
+          automatic,
         });
         const idempotencyKey =
           serverCommandKeys.current[commandFingerprint] ?? crypto.randomUUID();
         serverCommandKeys.current[commandFingerprint] = idempotencyKey;
         setAnalysisStatus('loading');
         setAnalysisError(null);
+        automaticAnalysisBusy.current = true;
+        automaticAnalysisLastKey.current = authoritativeTranscriptKey;
+        automaticAnalysisLastStarted.current = Date.now();
         try {
           const response = await fetch('/api/workspace/recommendations/generate', {
             method: 'POST',
@@ -737,7 +768,8 @@ export function OrionWorkspace({
             body: JSON.stringify({
               encounterId: authoritativeEncounterId,
               snapshot: authoritativeTranscriptSnapshot,
-              acknowledged: true,
+              acknowledged: !automatic,
+              mode: automatic ? 'automatic' : 'reviewed',
               idempotencyKey,
             }),
           });
@@ -745,6 +777,27 @@ export function OrionWorkspace({
             | ({ runId?: string; replay?: boolean } & ApiErrorPayload)
             | null;
           if (!response.ok || !payload?.runId) {
+            if (response.status === 429 || payload?.error?.code === 'AI_RATE_LIMITED') {
+              delete serverCommandKeys.current[commandFingerprint];
+              const header = Number(response.headers.get('Retry-After'));
+              const seconds = Number.isFinite(header) && header > 0 ? header : 60;
+              setAnalysisRetryAt(Date.now() + seconds * 1000);
+              rateLimitRetries.current += 1;
+              if (automatic && rateLimitRetries.current <= 3) automaticAnalysisLastKey.current = '';
+              setAnalysisStatus('waiting');
+              setAnalysisError(`Лимит Groq. Следующая попытка не раньше чем через ${Math.ceil(seconds)} сек. ${rateLimitRetries.current <= 3 ? 'Повторим автоматически во время текущего приёма.' : 'Автоповторы приостановлены; повторите позже вручную.'}`);
+              return;
+            }
+            if (automatic && payload?.error?.code === 'TRANSCRIPT_SNAPSHOT_CHANGED') {
+              delete serverCommandKeys.current[commandFingerprint];
+              const refreshed = await loadAuthoritativeWorkspace(authoritativeEncounterId, true);
+              if (refreshed) {
+                automaticAnalysisLastKey.current = '';
+                setAnalysisError(null);
+                setAnalysisStatus('waiting');
+              }
+              return;
+            }
             if (response.status < 500) {
               delete serverCommandKeys.current[commandFingerprint];
             }
@@ -754,7 +807,8 @@ export function OrionWorkspace({
             );
           }
           delete serverCommandKeys.current[commandFingerprint];
-          await loadAuthoritativeWorkspace(authoritativeEncounterId);
+          rateLimitRetries.current = 0;
+          await loadAuthoritativeWorkspace(authoritativeEncounterId, true);
           setAcknowledgedTranscriptKey(null);
           setAnalysisStatus('ready');
         } catch (error) {
@@ -764,6 +818,8 @@ export function OrionWorkspace({
               ? error.message
               : 'Клинический анализ временно недоступен.',
           );
+        } finally {
+          automaticAnalysisBusy.current = false;
         }
         return;
       }
@@ -873,10 +929,36 @@ export function OrionWorkspace({
       authoritativeEncounterId,
       authoritativeSnapshot,
       authoritativeTranscriptSnapshot,
+      authoritativeTranscriptKey,
+      analysisRetryAt,
       loadAuthoritativeWorkspace,
       transcriptAcknowledged,
     ],
   );
+
+  useEffect(() => {
+    if (!analysisRetryAt) return;
+    const timer = window.setTimeout(() => setAnalysisRetryAt(0), Math.min(2147483647, Math.max(0, analysisRetryAt - Date.now())));
+    return () => window.clearTimeout(timer);
+  }, [analysisRetryAt]);
+
+  useEffect(() => {
+    if (analysisRetryAt > Date.now() || rateLimitRetries.current > 3 || !automaticRecordingStarted.current || !authoritativeEncounterId || !authoritativeSnapshot ||
+      !['listening', 'review'].includes(sessionState) ||
+      authoritativeSnapshot.encounter.status !== 'in_progress' ||
+      !getLiveConsentState(authoritativeSnapshot).analysisReady ||
+      authoritativeTranscriptSnapshot.length === 0 ||
+      analysisCharacterCount < (sessionState === 'listening' ? 80 : 40) || automaticAnalysisBusy.current ||
+      automaticAnalysisLastKey.current === authoritativeTranscriptKey) return;
+    // Wait for a pause and bound provider traffic. New speech replaces this timer.
+    const delay = automaticAnalysisLastStarted.current
+      ? Math.max(500, LIVE_ANALYSIS_INTERVAL_MS - (Date.now() - automaticAnalysisLastStarted.current))
+      : FIRST_LIVE_ANALYSIS_DELAY_MS;
+    const timer = window.setTimeout(() => void runAnalysis('live', false, true), delay);
+    return () => window.clearTimeout(timer);
+  }, [authoritativeEncounterId, authoritativeSnapshot, sessionState,
+    authoritativeTranscriptSnapshot.length, authoritativeTranscriptKey,
+    analysisCharacterCount, analysisStatus, analysisRetryAt, runAnalysis]);
 
   useEffect(() => {
     if (authoritativeEncounterId) return;
@@ -966,6 +1048,33 @@ export function OrionWorkspace({
     return 'Микрофон ожидает запуска';
   }, [speech.activity, speech.status]);
 
+  const activateEncounter = async () => {
+    if (!authoritativeSnapshot || !canManageWorkspace || startingEncounter) return;
+    setStartingEncounter(true);
+    setAuthoritativeMessage(null);
+    try {
+      const { id } = authoritativeSnapshot.encounter;
+      let { status, version } = authoritativeSnapshot.encounter;
+      while (status === 'draft' || status === 'ready') {
+        const nextStatus = status === 'draft' ? 'ready' : 'in_progress';
+        const fingerprint = `${id}:${version}:${nextStatus}`;
+        const key = encounterStartKeys.current[fingerprint] ?? crypto.randomUUID();
+        encounterStartKeys.current[fingerprint] = key;
+        const response = await fetch('/api/workspace/encounters/transition', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ encounterId: id, nextStatus, expectedVersion: version, idempotencyKey: key }),
+        });
+        const payload = await response.json() as { transition?: { status: 'ready' | 'in_progress'; version: number }; error?: { message?: string } };
+        if (!response.ok || payload.transition?.status !== nextStatus || !Number.isInteger(payload.transition.version) || payload.transition.version <= version) throw new Error(payload.error?.message ?? 'Не удалось открыть приём. Повторите попытку.');
+        status = payload.transition.status;
+        version = payload.transition.version;
+      }
+      await loadAuthoritativeWorkspace(id);
+    } catch (error) {
+      setAuthoritativeMessage(error instanceof Error ? error.message : 'Не удалось открыть приём.');
+    } finally { setStartingEncounter(false); }
+  };
+
   const startSession = () => {
     if (!consentConfirmed) return;
     if (authoritativeEncounterId) {
@@ -983,6 +1092,11 @@ export function OrionWorkspace({
       const startedAt = authoritativeSnapshot.encounter.startedAt
         ? new Date(authoritativeSnapshot.encounter.startedAt).toISOString()
         : new Date().toISOString();
+      setRecordingBaselineIds(finalSpeechTokens.flatMap((token) => token.sourceId ? [token.sourceId] : []));
+      setShowEarlierTranscript(false);
+      automaticAnalysisLastKey.current = authoritativeTranscriptKey;
+      automaticAnalysisLastStarted.current = 0;
+      automaticRecordingStarted.current = true;
       analysisAbortRef.current?.abort();
       analysisAbortRef.current = null;
       researchAbortRef.current?.abort();
@@ -1002,6 +1116,8 @@ export function OrionWorkspace({
       return;
     }
     const startedAt = new Date().toISOString();
+    setRecordingBaselineIds([]);
+    setShowEarlierTranscript(false);
     analysisAbortRef.current?.abort();
     analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
@@ -1039,11 +1155,11 @@ export function OrionWorkspace({
     }
   };
 
-  const resetSession = async () => {
+  const resetSession = async (newConversation = false) => {
     const finalizedAudio =
       sessionState === 'ready' ? null : await speech.stop();
     const currentRecord = currentEncounterRef.current;
-    if (currentRecord) {
+    if (currentRecord && !localAccountModeEnabled()) {
       try {
         const completedRecord: OrionEncounterRecord = {
           ...currentRecord,
@@ -1072,6 +1188,11 @@ export function OrionWorkspace({
       speech.reset();
       setEncounterEndedAt(null);
       setAcknowledgedTranscriptKey(null);
+      if (newConversation) {
+        automaticRecordingStarted.current = false;
+        window.location.assign(scopeUrl('/live'));
+        return;
+      }
       await loadAuthoritativeWorkspace(authoritativeEncounterId);
       return;
     }
@@ -1488,6 +1609,7 @@ export function OrionWorkspace({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      if (localAccountModeEnabled()) return;
       try {
         await markAbandonedEncountersInterrupted();
         const records = await listEncounters();
@@ -1509,7 +1631,7 @@ export function OrionWorkspace({
 
   useEffect(() => {
     currentEncounterRef.current = currentEncounter;
-    if (!currentEncounter) return;
+    if (!currentEncounter || localAccountModeEnabled()) return;
     const timer = window.setTimeout(() => {
       void saveEncounter(currentEncounter)
         .then(() => {
@@ -1727,6 +1849,16 @@ export function OrionWorkspace({
         </div>
 
         <div className="suggestion-actions">
+          {entry.status === 'accepted' && authoritativeEncounterId && (
+            <div className="accepted-next-step">
+              <strong>Принято и сохранено в этом приёме</strong>
+              <p>{suggestion.category === 'clarification' ? 'Это вопрос для уточнения, не подтверждённый факт. Запишите ответ пациента в клинической записи.' : 'Принятие подсказки само по себе не оформляет направление или назначение. Проверьте формулировку в клинической записи.'}</p>
+              <a href={scopeUrl(`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}`)}>Клиническая запись этого приёма</a>
+              {suggestion.category === 'option' && serverRecommendationReferences[suggestion.id] && (
+                <p><a href={scopeUrl(`/orders?${new URLSearchParams({ encounterId: authoritativeEncounterId, recommendationId: suggestion.id, recommendationVersion: String(serverRecommendationReferences[suggestion.id].expectedVersion) }).toString()}`)}>Создать черновик направления</a></p>
+              )}
+            </div>
+          )}
           {entry.status === 'discarded' ? (
             <button
               className="restore"
@@ -1850,7 +1982,8 @@ export function OrionWorkspace({
       authoritativeConsent?.speechReady,
   );
   const canManageLiveConsents = Boolean(
-    canManageWorkspace && authoritativeLoadState === 'ready' && authoritativeEncounterIsActive,
+    canManageWorkspace && authoritativeLoadState === 'ready' &&
+    authoritativeSnapshot && ['draft', 'ready', 'in_progress'].includes(authoritativeSnapshot.encounter.status) && !startingEncounter,
   );
 
   return (
@@ -1864,7 +1997,7 @@ export function OrionWorkspace({
         </div>
 
         <div className="header-actions">
-          <button
+          {!localAccountModeEnabled() && <button
             className="history-trigger"
             type="button"
             onClick={() => setHistoryOpen(true)}
@@ -1873,7 +2006,7 @@ export function OrionWorkspace({
             <span aria-hidden="true">▤</span>
             <span className="history-trigger__label">Локальные файлы</span>
             <b>{historyRecords.length}</b>
-          </button>
+          </button>}
         </div>
       </section>
 
@@ -1884,7 +2017,7 @@ export function OrionWorkspace({
         <div>
           <strong>
             {authoritativeLoadState === 'loading'
-              ? 'Загружаем точную запись из D1…'
+              ? <><OrionMark animated size={22} /> Загружаем точную запись из D1…</>
               : authoritativeLoadState === 'ready'
                 ? `D1 · ${authoritativeSnapshot?.encounter.patient.displayName ?? 'приём загружен'}`
                 : 'Серверная запись не открыта'}
@@ -1979,17 +2112,17 @@ export function OrionWorkspace({
             <div>
               <strong>
                 {audioConsentConfirmed
-                  ? 'Аудиозапись хранится локально'
+                  ? localAccountModeEnabled() ? 'Аудиозапись в текущей вкладке' : 'Аудиозапись хранится локально'
                   : 'Аудиозапись выключена'}
               </strong>
               <p>
                 {sessionState === 'listening' && speech.status === 'streaming'
                   ? audioConsentConfirmed
-                    ? 'Микрофон используется для локального STT и записи в историю этого браузера. В Groq уходит только текст.'
+                    ? localAccountModeEnabled() ? 'Звук обрабатывается локально. Скачайте аудиофайл до закрытия вкладки; автоматического архива аудио здесь нет.' : 'Микрофон используется для локального STT и записи в историю этого браузера. В Groq уходит только текст.'
                     : 'Реплики распознаются локально на этом ПК; аудиофайл не создаётся. В Groq уходит только текст.'
                   : sessionState === 'review'
                     ? speech.recordedAudio
-                      ? `Запись готова: ${(speech.recordedAudio.size / 1_048_576).toFixed(1)} МБ. Она не отправляется в Groq.`
+                      ? `Запись готова: ${(speech.recordedAudio.size / 1_048_576).toFixed(1)} МБ. ${localAccountModeEnabled() ? 'Скачайте файл до закрытия вкладки.' : 'Она не отправляется в Groq.'}`
                       : audioConsentConfirmed
                         ? speech.recordingError ?? 'Аудиозапись не была создана.'
                         : 'Аудиофайл не создавался.'
@@ -2007,13 +2140,9 @@ export function OrionWorkspace({
 
           {sessionState === 'ready' && (
             <div className="session-ready">
-              <div className="listening-orbit" aria-hidden="true">
-                <span className="orbit orbit-one" />
-                <span className="orbit orbit-two" />
-                <span className="orbit-core">O</span>
-              </div>
+              <OrionMark size={64} className="live-brand-mark" />
               <p className="eyebrow">Перед началом</p>
-              <h2>Спокойный разговор.<br />Точная поддержка.</h2>
+              <h2>{persistedSpeechTokens.length ? 'Продолжить приём' : 'Запись разговора'}</h2>
               <p className="stage-description">Ассистент не вмешивается в беседу. Он фиксирует контекст и готовит варианты для решения врача.</p>
 
               <div
@@ -2171,8 +2300,23 @@ export function OrionWorkspace({
                 disabled={!canStartAuthoritativeSpeech}
                 onClick={startSession}
               >
-                <span className="action-icon" aria-hidden="true" /> Начать расшифровку
+                <span className="action-icon" aria-hidden="true" />
+                {persistedSpeechTokens.length > 0 ? 'Продолжить запись этого приёма' : 'Начать расшифровку'}
               </button>
+              {authoritativeSnapshot && ['draft', 'ready'].includes(authoritativeSnapshot.encounter.status) && (
+                <div className="live-activation">
+                  <p>Новый приём ещё не открыт. Зафиксируйте согласия выше, затем откройте приём для записи.</p>
+                  <button className="primary-action" type="button" disabled={!canManageWorkspace || startingEncounter || !authoritativeConsent?.speechReady} onClick={() => void activateEncounter()}>
+                    {startingEncounter ? 'Открываем приём…' : 'Открыть приём для записи'}
+                  </button>
+                </div>
+              )}
+              {persistedSpeechTokens.length > 0 && (
+                <p className="action-hint">
+                  В этом приёме уже сохранено реплик: {persistedSpeechTokens.length}. Запуск добавит новые, а не создаст другой приём.{' '}
+                  <a href={scopeUrl('/live')}>Новый разговор — другой приём</a>
+                </p>
+              )}
               {!canStartAuthoritativeSpeech && (
                 <small className="action-hint">
                   {authoritativeLoadState === 'loading'
@@ -2198,6 +2342,21 @@ export function OrionWorkspace({
                 {Array.from({ length: 24 }, (_, index) => <i key={index} style={{ '--bar': index } as React.CSSProperties} />)}
               </div>
               <p className="eyebrow">{speechStatusLabel}</p>
+              {speech.error && transcriptTurns.length > 0 && (
+                <div className="speech-error" role="alert">
+                  <strong>Запись прервана</strong>
+                  <p>{speech.error}</p>
+                  <p>Сохранённые реплики остаются в этом приёме. Остановите расшифровку, затем продолжите запись.</p>
+                </div>
+              )}
+              {recordingBaselineIds.length > 0 && (
+                <div className="authoritative-action-message" role="status">
+                  <p>Продолжается тот же приём. Ранее сохранено реплик: {recordingBaselineIds.length}. Таймер показывает текущую запись; прежний текст не распознаётся заново.</p>
+                  <button className="secondary-action" type="button" onClick={() => setShowEarlierTranscript((value) => !value)}>
+                    {showEarlierTranscript ? 'Показать только текущую запись' : 'Показать также прежние реплики'}
+                  </button>
+                </div>
+              )}
 
               {transcriptTurns.length === 0 ? (
                 <>
@@ -2229,7 +2388,7 @@ export function OrionWorkspace({
                       <h2>Живая расшифровка</h2>
                       <p>Подтверждённый текст видит только врач</p>
                     </div>
-                    <span>{finalSpeechTokens.length} подтверждённых реплик</span>
+                    <span>{visibleFinalTokens.length} подтверждённых реплик в этом виде</span>
                   </div>
 
                   <div className="transcript-feed" aria-label="Живая расшифровка разговора">
@@ -2294,6 +2453,11 @@ export function OrionWorkspace({
 
           {sessionState === 'review' && (
             <div className="session-review">
+              {authoritativeEncounterId && (
+                <button className="primary-action" type="button" disabled={speech.status === 'stopping'} onClick={() => void resetSession(true)}>
+                  Сохранить материалы и начать новый разговор
+                </button>
+              )}
               <span className="review-symbol" aria-hidden="true">✓</span>
               <p className="eyebrow">Расшифровка остановлена</p>
               <h2>Сначала решения.<br />Затем протокол.</h2>
@@ -2428,6 +2592,38 @@ export function OrionWorkspace({
             <div><p className="eyebrow">Только для врача</p><h2>Подсказки</h2></div>
             <span className="private-pill">Приватно</span>
           </div>
+          {authoritativeEncounterId && (
+            <div className="authoritative-action-message" role="status">
+              <strong>Подсказки по текущему приёму</strong>
+              <p>ИИ также собирает черновики жалоб, анамнеза и других разделов клинической записи этого приёма. Сохранённые правки врача не заменяются; подтверждение разделов остаётся за врачом.</p>
+              <a href={scopeUrl(`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}#clinical-record`)}>Открыть 8 разделов записи</a>
+              {!authoritativeConsent?.externalAi && authoritativeLoadState === 'ready' && (
+                <div className="live-ai-consent">
+                  <strong>ИИ выключен: согласие на передачу текста не зафиксировано</strong>
+                  <p>Согласие на микрофон не разрешает отправлять текст в Groq. Если пациент согласен на внешний ИИ-анализ, зафиксируйте это отдельно. Передаётся текст, не аудиозапись.</p>
+                  <button className="secondary-action" type="button" disabled={!canManageLiveConsents || Boolean(pendingConsentType)} onClick={() => void recordLiveConsentDecision('external_ai_processing', 'granted')}>
+                    {pendingConsentType === 'external_ai_processing' ? 'Сохраняем согласие…' : 'Пациент согласен — включить подсказки ИИ'}
+                  </button>
+                  {consentActionMessage && <p>{consentActionMessage}</p>}
+                </div>
+              )}
+              {analysisWindow.omitted > 0 && <p className="analysis-context-warning" role="status">ИИ видит только 24 последних реплики. Ещё {analysisWindow.omitted} ранних реплик вне анализа — проверьте полную расшифровку перед решением.</p>}
+              <details><summary>Как работает анализ</summary>
+              <p>
+                {!authoritativeEncounterIsActive
+                  ? 'Откройте приём со статусом «идёт».'
+                  : !authoritativeConsent?.analysisReady
+                    ? 'Для анализа нужно отдельное согласие пациента на передачу расшифровки в Groq.'
+                    : authoritativeTranscriptSnapshot.length === 0
+                      ? 'Начните разговор. После сохранения реплик подсказки появятся автоматически.'
+                      : 'Подсказки обновляются автоматически по новым репликам: первая попытка после короткой паузы, следующие — с интервалом не меньше 12 секунд. При лимите Groq ожидание увеличивается. Подтверждать каждую реплику не нужно.'}
+              </p>
+              <p>Анализ использует до 24 последних сохранённых реплик этого приёма, включая прежние. Переключатель вида разговора не меняет состав анализа.</p>
+              <p>Расшифровка может содержать ошибки. Подсказки — непроверенные черновики; проверьте текст, роли и содержание перед принятием решения.</p>
+              <a href={scopeUrl(`/?encounterId=${encodeURIComponent(authoritativeEncounterId)}#patient-consents`)}>Проверить текст и согласия в клинической записи</a>
+              </details>
+            </div>
+          )}
 
           {analysis || activeSuggestionEntries.length > 0 || discardedSuggestionEntries.length > 0 ? (
             <div className="assistant-results">
@@ -2438,7 +2634,7 @@ export function OrionWorkspace({
                 aria-busy={analysisStatus === 'loading'}
               >
                 <div>
-                  <span className={`analysis-dot is-${analysisStatus}`} />
+                  {analysisStatus === 'loading' ? <OrionMark animated size={24} /> : <span className={`analysis-dot is-${analysisStatus}`} />}
                   <strong>
                     {analysisStatus === 'loading'
                       ? 'Обновляем по новым словам'
@@ -2446,7 +2642,7 @@ export function OrionWorkspace({
                         ? 'Ждём паузу для обновления'
                         : analysisStatus === 'error'
                           ? 'Предыдущие подсказки · проверьте актуальность'
-                          : 'GPT-OSS 120B · подтверждённый текст'}
+                          : 'GPT-OSS 120B · черновики по расшифровке'}
                   </strong>
                 </div>
                 <p>{analysis?.summary ?? 'Перепроверяем рекомендации после изменения ролей говорящих.'}</p>
@@ -2464,6 +2660,7 @@ export function OrionWorkspace({
                       void runAnalysis(
                         sessionState === 'review' ? 'final' : 'live',
                         true,
+                        Boolean(authoritativeEncounterId),
                       )
                     }
                   >
@@ -2549,16 +2746,16 @@ export function OrionWorkspace({
               >
                 <span className="assistant-glyph" aria-hidden="true">
                   {analysisStatus === 'loading' || analysisStatus === 'waiting'
-                    ? '···'
+                    ? <OrionMark animated={analysisStatus === 'loading'} size={42} />
                     : analysisStatus === 'error'
                       ? '!'
                       : '✦'}
                 </span>
                 <h3>
                   {analysisStatus === 'loading'
-                    ? 'Проверяем подтверждённый текст'
+                    ? 'Анализируем сохранённую расшифровку'
                     : analysisStatus === 'waiting'
-                      ? 'Ждём естественную паузу'
+                      ? analysisRetryAt ? 'Пауза из-за лимита Groq' : 'Ждём естественную паузу'
                       : analysisStatus === 'error'
                         ? 'Анализ временно недоступен'
                         : sessionState === 'listening' && speech.status === 'error'
@@ -2569,13 +2766,13 @@ export function OrionWorkspace({
                 </h3>
                 <p>
                   {analysisError ??
-                    'GPT-OSS 120B получает только подтверждённый текст. ORION не перебивает разговор и не принимает решения за врача.'}
+                    'GPT-OSS 120B анализирует сохранённый текст при наличии согласия. Черновики требуют проверки врача; аудио в Groq не передаётся.'}
                 </p>
                 {analysisStatus === 'error' && analysisSegments.length > 0 && (
                   <button
                     className="analysis-retry"
                     type="button"
-                    onClick={() => void runAnalysis(sessionState === 'review' ? 'final' : 'live', true)}
+                    onClick={() => void runAnalysis(sessionState === 'review' ? 'final' : 'live', true, Boolean(authoritativeEncounterId))}
                   >
                     Повторить анализ
                   </button>
@@ -2591,28 +2788,6 @@ export function OrionWorkspace({
             </>
           )}
 
-          {authoritativeEncounterId && authoritativeTranscriptSnapshot.length > 0 && (
-            <label className="analysis-acknowledgement">
-              <input
-                type="checkbox"
-                checked={transcriptAcknowledged}
-                disabled={!authoritativeEncounterIsActive || analysisStatus === 'loading'}
-                onChange={(event) =>
-                  setAcknowledgedTranscriptKey(
-                    event.target.checked ? authoritativeTranscriptKey : null,
-                  )
-                }
-              />
-              <span>
-                <strong>Я сверил(а) текст, язык и роли говорящих</strong>
-                <small>
-                  Подтверждение относится к текущим {authoritativeTranscriptSnapshot.length}{' '}
-                  финальным репликам и сбросится при появлении новой.
-                </small>
-              </span>
-            </label>
-          )}
-
           {authoritativeMessage && (
             <p className="authoritative-action-message" role="status">
               {authoritativeMessage}
@@ -2624,17 +2799,17 @@ export function OrionWorkspace({
               className="analysis-refresh"
               type="button"
               disabled={
+                analysisRetryAt > Date.now() ||
                 Boolean(authoritativeEncounterId) &&
-                (!transcriptAcknowledged ||
-                  !authoritativeEncounterIsActive ||
+                (!authoritativeEncounterIsActive ||
                   !authoritativeConsent?.analysisReady)
               }
               onClick={() =>
-                void runAnalysis(sessionState === 'review' ? 'final' : 'live', true)
+                void runAnalysis(sessionState === 'review' ? 'final' : 'live', true, Boolean(authoritativeEncounterId))
               }
             >
               {authoritativeEncounterId
-                ? 'Создать серверные черновики'
+                ? 'Получить подсказки ИИ'
                 : 'Обновить по подтверждённому тексту'}
             </button>
           )}
@@ -2654,7 +2829,7 @@ export function OrionWorkspace({
           <span>Локальный STT · Groq AI</span>
         </div>
       </footer>
-      {historyOpen && (
+      {historyOpen && !localAccountModeEnabled() && (
         <EncounterHistoryPanel
           records={historyRecords}
           preferredEncounterId={encounterId}

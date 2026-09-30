@@ -3,6 +3,8 @@ import {
   getAuthenticatedClinicContext,
 } from '../authenticated-clinic-page';
 import { OrionWorkspace } from '../orion-workspace';
+import { EncounterStart } from './encounter-start';
+import './clinical-live.css';
 import { WorkspaceAssignmentBoundary } from '../workspace-assignment-boundary';
 import { workspacePageUrl, type WorkspacePageQuery } from '@/lib/workspace-access-url';
 
@@ -22,10 +24,10 @@ export default async function LiveConsultationPage({
   return (
     <AuthenticatedClinicPage context={context} requiredCapability="clinician">
       <WorkspaceAssignmentBoundary user={context.user} returnTo={returnTo}>
-        <OrionWorkspace
+        {encounterId ? <OrionWorkspace
           clinicianName={context.user.displayName}
           requestedEncounterId={encounterId || null}
-        />
+        /> : <EncounterStart />}
       </WorkspaceAssignmentBoundary>
     </AuthenticatedClinicPage>
   );

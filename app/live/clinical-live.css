@@ -1,0 +1,81 @@
+/* Compact workspace overrides scoped to LIVE. */
+.orion-shell .session-ready { margin: 0 auto; padding: 28px 0; gap: 12px; }
+.orion-shell .session-ready .listening-orbit { display: none; }
+.orion-shell .live-brand-mark { color: var(--brand); margin-bottom: 4px; }
+.orion-shell .session-ready h2 { font-size: clamp(24px, 2.2vw, 34px); line-height: 1.2; letter-spacing: -.025em; }
+.orion-shell .stage-description { font-size: 16px; line-height: 1.55; margin: 6px 0 18px; }
+.orion-shell .visit-rail h1 { font-size: 26px; line-height: 1.2; }
+.orion-shell .assistant-panel h2 { font-size: 26px; }
+.orion-shell .authoritative-action-message { font-size: 14px; line-height: 1.55; }
+.orion-shell details summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.orion-shell .accepted-next-step { grid-column: 1 / -1; flex-basis: 100%; padding: 14px; border: 1px solid var(--panel-border); border-radius: 10px; font-size: 14px; line-height: 1.5; text-align: left; }
+
+/* The entry page uses clinic-shell tokens, never the legacy recorder's buttons. */
+.live-start {
+  width: 100%;
+  max-width: 1120px;
+  min-width: 0;
+  align-self: start;
+  padding: 28px 32px 32px;
+  color: var(--ink);
+}
+.live-start h1,
+.live-start h2,
+.live-start h3,
+.live-start p { margin: 0; }
+.live-start__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
+.live-start__header > div { min-width: 0; }
+.live-start .live-start__eyebrow { margin-bottom: 7px; color: var(--ink-muted); font-size: 12px; font-weight: 650; letter-spacing: .065em; text-transform: uppercase; }
+.live-start h1 { font-size: clamp(26px, 2.1vw, 32px); font-weight: 650; line-height: 1.2; letter-spacing: -.035em; }
+.live-start .live-start__intro { max-width: 60ch; margin-top: 10px; color: var(--ink-soft); font-size: 16px; line-height: 1.55; }
+.live-start__idle { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; padding-top: 5px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+.live-start__workspace { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.live-start__routes { min-width: 0; }
+.live-start__section-heading { padding: 22px 24px 18px; }
+.live-start h2 { font-size: 17px; font-weight: 650; line-height: 1.35; letter-spacing: -.02em; }
+.live-start__section-heading p { margin-top: 6px; color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
+.live-start__route { display: grid; grid-template-columns: 40px minmax(0, 1fr) 18px; align-items: center; gap: 13px; min-height: 94px; padding: 18px 24px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.live-start__route-icon { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--ink-soft); }
+.live-start__route-copy { display: grid; gap: 5px; min-width: 0; }
+.live-start__route-copy small { color: var(--ink-muted); font-size: 10px; font-weight: 750; letter-spacing: .075em; }
+.live-start__route-copy strong { font-size: 16px; font-weight: 650; line-height: 1.35; }
+.live-start__route-copy > span { color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
+.live-start__route-arrow { color: var(--ink-muted); }
+.live-start__route--primary .live-start__route-icon { border-color: transparent; background: var(--brand-soft); color: var(--brand-strong); }
+.live-start__route--primary strong { color: var(--brand-strong); }
+.live-start a.live-start__route:hover { background: var(--surface-muted); }
+.live-start a.live-start__route:hover .live-start__route-arrow { color: var(--brand-strong); }
+.live-start__route--disabled { color: var(--ink-muted); background: var(--surface-muted); }
+.live-start__route--disabled .live-start__route-icon { color: var(--ink-muted); }
+.live-start__history { background: var(--surface-muted); }
+.live-start__guidance { min-width: 0; padding: 22px 24px; border-left: 1px solid var(--line); background: var(--surface-strong); }
+.live-start__guidance > h2 { margin-bottom: 22px; }
+.live-start__guidance-item { display: flex; align-items: flex-start; gap: 10px; }
+.live-start__guidance-item + .live-start__guidance-item { margin-top: 23px; }
+.live-start__guidance-item > svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-muted); }
+.live-start__guidance-item h3 { font-size: 14px; font-weight: 650; line-height: 1.4; }
+.live-start__guidance-item p { margin-top: 6px; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+.live-start .live-start__pause-note { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+.live-start .live-start__data-note { margin-top: 14px; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+.live-start a:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -3px; border-radius: 4px; }
+@media (max-width: 1100px) {
+  .live-start { padding: 24px; }
+  .live-start__header { flex-direction: column; gap: 12px; }
+  .live-start__idle { padding-top: 0; }
+  .live-start__workspace { grid-template-columns: minmax(0, 1fr); }
+  .live-start__guidance { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px 24px; border-top: 1px solid var(--line); border-left: 0; }
+  .live-start__guidance > h2 { grid-column: 1 / -1; margin-bottom: 0; }
+  .live-start__guidance-item + .live-start__guidance-item { margin-top: 0; }
+  .live-start .live-start__pause-note { grid-column: 1 / -1; margin-top: 0; }
+}
+@media (max-width: 600px) {
+  .live-start { padding: 20px 14px 28px; }
+  .live-start__header { margin-bottom: 20px; }
+  .live-start__section-heading,
+  .live-start__guidance { padding: 18px; }
+  .live-start__route { grid-template-columns: 34px minmax(0, 1fr) 16px; gap: 10px; padding: 17px 18px; }
+  .live-start__route-icon { width: 34px; height: 38px; border-radius: 7px; }
+  .live-start__route-copy strong { font-size: 15px; }
+  .live-start__guidance { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .live-start__history { gap: 10px; }
+}

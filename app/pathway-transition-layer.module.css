@@ -1,0 +1,47 @@
+.curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  color: var(--ink);
+  background: var(--canvas);
+  outline: none;
+  animation: curtain-cover 500ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.curtain::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 44%, color-mix(in srgb, var(--brand) 16%, transparent), transparent 66%);
+}
+.curtain[data-direction='close'] { animation-duration: 360ms; }
+.curtain[data-phase='waiting'] { animation: none; }
+.curtain[data-phase='reveal'] { animation: curtain-reveal 420ms cubic-bezier(.4, 0, .2, 1) both; }
+.curtain[data-direction='close'][data-phase='reveal'] { animation-duration: 400ms; }
+.scene { display: grid; justify-items: center; text-align: center; padding: 32px 24px; max-width: 100%; }
+.medallion { position: relative; width: 122px; height: 122px; display: grid; place-items: center; color: var(--brand-strong); }
+.halo, .haloOuter { position: absolute; inset: 8px; border: 1px solid color-mix(in srgb, var(--brand) 36%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--brand) 5%, transparent); animation: halo-expand 920ms cubic-bezier(.22, 1, .36, 1) both; }
+.haloOuter { inset: -16px; border-color: color-mix(in srgb, var(--brand) 14%, transparent); background: transparent; animation-delay: 60ms; }
+.icon { animation: pulse-settle 780ms cubic-bezier(.22, 1, .36, 1) both; }
+.trace { width: min(420px, 75vw); height: 58px; margin-top: 5px; color: var(--brand); }
+.trace path { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: trace-draw 850ms cubic-bezier(.25, .46, .45, .94) 70ms both; }
+.scene strong { margin-top: 10px; font-size: clamp(23px, 3vw, 34px); line-height: 1.2; letter-spacing: -.04em; font-weight: 650; }
+.scene small { margin-top: 10px; color: var(--ink-soft); font-size: 13px; }
+.curtain[data-phase='reveal'] .scene { animation: scene-release 420ms cubic-bezier(.4, 0, .2, 1) both; }
+.curtain[data-direction='close'] .scene { animation: scene-return 760ms cubic-bezier(.22, 1, .36, 1) both; }
+.curtain[data-direction='close'][data-phase='reveal'] .scene { animation: scene-release 400ms cubic-bezier(.4, 0, .2, 1) both; }
+.curtain[data-direction='close'] .trace path { animation-duration: 680ms; }
+.failure { position: fixed; z-index: 9200; bottom: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; max-width: min(600px, calc(100vw - 32px)); padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-strong); color: var(--ink); box-shadow: var(--shadow-sm); font-size: 14px; }
+.failure button { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border: 0; border-radius: 8px; background: var(--surface-muted); cursor: pointer; }
+@keyframes curtain-cover { from { opacity: 0; } to { opacity: 1; } }
+@keyframes curtain-reveal { from { opacity: 1; } to { opacity: 0; } }
+@keyframes halo-expand { from { opacity: 0; transform: scale(.76); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulse-settle { from { opacity: 0; transform: scale(.82); } 60% { opacity: 1; transform: scale(1.035); } to { opacity: 1; transform: scale(1); } }
+@keyframes trace-draw { to { stroke-dashoffset: 0; } }
+@keyframes scene-release { to { opacity: 0; transform: translateY(-12px) scale(1.02); } }
+@keyframes scene-return { from { opacity: 0; transform: translateY(10px) scale(1.05); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .curtain, .halo, .haloOuter, .icon, .trace path, .scene { animation: none !important; } .trace path { stroke-dashoffset: 0; } }

@@ -5,6 +5,7 @@ import { useWorkspaceFetch } from '@/lib/workspace-access-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type LocalSpeechToken = {
+  segmentIndex?: number;
   sourceId?: string;
   version?: number;
   text: string;
@@ -62,6 +63,7 @@ type SessionResponse = {
 
 type PersistedSegmentResponse = {
   segment?: {
+    segmentIndex?: unknown;
     id?: unknown;
     version?: unknown;
     role?: unknown;
@@ -433,6 +435,7 @@ function normalizePersistedSegment(
   return {
     sourceId,
     version,
+    segmentIndex: typeof segment.segmentIndex === 'number' ? segment.segmentIndex : undefined,
     text,
     startMs: startedAtMs,
     endMs: endedAtMs,
@@ -461,6 +464,7 @@ export function useLocalSpeechTranscription(
   const statusRef = useRef<TranscriptionStatus>('idle');
   const runRef = useRef(0);
   const sessionIdRef = useRef<string | null>(null);
+  const persistedUploadIndexRef = useRef(0);
   const captureRef = useRef<CaptureState>(createCaptureState());
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const pendingUploadsRef = useRef(0);
@@ -817,7 +821,7 @@ export function useLocalSpeechTranscription(
                     'X-Orion-Speech-Session-Id': sessionId,
                   }
                 : { 'X-Orion-Session-Id': sessionId }),
-              'X-Orion-Utterance-Index': String(utterance.index),
+              'X-Orion-Utterance-Index': String(encounterId ? persistedUploadIndexRef.current : utterance.index),
             },
             body: encodeWav(utterance.samples),
             signal: sessionSignal
@@ -838,6 +842,10 @@ export function useLocalSpeechTranscription(
             | PersistedSegmentResponse
             | null;
           if (!payload || run !== runRef.current) return;
+          if (encounterId && 'skipped' in payload && payload.skipped === 'no_speech') {
+            setProvisionalTokens([]);
+            return;
+          }
           const speechToken = encounterId
             ? normalizePersistedSegment(payload as PersistedSegmentResponse)
             : normalizeTranscription(
@@ -847,6 +855,7 @@ export function useLocalSpeechTranscription(
                 ),
               );
           if (!speechToken) return;
+          if (encounterId) persistedUploadIndexRef.current += 1;
 
           setFinalTokens((current) => {
             const previous = current.at(-1);
@@ -1082,6 +1091,7 @@ export function useLocalSpeechTranscription(
         return;
       }
       sessionIdRef.current = sessionId;
+      persistedUploadIndexRef.current = 0;
       setEngine(
         normalizeEngine(session.engine) ??
           (encounterId && session.session

@@ -24,6 +24,16 @@ const roleLabels: Record<OrganizationRole, string> = {
   service: 'Сервисная роль',
 };
 
+const roleResponsibilities: Record<OrganizationRole, string> = {
+  doctor: 'Ведёт приём, проверяет протокол и принимает клинические решения. Доступность каждого действия определяется разрешениями ниже.',
+  nurse: 'Фиксирует измерения и ответы пациента, выполняет задачи наблюдения и сообщает врачу об отклонениях. Не заменяет врача при постановке диагноза и выборе лечения.',
+  registrar: 'Работает с карточками пациентов, записью и очередью в пределах своего назначения. Не принимает клинические решения.',
+  administrator: 'Управляет рабочими назначениями сотрудников при наличии соответствующего разрешения. Эта роль сама по себе не даёт права вести приём или подписывать протокол.',
+  medical_lead: 'Проверяет клинические правила и качество работы в рамках выданных разрешений. Полномочия врача не добавляются автоматически.',
+  auditor: 'Проверяет доступные записи аудита. Роль аудитора не означает право менять клинические записи.',
+  service: 'Предназначена для серверных интеграций, а не интерактивной работы сотрудника.',
+};
+
 const permissionLabels: Record<ClinicPermission, string> = {
   'clinic.dashboard.read': 'Рабочий день',
   'patient.directory.read': 'Реестр пациентов',
@@ -32,8 +42,8 @@ const permissionLabels: Record<ClinicPermission, string> = {
   'encounter.manage': 'Ведение приёма и протокола',
   'orders.manage': 'Направления и результаты',
   'scheduling.manage': 'Запись и электронная очередь',
-  'care.manage': 'Диспансерное наблюдение',
-  'observations.manage': 'Показатели пациента',
+  'care.manage': 'План наблюдения',
+  'observations.manage': 'Измерения пациента',
   'communications.manage': 'Сообщения и напоминания',
   'access.self.read': 'Просмотр собственного доступа',
   'access.manage': 'Управление назначениями доступа',
@@ -168,6 +178,15 @@ export function AccessWorkspace({
           <div className={styles.roles}>
             {selected.roles.map((role) => <span key={role}>{roleLabels[role]}</span>)}
           </div>
+          <section aria-label="Обязанности выбранной роли">
+            {selected.roles.length > 1 ? (
+              <p><strong>В этом назначении совмещены роли.</strong> Поэтому доступны обязанности нескольких ролей. Это не отдельные аккаунты; при проверке работы медсестры или администратора используйте отдельное назначение с нужными правами.</p>
+            ) : null}
+            {selected.roles.map((role) => (
+              <p key={role}><strong>{roleLabels[role]}.</strong> {roleResponsibilities[role]}</p>
+            ))}
+            <p>Описание роли — не выдача прав. Проверяйте список разрешений этого назначения; запрет или отсутствие разрешения ограничивает действие.</p>
+          </section>
           <dl className={styles.metadata}>
             <div><dt>Статус</dt><dd>Активно</dd></div>
             <div><dt>Начало</dt><dd>{formatDate(selected.effectiveFrom)}</dd></div>

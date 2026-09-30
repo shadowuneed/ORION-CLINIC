@@ -7,6 +7,8 @@ import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import { D1ClinicalSectionRepository } from './clinical-sections';
 import { D1ProtocolReviewRepository } from './protocol-review';
 import { D1ProtocolSigningRepository } from './protocol-signing';
+import { D1DocumentExportRepository } from './document-export';
+import { generateProtocolArtifacts } from '@/lib/documents/protocol-artifacts';
 import {
   D1SuggestionReviewRepository,
   SuggestionLifecycleError,
@@ -220,6 +222,21 @@ afterEach(() => {
 });
 
 describe('recommendations in the immutable protocol source', () => {
+  it('does not publish a protocol preview if access is revoked during the snapshot read', async () => {
+    let armed = false;
+    const fixture = createFixture((sql, database) => {
+      if (armed && sql.includes('version.content_json as contentJson')) {
+        armed = false;
+        database.exec("update memberships set status='disabled' where id='membership-a'");
+      }
+    });
+    expect(await fixture.review.getCurrentPreview('user-a')).toBeNull();
+    await resolveMandatorySections(fixture.sections);
+    await fixture.review.beginReview({ expectedEncounterVersion: 1, idempotencyKey: crypto.randomUUID(), actorId: 'user-a', requestId: crypto.randomUUID() });
+    armed = true;
+    await expect(fixture.review.getCurrentPreview('user-a')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(armed).toBe(false);
+  });
   it.each(['draft', 'sign'] as const)('rolls back %s when access is revoked after final preflight', async (operation) => {
     let armed = false;
     const { database, sections, review, signing } = createFixture(undefined, { beforeBatch: () => {
@@ -394,6 +411,17 @@ describe('recommendations in the immutable protocol source', () => {
       requestId: crypto.randomUUID(),
     });
     const draftContent = readProtocolContent(database, draft.protocol.id);
+    const draftPreview = await review.getCurrentPreview('user-a');
+    expect(draftPreview).toMatchObject({ id: draft.protocol.id, status: 'draft', version: 1,
+      recommendations: [{ title: clinicianTitle, content: clinicianContent }] });
+    expect(draftPreview?.sections).toHaveLength(8);
+    expect(draftPreview).not.toHaveProperty('transcript');
+    expect(draftPreview).not.toHaveProperty('contentJson');
+    await expect(review.getCurrentPreview('user-b')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    await expect(new D1ProtocolReviewRepository(createD1Adapter(database), {
+      organizationId: 'org-a', facilityId: 'fac-a', encounterId: 'encounter-b',
+      reviewerMembershipId: 'membership-a', accessAssignmentId: 'access-assignment-a-general-medicine', accessPermission: 'encounter.read',
+    }).getCurrentPreview('user-a')).rejects.toBeInstanceOf(AccessPermissionRequiredError);
 
     expect(draftContent.parsed).toMatchObject({
       schemaVersion: 1,
@@ -490,6 +518,16 @@ describe('recommendations in the immutable protocol source', () => {
     });
     expect(signed.transition).toMatchObject({ status: 'finalized', version: 3 });
     expect(signedContent.raw).toBe(draftContent.raw);
+    const reopened = await review.getCurrentPreview('user-a');
+    expect(reopened).toMatchObject({ id: signed.protocol.id, status: 'signed', version: 2 });
+    expect(reopened?.sections).toEqual(draftPreview?.sections);
+    const source = await new D1DocumentExportRepository(createD1Adapter(database), {
+      organizationId: 'org-a', facilityId: 'fac-a', encounterId: 'encounter-a', reviewerMembershipId: 'membership-a',
+      accessAssignmentId: 'access-assignment-a-general-medicine', accessPermission: 'encounter.read',
+    }, 'user-a').getSignedSource();
+    const artifacts = await generateProtocolArtifacts(source);
+    expect(artifacts.map(item => item.kind)).toEqual(expect.arrayContaining(['protocol_pdf', 'protocol_docx', 'bundle_zip']));
+    expect(artifacts.every(item => item.bytes.length > 100 && item.sha256.length === 64)).toBe(true);
     expect(signedContent.parsed.recommendations).toEqual(
       draftContent.parsed.recommendations,
     );

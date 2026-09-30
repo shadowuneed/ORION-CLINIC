@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SchedulingScope } from '@/lib/auth/scheduling-access';
+import { SchedulingPermissionRequiredError } from '@/lib/auth/scheduling-access';
 import {
   SCHEDULING_CONFIRMATION_STATEMENT_VERSION,
   SYNTHETIC_SCHEDULE_SOURCE_LABEL,
@@ -636,6 +637,101 @@ afterEach(() => {
 });
 
 describe('D1 scheduling workflow', () => {
+  it('does not return another clinician\'s patient preferences, appointment or queue ticket', async () => {
+    const { d1, repository, primaryReferral, firstSlotStartsAt } = fixture();
+    const preference = await repository.createPreference(
+      preferenceInput(primaryReferral, firstSlotStartsAt, crypto.randomUUID()),
+    );
+    const held = await repository.holdSlot({
+      serviceRequestId: primaryReferral.requestId, slotId: 'slot-1',
+      preferenceSnapshotId: preference.id, expectedSlotVersion: 1,
+      idempotencyKey: crypto.randomUUID(), requestId: 'scope-hold',
+    });
+    await repository.confirmAppointment({
+      appointmentId: held.id, expectedAppointmentVersion: 1, expectedSlotVersion: 2,
+      confirmation: await confirmationFor(held), reason: 'Synthetic confirmation',
+      idempotencyKey: crypto.randomUUID(), requestId: 'scope-confirm',
+    });
+    await repository.issueQueueTicket({
+      appointmentId: held.id, expectedAppointmentVersion: 2,
+      idempotencyKey: crypto.randomUUID(), requestId: 'scope-ticket',
+    });
+    const own = await repository.list();
+    expect(own.preferences).toHaveLength(1);
+    expect(own.appointments).toHaveLength(1);
+    expect(own.queue).toHaveLength(1);
+    expect(own.slots.find(slot => slot.id === 'slot-1')?.current.appointmentId).toBe(held.id);
+
+    const otherClinician = new D1SchedulingWorkflowRepository(d1, {
+      organizationId: 'org-a', facilityId: 'fac-a', userId: 'user-b',
+      membershipId: 'membership-b', accessAssignmentId: 'orders-assignment-a',
+      role: 'clinician',
+    });
+    const other = await otherClinician.list();
+    expect(other.eligibleReferrals).toHaveLength(0);
+    expect(other.preferences).toHaveLength(0);
+    expect(other.appointments).toHaveLength(0);
+    expect(other.queue).toHaveLength(0);
+    expect(other.slots.find(slot => slot.id === 'slot-1')?.current.appointmentId).toBeNull();
+  }, 20000);
+
+  it('lets a separate registrar book and call but not start clinical service', async () => {
+    const { database, d1, primaryReferral, firstSlotStartsAt } = fixture();
+    database.exec(`
+      insert into users (id,external_issuer,external_subject,display_name,status)
+        values ('registrar-user','test','registrar','Test registrar','active');
+      insert into memberships (id,organization_id,facility_id,user_id,role,status)
+        values ('registrar-member','org-a','fac-a','registrar-user','registrar','active');
+      insert into department_access_assignments
+        (id,organization_id,facility_id,department_id,membership_id,created_by_membership_id,created_at)
+        values ('registrar-assignment','org-a','fac-a','orders-department','registrar-member','membership-b',1);
+      insert into department_access_assignment_versions
+        (id,organization_id,facility_id,assignment_id,department_id,membership_id,
+         version,supersedes_version_id,status,source_type,roles_json,allow_permissions_json,
+         deny_permissions_json,effective_from,effective_until,change_reason,changed_by_membership_id,changed_at,created_at)
+        values ('registrar-v1','org-a','fac-a','registrar-assignment','orders-department','registrar-member',
+          1,null,'active','bootstrap','["registrar"]','[]','[]',1,null,'Isolated test','membership-b',1,1);
+      insert into department_access_assignment_heads
+        (id,organization_id,facility_id,assignment_id,department_id,membership_id,current_version_id,lock_version,created_at,updated_at)
+        values ('registrar-head','org-a','fac-a','registrar-assignment','orders-department','registrar-member','registrar-v1',1,1,1);
+    `);
+    const repository = new D1SchedulingWorkflowRepository(d1, {
+      organizationId: 'org-a', facilityId: 'fac-a', userId: 'registrar-user',
+      membershipId: 'registrar-member', accessAssignmentId: 'registrar-assignment', role: 'registrar',
+    });
+    const key = () => crypto.randomUUID();
+    const preference = await repository.createPreference(preferenceInput(primaryReferral, firstSlotStartsAt, key()));
+    const held = await repository.holdSlot({ serviceRequestId: primaryReferral.requestId,
+      slotId: 'slot-1', preferenceSnapshotId: preference.id, expectedSlotVersion: 1,
+      idempotencyKey: key(), requestId: 'registrar-hold' });
+    const confirmed = await repository.confirmAppointment({ appointmentId: held.id,
+      expectedAppointmentVersion: 1, expectedSlotVersion: 2, confirmation: await confirmationFor(held),
+      reason: 'Artificial patient confirmation', idempotencyKey: key(), requestId: 'registrar-confirm' });
+    expect(confirmed.current.status).toBe('confirmed');
+    let ticket = await repository.issueQueueTicket({ appointmentId: held.id,
+      expectedAppointmentVersion: 2, idempotencyKey: key(), requestId: 'registrar-ticket' });
+    const registrarView = await repository.list();
+    expect(registrarView.preferences).toHaveLength(1);
+    expect(registrarView.appointments.map(item => item.id)).toContain(held.id);
+    expect(registrarView.queue.map(item => item.id)).toContain(ticket.id);
+    for (const action of ['arrive', 'call'] as const) {
+      ticket = await repository.commandQueue({ ticketId: ticket.id, action,
+        expectedQueueVersion: ticket.current.version, reason: 'Artificial queue transition',
+        roomLabel: 'Test room', exceptionCode: null, exceptionNote: null,
+        idempotencyKey: key(), requestId: `registrar-${action}` });
+    }
+    const before = database.prepare('select count(*) as n from audit_events').get();
+    await expect(repository.commandQueue({ ticketId: ticket.id, action: 'start_service',
+      expectedQueueVersion: ticket.current.version, reason: 'Forbidden registrar clinical action',
+      roomLabel: 'Test room', exceptionCode: null, exceptionNote: null,
+      idempotencyKey: key(), requestId: 'registrar-denied-start' })).rejects.toBeInstanceOf(SchedulingPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from audit_events').get()).toEqual(before);
+    expect((await repository.getAppointment(held.id))?.current.status).toBe('confirmed');
+    expect(database.prepare('select status from queue_ticket_versions where id = (select current_version_id from queue_ticket_heads where queue_ticket_id = ?)').get(ticket.id)).toEqual({ status: 'called' });
+    expect(database.prepare('select access_assignment_id from appointments where id = ?').get(held.id))
+      .toEqual({ access_assignment_id: 'registrar-assignment' });
+  }, 20000);
+
   it('persists preference, hold, patient confirmation and the complete queue lifecycle', async () => {
     const { database, repository, primaryReferral, firstSlotStartsAt } = fixture();
     const initial = await repository.list();

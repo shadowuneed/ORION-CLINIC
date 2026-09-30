@@ -1,5 +1,6 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -13,7 +14,6 @@ import {
   CircleDot,
   Clock3,
   DoorOpen,
-  LoaderCircle,
   MapPin,
   RefreshCw,
   ShieldCheck,
@@ -165,6 +165,31 @@ export function isExpiredSchedulingHold(
   );
 }
 
+/** Only actionable, currently scoped appointments belong on the staff queue board. */
+export function buildActiveQueueBoard(
+  tickets: SchedulingQueueTicketRecord[],
+  appointments: SchedulingAppointmentRecord[],
+  eligibleReferralIds: readonly string[],
+) {
+  const allowed = new Set(eligibleReferralIds);
+  const byId = new Map(appointments.map((appointment) => [appointment.id, appointment]));
+  return tickets.flatMap((ticket) => {
+    const appointment = byId.get(ticket.appointmentId);
+    if (
+      !appointment ||
+      !allowed.has(appointment.serviceRequestId) ||
+      appointment.patient.id !== ticket.patient.id ||
+      appointment.current.status !== 'confirmed' ||
+      ['completed', 'cancelled'].includes(ticket.current.status)
+    ) return [];
+    return [{ ticket, appointment }];
+  }).sort((a, b) =>
+    a.ticket.serviceDate.localeCompare(b.ticket.serviceDate) ||
+    a.ticket.sequence - b.ticket.sequence ||
+    a.ticket.id.localeCompare(b.ticket.id),
+  );
+}
+
 function formatTimestamp(value: number | null) {
   if (value === null) return '—';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -216,7 +241,8 @@ export function SchedulingWorkspace() {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<ApiError | null>(null);
-  const [testDataAcknowledged, setTestDataAcknowledged] = useState(false);
+  // The runtime itself is synthetic-only; no per-action checkbox is required.
+  const testDataAcknowledged = true;
   const [patientConfirmed, setPatientConfirmed] = useState(false);
   const [confirmationMethod, setConfirmationMethod] = useState<
     'verbal_in_person' | 'verbal_phone' | 'digital'
@@ -362,6 +388,11 @@ export function SchedulingWorkspace() {
   const currentTicket = currentAppointment
     ? queue.find((ticket) => ticket.appointmentId === currentAppointment.id)
     : undefined;
+  const activeQueueBoard = buildActiveQueueBoard(
+    queue,
+    appointments,
+    referrals.map((referral) => referral.serviceRequestId),
+  );
 
   const visibleSlots = slots.filter((slot) => {
     const preferredProvider = currentPreference?.preferredProviderId;
@@ -587,6 +618,7 @@ export function SchedulingWorkspace() {
     ticket: SchedulingQueueTicketRecord,
     action: QueueAction,
   ) {
+    if (!testDataAcknowledged) return;
     const reason = queueReason.trim();
     if (reason.length < 3) return;
     const result = await postCommand<SchedulingQueueTicketRecord>(
@@ -616,7 +648,7 @@ export function SchedulingWorkspace() {
   if (state !== 'ready') {
     const content = {
       loading: {
-        icon: <LoaderCircle className={styles.spin} aria-hidden="true" size={28} />,
+        icon: <OrionMark animated size={48} />,
         title: 'Загружаем расписание',
         text: 'Читаем актуальные версии направлений, слотов и очереди из локальной D1.',
       },
@@ -692,8 +724,8 @@ export function SchedulingWorkspace() {
         <div className={styles.sourceBadge}>
           <ShieldCheck aria-hidden="true" size={20} />
           <span>
-            <strong>{data.sourceLabel ?? 'Тестовое ручное расписание · не КМИС'}</strong>
-            <small>D1 · синтетические пациенты · без внешней записи</small>
+            <strong>Ручное расписание</strong>
+            <small>Записи сохраняются здесь · связь с КМИС не настроена</small>
           </span>
         </div>
       </header>
@@ -736,17 +768,6 @@ export function SchedulingWorkspace() {
       ) : null}
 
       <div className={styles.toolbar}>
-        <label className={styles.syntheticCheck}>
-          <input
-            checked={testDataAcknowledged}
-            onChange={(event) => setTestDataAcknowledged(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <strong>Работаю только с тестовыми данными</strong>
-            <small>Обязательно для записи изменений в этот локальный контур</small>
-          </span>
-        </label>
         <div className={styles.toolbarActions}>
           {assignmentOptions.length > 1 ? (
             <select
@@ -768,6 +789,39 @@ export function SchedulingWorkspace() {
           </button>
         </div>
       </div>
+
+      <section aria-labelledby="active-queue-title" className={styles.queueBoard}>
+        <header className={styles.queueBoardHeader}>
+          <div>
+            <span className={styles.eyebrow}>Доступная выборка</span>
+            <h2 id="active-queue-title">Текущая очередь</h2>
+            <p>Талоны из доступных вам подтверждённых записей в загруженной выборке. Порядок — дата и номер талона, без автоматической оценки приоритета.</p>
+          </div>
+          <span className={styles.queueBoardCount}>{activeQueueBoard.length} в выборке</span>
+        </header>
+        {activeQueueBoard.length ? (
+          <ol className={styles.queueBoardList}>
+            {activeQueueBoard.map(({ ticket, appointment }) => (
+              <li key={ticket.id}>
+                <button
+                  aria-label={`Открыть запись: талон ${ticket.displayNumber}, ${ticket.patient.displayName}, ${queueLabels[ticket.current.status]}`}
+                  onClick={() => selectReferral(appointment.serviceRequestId)}
+                  type="button"
+                >
+                  <strong className={styles.queueBoardNumber}>{ticket.displayNumber}</strong>
+                  <span className={styles.queueBoardPatient}><strong>{ticket.patient.displayName}</strong><small>{appointment.slot.serviceName} · {formatSlot(appointment.slot)}</small></span>
+                  <span className={`${styles.status} ${styles['queue_' + ticket.current.status]}`}>{queueLabels[ticket.current.status]}</span>
+                  <span className={styles.queueBoardRoom}>{ticket.current.roomLabel || 'Кабинет не назначен'}</span>
+                  <ChevronRight aria-hidden="true" size={17} />
+                </button>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className={styles.queueBoardEmpty}>В текущей выборке нет активных талонов. Обновите данные после подтверждения записи и выдачи талона.</p>
+        )}
+        <p className={styles.queueBoardFoot}>Данные читаются из D1 при загрузке и по кнопке «Обновить». API пока ограничивает выборку 100 записями и 100 талонами; это не полный реестр. Для изменения статуса откройте запись.</p>
+      </section>
 
       <section className={styles.workspace}>
         <aside className={styles.referrals}>
@@ -830,7 +884,7 @@ export function SchedulingWorkspace() {
                 </section>
 
                 <section className={styles.panel}>
-                  <PanelHeader number="02" title="Свободные окна" text="Показываются только сохранённые ручные тестовые слоты из D1." />
+                  <PanelHeader number="02" title="Свободные окна" text="Показываются сохранённые вручную окна этого расписания." />
                   {activeAppointment ? (
                     <InlineEmpty title="У направления уже есть активная запись" text="Сначала завершите или отмените текущую запись. Второй активный резерв сервер не создаст." />
                   ) : currentPreference ? (
@@ -893,6 +947,7 @@ export function SchedulingWorkspace() {
                   <QueuePanel
                     appointment={currentAppointment}
                     busy={Boolean(busy)}
+                    testDataAcknowledged={testDataAcknowledged}
                     capabilities={capabilities}
                     exceptionCode={exceptionCode}
                     exceptionNote={exceptionNote}
@@ -1104,7 +1159,7 @@ function AppointmentPanel({
   );
 }
 
-function QueuePanel({
+export function QueuePanel({
   appointment,
   busy,
   capabilities,
@@ -1118,7 +1173,9 @@ function QueuePanel({
   setQueueReason,
   setRoomLabel,
   ticket,
+  testDataAcknowledged,
 }: {
+  testDataAcknowledged: boolean;
   appointment?: SchedulingAppointmentRecord;
   busy: boolean;
   capabilities?: SchedulingWorkspaceData['capabilities'];
@@ -1137,6 +1194,7 @@ function QueuePanel({
   const permission = action ? (`queue.${action === 'mark_exception' ? 'exception' : action}` as keyof SchedulingWorkspaceData['capabilities']) : null;
   const actionAllowed = permission ? capabilities?.[permission] : false;
   const needsRoom = action === 'call' || action === 'start_service';
+  const writesBlocked = busy || !testDataAcknowledged;
   return (
     <div className={styles.queuePanel}>
       <div className={styles.ticketCard}>
@@ -1152,9 +1210,12 @@ function QueuePanel({
 
       {action ? (
         <div className={styles.queueControls}>
+          {!actionAllowed ? <p role="status">{action === 'start_service' || action === 'complete'
+            ? 'Следующий шаг выполняет врач: начало и завершение приёма недоступны регистратору. Талон и вызов уже сохранены.'
+            : 'Для следующего действия нет разрешения в текущем рабочем доступе.'}</p> : null}
           <label><span>Основание изменения статуса</span><input onChange={(event) => setQueueReason(event.target.value)} value={queueReason} /></label>
           {needsRoom ? <label><span>Кабинет</span><input onChange={(event) => setRoomLabel(event.target.value)} value={roomLabel} /></label> : null}
-          <button className={styles.primaryButton} disabled={busy || !actionAllowed || queueReason.trim().length < 3 || (needsRoom && !roomLabel.trim()) || (action === 'complete' && !appointment)} onClick={() => onAction(action)} type="button"><CircleDot aria-hidden="true" size={16} />{queueActionLabels[action]}</button>
+          <button className={styles.primaryButton} disabled={writesBlocked || !actionAllowed || queueReason.trim().length < 3 || (needsRoom && !roomLabel.trim()) || (action === 'complete' && !appointment)} onClick={() => onAction(action)} type="button"><CircleDot aria-hidden="true" size={16} />{queueActionLabels[action]}</button>
         </div>
       ) : null}
 
@@ -1164,7 +1225,7 @@ function QueuePanel({
           <div>
             <label><span>Код</span><input onChange={(event) => setExceptionCode(event.target.value)} value={exceptionCode} /></label>
             <label><span>Описание</span><input onChange={(event) => setExceptionNote(event.target.value)} value={exceptionNote} /></label>
-            <button className={styles.dangerButton} disabled={busy || exceptionCode.trim().length < 2 || exceptionNote.trim().length < 3 || queueReason.trim().length < 3} onClick={() => onAction('mark_exception')} type="button">Передать на ручную проверку</button>
+            <button className={styles.dangerButton} disabled={writesBlocked || exceptionCode.trim().length < 2 || exceptionNote.trim().length < 3 || queueReason.trim().length < 3} onClick={() => onAction('mark_exception')} type="button">Передать на ручную проверку</button>
           </div>
         </details>
       ) : null}

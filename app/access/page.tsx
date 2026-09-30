@@ -31,6 +31,7 @@ export default async function AccessPage({
   const principal = toSiteIdentityPrincipal({
     id: context.user.userId,
     email: context.user.email,
+    issuer: context.user.issuer,
   });
 
   let view:

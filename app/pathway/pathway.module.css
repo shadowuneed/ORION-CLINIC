@@ -1,0 +1,60 @@
+.page { min-width: 0; color: var(--ink); }
+.innerBar { position: sticky; top: 68px; z-index: 5; display: flex; align-items: end; gap: 8px; min-width: 0; height: 60px; padding: 8px 18px 0; border-bottom: 1px solid var(--line-strong); background: color-mix(in srgb, var(--surface-strong) 87%, var(--brand-soft)); box-shadow: 0 4px 15px rgb(0 0 0 / 5%); }
+.innerDots { display: flex; align-self: center; gap: 4px; margin-right: 5px; }
+.innerDots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+.innerDots i:first-child { background: var(--brand); }
+.innerTabs { display: flex; align-items: end; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.innerTab { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex: 0 0 auto; min-height: 42px; padding: 0 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 14px 14px 0 0; background: transparent; color: var(--ink-soft); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.innerTab:hover { background: var(--surface-muted); color: var(--ink); }
+.innerTabActive { border-color: var(--line-strong); background: var(--surface); color: var(--ink); box-shadow: 0 -3px 13px rgb(0 0 0 / 4%); }
+.innerTab:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -3px; }
+.workspace { min-width: 0; max-width: 100%; overflow-x: clip; container-type: inline-size; }
+.workspace[hidden] { display: none; }
+.pane { min-width: 0; animation: pathway-enter .18s ease-out both; }
+.pane[hidden] { display: none; }
+.paneLoading { display: grid; place-items: center; min-height: 240px; margin: 0; color: var(--ink-soft); font-size: 13px; }
+@keyframes pathway-enter { from { opacity: .65; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+.overview { min-width: 0; padding: 34px clamp(18px, 3vw, 42px) 60px; background: var(--canvas); }
+.overviewHeader { display: flex; justify-content: space-between; align-items: end; gap: 30px; }
+.overviewHeader h1 { margin: 8px 0 8px; font-size: clamp(30px, 3.5vw, 48px); line-height: 1.08; letter-spacing: -.055em; }
+.overviewHeader p { max-width: 770px; margin: 0; color: var(--ink-soft); font-size: 14px; line-height: 1.55; }
+.patientPicker { display: grid; gap: 8px; flex: 0 0 auto; width: min(290px, 100%); }
+.patientPicker label { color: var(--ink-muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.patientPicker select { width: 100%; min-height: 46px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; }
+.patientHero { display: flex; align-items: stretch; justify-content: space-between; gap: 18px; margin-top: 28px; padding: 18px; border: 1px solid var(--line-strong); border-radius: 24px; background: color-mix(in srgb, var(--surface) 85%, var(--brand-soft)); box-shadow: 0 12px 32px rgb(0 0 0 / 4%); }
+.patientIdentity { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.patientAvatar { display: grid; flex: 0 0 auto; width: 64px; height: 64px; place-items: center; border: 1px solid var(--brand); border-radius: 19px; background: var(--brand-soft); color: var(--brand-strong); }
+.patientIdentity > div { display: grid; gap: 5px; min-width: 0; }
+.patientIdentity small { color: var(--brand-strong); font-size: 10px; font-weight: 750; letter-spacing: .12em; }
+.patientIdentity strong { overflow: hidden; font-size: 20px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.patientIdentity div > span { color: var(--ink-muted); font-size: 12px; }
+.patientSignals { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.patientSignals > div { display: flex; align-items: center; gap: 10px; min-width: 112px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-strong); color: var(--ink); text-align: left; }
+.patientSignals > div > svg { color: var(--brand-strong); flex: 0 0 auto; }
+.patientSignals span { display: grid; gap: 3px; }
+.patientSignals strong { font-size: 20px; line-height: 1; }
+.patientSignals small { color: var(--ink-muted); font-size: 10px; }
+.partialNotice { margin: 14px 0 0; padding: 11px 14px; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink-soft); font-size: 12px; }
+.timelineSection { min-width: 0; margin-top: 42px; }
+.timelineHeading { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+.timelineHeading h2 { margin: 7px 0 5px; font-size: 26px; letter-spacing: -.04em; }
+.timelineHeading p { margin: 0; color: var(--ink-muted); font-size: 12px; }
+.timelineHeading button { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 13px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.timelineHeading button:disabled { cursor: wait; opacity: .6; }
+.timelineScroller { min-width: 0; overflow-x: auto; margin-top: 22px; padding-bottom: 20px; scrollbar-color: var(--brand) var(--surface); }
+.timelineTrack { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 255px); gap: 16px; width: max-content; min-width: 100%; padding-top: 59px; }
+.timelineTrack::before { content: ''; position: absolute; top: 37px; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, var(--brand), var(--line-strong)); }
+.timelineEvent { position: relative; min-width: 0; }
+.timelineNode { position: absolute; top: -29px; left: 17px; z-index: 1; width: 15px; height: 15px; border: 3px solid var(--canvas); border-radius: 50%; background: #d7eb84; box-shadow: 0 0 0 1px var(--brand); }
+.timelineEvent time { display: block; padding-left: 2px; color: var(--ink-muted); font-size: 11px; font-weight: 700; }
+.timelineCard { display: grid; align-content: start; gap: 9px; min-height: 182px; margin-top: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 19px; background: var(--surface); box-shadow: 0 10px 24px rgb(0 0 0 / 4%); }
+.timelineEvent:nth-child(even) .timelineCard { margin-top: 27px; }
+.timelineCard small { color: var(--brand-strong); font-size: 10px; font-weight: 750; text-transform: uppercase; }
+.timelineCard strong { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.timelineCard > span { color: var(--ink-muted); font-size: 11px; }
+.timelineEmpty { margin-top: 28px; padding: 30px; border: 1px dashed var(--line-strong); border-radius: 18px; background: var(--surface); color: var(--ink-soft); font-size: 14px; }
+.overview :is(button, select):focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+@media (max-width: 1100px) { .patientHero { flex-direction: column; } .patientSignals { flex-wrap: wrap; } }
+@media (max-width: 700px) { .innerBar { top: 0; padding-inline: 12px; } .innerDots { display: none; } .innerTab { padding-inline: 10px; font-size: 11px; } .overview { padding: 24px 16px 86px; } .overviewHeader { flex-direction: column; align-items: stretch; gap: 18px; } .patientPicker { width: 100%; } .patientIdentity strong { font-size: 16px; } .patientAvatar { width: 52px; height: 52px; } .patientSignals > div { flex: 1 1 110px; } .timelineHeading { align-items: start; } .timelineHeading p { max-width: 230px; } }
+@media (prefers-reduced-motion: reduce) { .pane { animation: none; } }

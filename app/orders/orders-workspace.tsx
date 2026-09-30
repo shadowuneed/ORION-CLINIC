@@ -1,5 +1,9 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
+import { orderActionBlocker } from '@/lib/workspace-ux';
+import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
+
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -14,7 +18,6 @@ import {
   FilePlus2,
   FlaskConical,
   History,
-  LoaderCircle,
   Play,
   Plus,
   RefreshCw,
@@ -53,8 +56,62 @@ type OrdersResponse = {
   assignments?: AccessAssignmentOption[];
   orders?: ServiceRequestRecord[];
   encounters?: OrderEncounterOption[];
+  recommendationSource?: RecommendationTransferSource | null;
   error?: ApiError;
 };
+
+type RecommendationTransferSelection = {
+  encounterId: string;
+  recommendationId: string;
+  recommendationVersion: number;
+};
+
+type RecommendationTransferSource = RecommendationTransferSelection & {
+  reviewDecisionId: string;
+  derivativeVersionId: string | null;
+  title: string;
+  medicalJustification: string;
+  state: 'accepted' | 'edited_and_accepted';
+  existingOrderId: string | null;
+};
+
+export function readRecommendationTransfer(params: URLSearchParams): RecommendationTransferSelection | null | 'invalid' {
+  if (!params.has('recommendationId') && !params.has('recommendationVersion')) return null;
+  const encounterId = params.get('encounterId')?.trim();
+  const recommendationId = params.get('recommendationId')?.trim();
+  const rawVersion = params.get('recommendationVersion') ?? '';
+  const recommendationVersion = Number(rawVersion);
+  if (!encounterId || !recommendationId || !/^[1-9]\d*$/.test(rawVersion) || !Number.isSafeInteger(recommendationVersion)) return 'invalid';
+  return { encounterId, recommendationId, recommendationVersion };
+}
+
+export function matchesRecommendationTransfer(selection: RecommendationTransferSelection, source: RecommendationTransferSource | null | undefined) {
+  return Boolean(source && source.encounterId === selection.encounterId && source.recommendationId === selection.recommendationId
+    && source.recommendationVersion === selection.recommendationVersion && source.reviewDecisionId
+    && ['accepted', 'edited_and_accepted'].includes(source.state));
+}
+
+export function orderRequestHref(requestId: string, facilityId: string, accessAssignmentId: string) {
+  const params = new URLSearchParams(buildOrderAccessQuery(facilityId, accessAssignmentId));
+  params.set('requestId', requestId);
+  return `/orders?${params.toString()}`;
+}
+
+export function recommendationTransferConflict(
+  status: number,
+  code: string | undefined,
+  selection: RecommendationTransferSelection | null | 'invalid',
+  facilityId: string,
+  accessAssignmentId: string,
+) {
+  if (status !== 409 || code !== 'ORDER_COMMAND_CONFLICT' || !selection || selection === 'invalid') return null;
+  const params = new URLSearchParams(buildOrderAccessQuery(facilityId, accessAssignmentId));
+  params.set('encounterId', selection.encounterId);
+  return {
+    message: 'Выбранная версия рекомендации изменилась или больше недоступна для переноса. Вернитесь в этот приём, проверьте актуальное решение врача и откройте принятую рекомендацию заново. На этом шаге направление не создавалось.',
+    href: `/?${params.toString()}`,
+  };
+}
 
 type ApiError = {
   code: string;
@@ -121,7 +178,7 @@ const reviewLabels = {
 };
 
 const actionLabels: Record<OrderAction, string> = {
-  approve: 'Подтвердить и отправить',
+  approve: 'Подтвердить направление',
   hold: 'Приостановить',
   resume: 'Возобновить',
   revoke: 'Отозвать',
@@ -189,16 +246,19 @@ export function OrdersWorkspace() {
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<OrdersResponse>({});
   const [selectedId, setSelectedId] = useState('');
+  const [openedRequestId, setOpenedRequestId] = useState('');
   const [selectedAccessAssignmentId, setSelectedAccessAssignmentId] = useState('');
   const [assignmentOptions, setAssignmentOptions] = useState<AccessAssignmentOption[]>([]);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<ServiceRequestStatus | 'all'>('all');
   const [kind, setKind] = useState<ServiceRequestKind | 'all'>('all');
   const [createOpen, setCreateOpen] = useState(false);
-  const [createKind, setCreateKind] = useState<ServiceRequestKind>('laboratory');
+  const [createKind, setCreateKind] = useState<ServiceRequestKind | ''>('laboratory');
+  const [createFromRecommendation, setCreateFromRecommendation] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [operationError, setOperationError] = useState<ApiError | null>(null);
+  const [sourceConflictHref, setSourceConflictHref] = useState('');
   const [actionReason, setActionReason] = useState('');
   const [reviewNote, setReviewNote] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
@@ -215,6 +275,8 @@ export function OrdersWorkspace() {
   const reviewKeys = useRef(new Map<string, string>());
   const loadAbort = useRef<AbortController | null>(null);
   const loadGeneration = useRef(0);
+  const transferSelection = useRef<RecommendationTransferSelection | null | 'invalid'>(null);
+  const requestedOrderId = useRef('');
 
   const selectOrder = useCallback((orderId: string) => {
     if (selectedIdRef.current !== orderId) {
@@ -235,8 +297,15 @@ export function OrdersWorkspace() {
     const controller = new AbortController();
     loadAbort.current = controller;
     setState('loading');
+    setSourceConflictHref('');
+    setCreateOpen(false);
     setSelectedFileName('');
     try {
+      if (transferSelection.current === 'invalid') {
+        setData({ error: { code: 'INVALID_SOURCE', message: 'Ссылка на рекомендацию неполная. Вернитесь в приём и откройте принятую рекомендацию заново.' } });
+        setState('error');
+        return;
+      }
       const params = new URLSearchParams({
         status: statusRef.current,
         kind: kindRef.current,
@@ -247,6 +316,14 @@ export function OrdersWorkspace() {
         params.set('accessAssignmentId', accessAssignmentRef.current);
       }
       if (queryRef.current) params.set('query', queryRef.current);
+      if (transferSelection.current) {
+        const transfer = transferSelection.current;
+        params.set('encounterId', transfer.encounterId);
+        params.set('recommendationId', transfer.recommendationId);
+        params.set('recommendationVersion', String(transfer.recommendationVersion));
+      }
+      const requestedId = preferredId ?? requestedOrderId.current;
+      if (requestedId) params.set('requestId', requestedId);
       const response = await fetch(`/api/orders?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
@@ -268,6 +345,17 @@ export function OrdersWorkspace() {
       } else if (response.status === 403) {
         setState('forbidden');
       } else if (!response.ok || !payload.orders || !payload.encounters) {
+        const conflict = recommendationTransferConflict(response.status, payload.error?.code, transferSelection.current, facilityRef.current, accessAssignmentRef.current);
+        if (conflict) {
+          setData({ ...payload, error: { ...payload.error!, message: conflict.message } });
+          setSourceConflictHref(conflict.href);
+        }
+        setState('error');
+      } else if (transferSelection.current && !matchesRecommendationTransfer(transferSelection.current, payload.recommendationSource)) {
+        setData({ error: { code: 'SOURCE_NOT_VERIFIED', message: 'Сервер не подтвердил выбранную версию рекомендации. Откройте приём и проверьте её актуальное решение.' } });
+        setState('error');
+      } else if (requestedId && !payload.orders.some(order => order.id === requestedId)) {
+        setData({ error: { code: 'ORDER_NOT_FOUND', message: 'Направление из ссылки не найдено в выбранном рабочем доступе. Другая запись вместо него не открыта.' } });
         setState('error');
       } else {
         const resolvedFacility = payload.facility?.id ?? facilityRef.current;
@@ -277,11 +365,12 @@ export function OrdersWorkspace() {
         accessAssignmentRef.current = resolvedAssignment;
         setSelectedAccessAssignmentId(resolvedAssignment);
         setAssignmentOptions(payload.assignments ?? []);
-        const candidate = preferredId ?? selectedIdRef.current;
+        setOpenedRequestId(requestedId);
+        const candidate = requestedId || (payload.recommendationSource ? payload.recommendationSource.existingOrderId ?? '' : selectedIdRef.current);
         selectOrder(
           payload.orders.some((order) => order.id === candidate)
             ? candidate
-            : payload.orders[0]?.id ?? '',
+            : payload.recommendationSource ? '' : payload.orders[0]?.id ?? '',
         );
         setState('ready');
       }
@@ -301,18 +390,23 @@ export function OrdersWorkspace() {
       const params = new URLSearchParams(window.location.search);
       facilityRef.current = params.get('facilityId') ?? '';
       accessAssignmentRef.current = params.get('accessAssignmentId') ?? '';
+      transferSelection.current = readRecommendationTransfer(params);
+      requestedOrderId.current = params.get('requestId') ?? '';
       setSelectedAccessAssignmentId(accessAssignmentRef.current);
       void load();
     }, 0);
     return () => {
       window.clearTimeout(timer);
       loadAbort.current?.abort();
+      loadGeneration.current += 1;
     };
   }, [load]);
 
   const orders = data.orders ?? [];
   const encounters = data.encounters ?? [];
   const selected = orders.find((order) => order.id === selectedId) ?? null;
+  const transferSource = state === 'ready' ? data.recommendationSource ?? null : null;
+  const formSource = createFromRecommendation ? transferSource : null;
 
   function assignmentQuery() {
     return buildOrderAccessQuery(
@@ -330,6 +424,9 @@ export function OrdersWorkspace() {
     accessAssignmentRef.current = assignment.assignmentId;
     facilityRef.current = assignment.facilityId;
     setSelectedAccessAssignmentId(assignment.assignmentId);
+    setCreateOpen(false);
+    setCreateFromRecommendation(false);
+    setData({});
     const url = new URL(window.location.href);
     url.searchParams.set('accessAssignmentId', assignment.assignmentId);
     url.searchParams.set('facilityId', assignment.facilityId);
@@ -365,12 +462,16 @@ export function OrdersWorkspace() {
 
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || state !== 'ready' || (createFromRecommendation && !formSource)) return;
+    const generation = loadGeneration.current;
+    const operationAssignment = accessAssignmentRef.current;
+    const operationFacility = facilityRef.current;
+    const currentOperation = () => generation === loadGeneration.current && operationAssignment === accessAssignmentRef.current && operationFacility === facilityRef.current;
     const form = new FormData(event.currentTarget);
     const commandPayload = {
       facilityId: facilityRef.current || undefined,
       accessAssignmentId: accessAssignmentRef.current || undefined,
-      encounterId: String(form.get('encounterId') ?? ''),
+      encounterId: formSource?.encounterId ?? String(form.get('encounterId') ?? ''),
       kind: String(form.get('kind') ?? ''),
       priority: String(form.get('priority') ?? ''),
       requestedService: String(form.get('requestedService') ?? ''),
@@ -380,7 +481,8 @@ export function OrdersWorkspace() {
           : null,
       medicalJustification: String(form.get('medicalJustification') ?? ''),
       clinicianNote: String(form.get('clinicianNote') ?? '') || null,
-      testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+      testDataAcknowledged: true,
+      ...(formSource ? { recommendationSource: { recommendationId: formSource.recommendationId, recommendationVersion: formSource.recommendationVersion } } : {}),
     };
     const keyName = buildScopedOperationKey(
       accessAssignmentRef.current,
@@ -406,6 +508,7 @@ export function OrdersWorkspace() {
         order?: ServiceRequestRecord;
         error?: ApiError;
       };
+      if (!currentOperation()) return;
       if (!response.ok || !payload.order) {
         if (response.status < 500) createKeys.current.delete(keyName);
         setOperationError(payload.error ?? { code: 'UNKNOWN', message: 'Не удалось создать направление.' });
@@ -413,15 +516,20 @@ export function OrdersWorkspace() {
       }
       createKeys.current.delete(keyName);
       setCreateOpen(false);
+      setCreateFromRecommendation(false);
+      transferSelection.current = null;
+      requestedOrderId.current = payload.order.id;
+      window.history.replaceState(null, '', orderRequestHref(payload.order.id, operationFacility, operationAssignment));
       updateOrder(payload.order, 'Черновик сохранён. Теперь врач должен отдельно его подтвердить.');
       await load(payload.order.id);
     } catch {
+      if (!currentOperation()) return;
       setOperationError({
         code: 'NETWORK_ERROR',
         message: 'Сервер не ответил. Ключ повтора сохранён — повтор не создаст дубль.',
       });
     } finally {
-      setBusy(null);
+      if (operationAssignment === accessAssignmentRef.current && operationFacility === facilityRef.current) setBusy(null);
     }
   }
 
@@ -628,9 +736,7 @@ export function OrdersWorkspace() {
     data.facility?.id ?? '',
     selectedAccessAssignmentId,
   )}`;
-  const signInHref = `/signin-with-chatgpt?return_to=${encodeURIComponent(
-    signInReturnTo,
-  )}`;
+  const signInHref = chatGPTSignInPath(signInReturnTo);
 
   return (
     <main className={styles.main}>
@@ -648,6 +754,8 @@ export function OrdersWorkspace() {
           disabled={state !== 'ready'}
           onClick={() => {
             clearFeedback();
+            setCreateFromRecommendation(false);
+            setCreateKind('laboratory');
             setCreateOpen(true);
           }}
           type="button"
@@ -656,6 +764,36 @@ export function OrdersWorkspace() {
           Новое направление
         </button>
       </header>
+
+      {transferSource && (
+        <section className={styles.transferPanel} aria-labelledby="recommendation-transfer-title">
+          <span className={styles.eyebrow}>Принято врачом · версия {transferSource.recommendationVersion}</span>
+          <h2 id="recommendation-transfer-title">Направление из рекомендации</h2>
+          <strong>{transferSource.title}</strong>
+          <p>{transferSource.medicalJustification}</p>
+          <p className={styles.hint}>1. Проверьте формулировку и выберите тип направления. 2. Сохраните черновик. 3. Подтвердите направление отдельно. Открытие этой страницы ничего не создаёт и не отправляет.</p>
+          <div className={styles.actionRow}>
+            {transferSource.existingOrderId ? (
+              <a className={styles.primaryButton} href={orderRequestHref(transferSource.existingOrderId, data.facility?.id ?? '', selectedAccessAssignmentId)}>Открыть уже созданное направление</a>
+            ) : (
+              <button className={styles.primaryButton} disabled={Boolean(busy)} onClick={() => {
+                clearFeedback();
+                setCreateFromRecommendation(true);
+                setCreateKind('');
+                setCreateOpen(true);
+              }} type="button"><FilePlus2 aria-hidden="true" size={18} />Проверить и создать черновик</button>
+            )}
+            <a className={styles.secondaryButton} href={`/?${new URLSearchParams({ facilityId: data.facility?.id ?? '', accessAssignmentId: selectedAccessAssignmentId, encounterId: transferSource.encounterId }).toString()}`}>Вернуться в приём</a>
+          </div>
+        </section>
+      )}
+
+      {state === 'ready' && openedRequestId && (
+        <div className={styles.successMessage} role="status"><FileCheck2 aria-hidden="true" size={18} />
+          <span>Открыто сохранённое направление. {selected?.current.status === 'draft' ? 'Это черновик: проверьте его и подтвердите отдельным действием ниже.' : 'Текущий статус указан в карточке.'}</span>
+          <a href={`/orders${buildOrderAccessQuery(data.facility?.id ?? '', selectedAccessAssignmentId)}`}>Все направления</a>
+        </div>
+      )}
 
       <section className={styles.stats} aria-label="Сводка направлений">
         <article>
@@ -739,10 +877,10 @@ export function OrdersWorkspace() {
         </div>
       )}
 
-      {state === 'loading' && <StatePanel icon={<LoaderCircle className={styles.spin} />} title="Загружаем направления" text="Читаем текущие версии и результаты из D1." />}
+      {state === 'loading' && <StatePanel icon={<OrionMark animated size={48} />} title="Загружаем направления" text="Читаем текущие версии и результаты из D1." />}
       {state === 'unauthenticated' && <StatePanel icon={<AlertCircle />} title="Нужен вход" text="Откройте платформу через авторизованный контур ORION Clinic." action={<a className={styles.primaryButton} href={signInHref} target="_top">Войти</a>} />}
       {state === 'forbidden' && <StatePanel icon={<ShieldCheck />} title="Нет доступа" text="Раздел доступен только врачу с активным назначением в клинике." />}
-      {state === 'error' && <StatePanel icon={<AlertCircle />} title="Не удалось загрузить данные" text={data.error?.message ?? 'Проверьте локальную базу и повторите.'} action={<button className={styles.secondaryButton} onClick={() => void load()} type="button">Повторить</button>} />}
+      {state === 'error' && <OrderLoadError message={data.error?.message} sourceConflictHref={sourceConflictHref} onRetry={() => void load()} />}
       {state === 'assignment' && <StatePanel icon={<ShieldCheck />} title="Выберите рабочий контур" text="Права разных отделений и филиалов не объединяются." action={<div className={styles.facilityChoices}>{assignmentOptions.map((assignment) => <button className={styles.secondaryButton} key={assignment.assignmentId} onClick={() => selectAssignment(assignment.assignmentId)} type="button">{assignment.organizationName} · {assignment.facilityName} · {assignment.departmentName}</button>)}</div>} />}
 
       {state === 'ready' && (
@@ -821,16 +959,18 @@ export function OrdersWorkspace() {
             <header className={styles.modalHeader}>
               <div>
                 <span className={styles.eyebrow}>Версия 1 · черновик</span>
-                <h2 id="create-order-title">Новое направление</h2>
+                <h2 id="create-order-title">{formSource ? 'Черновик из принятой рекомендации' : 'Новое направление'}</h2>
                 <p>Сохранение не отправляет запрос. Подтверждение врача — отдельный шаг.</p>
               </div>
               <button aria-label="Закрыть" disabled={Boolean(busy)} onClick={() => setCreateOpen(false)} type="button"><X size={19} /></button>
             </header>
-            <form className={styles.createForm} onSubmit={createOrder}>
+            <form className={styles.createForm} onSubmit={createOrder} key={formSource ? `${formSource.recommendationId}:${formSource.recommendationVersion}` : 'manual'}>
+              {formSource && <div className={joinClass(styles.transferSummary, styles.fieldWide)}><strong>Источник: {formSource.title}</strong><p>Принятая версия {formSource.recommendationVersion}. Приём зафиксирован по серверному источнику. Тип и приоритет выбираете вы; текст можно изменить. Сохранение не подтверждает и не отправляет направление.</p></div>}
               <label className={styles.fieldWide}>
                 <span>Приём и пациент</span>
-                <select name="encounterId" required defaultValue="">
+                <select name="encounterId" required defaultValue={formSource?.encounterId ?? ''} disabled={Boolean(formSource)}>
                   <option disabled value="">Выберите приём</option>
+                  {formSource && !encounters.some(encounter => encounter.id === formSource.encounterId) && <option value={formSource.encounterId}>Приём принятой рекомендации</option>}
                   {encounters.map((encounter) => (
                     <option disabled={!encounter.careConsentEffective} key={encounter.id} value={encounter.id}>
                       {encounter.patientName} · {encounter.medicalRecordNumber}{encounter.careConsentEffective ? '' : ' · нет согласия'}
@@ -841,7 +981,8 @@ export function OrdersWorkspace() {
               </label>
               <label>
                 <span>Тип</span>
-                <select name="kind" onChange={(event) => setCreateKind(event.target.value as ServiceRequestKind)} value={createKind}>
+                <select name="kind" required onChange={(event) => setCreateKind(event.target.value as ServiceRequestKind)} value={createKind}>
+                  <option disabled value="">Выберите тип направления</option>
                   <option value="laboratory">Лабораторный анализ</option>
                   <option value="ecg">ЭКГ</option>
                   <option value="service">Процедура или услуга</option>
@@ -850,7 +991,8 @@ export function OrdersWorkspace() {
               </label>
               <label>
                 <span>Приоритет</span>
-                <select defaultValue="routine" name="priority">
+                <select defaultValue={formSource ? '' : 'routine'} name="priority" required>
+                  <option disabled value="">Выберите приоритет</option>
                   <option value="routine">Планово</option>
                   <option value="urgent">Срочно</option>
                   <option value="asap">Как можно скорее</option>
@@ -859,7 +1001,7 @@ export function OrdersWorkspace() {
               </label>
               <label className={styles.fieldWide}>
                 <span>Что требуется</span>
-                <input maxLength={300} minLength={2} name="requestedService" placeholder="Например, гликированный гемоглобин HbA1c" required />
+                <input defaultValue={formSource?.title ?? ''} maxLength={300} minLength={2} name="requestedService" placeholder="Например, гликированный гемоглобин HbA1c" required />
               </label>
               {createKind === 'referral' && (
                 <label className={styles.fieldWide}>
@@ -869,20 +1011,18 @@ export function OrdersWorkspace() {
               )}
               <label className={styles.fieldWide}>
                 <span>Медицинское обоснование</span>
-                <textarea maxLength={2000} minLength={10} name="medicalJustification" placeholder="Клинические сведения, показания и цель запроса" required rows={4} />
+                <textarea defaultValue={formSource?.medicalJustification ?? ''} maxLength={2000} minLength={10} name="medicalJustification" placeholder="Клинические сведения, показания и цель запроса" required rows={4} />
+                {formSource && <small>Проверьте показания и цель. Обоснование должно содержать от 10 до 2000 символов.</small>}
               </label>
               <label className={styles.fieldWide}>
                 <span>Примечание исполнителю</span>
                 <textarea maxLength={2000} name="clinicianNote" placeholder="Подготовка, сроки или другая важная информация" rows={3} />
               </label>
-              <label className={joinClass(styles.confirmation, styles.fieldWide)}>
-                <input name="testDataAcknowledged" required type="checkbox" />
-                <span><strong>Используются только тестовые данные</strong><small>Внешняя КМИС и реальная лаборатория не подключены.</small></span>
-              </label>
               <div className={joinClass(styles.formActions, styles.fieldWide)}>
+                {operationError && <p className={styles.errorMessage} role="alert">{operationError.message}</p>}
                 <button className={styles.secondaryButton} disabled={Boolean(busy)} onClick={() => setCreateOpen(false)} type="button">Отмена</button>
-                <button className={styles.primaryButton} disabled={Boolean(busy) || encounters.length === 0} type="submit">
-                  {busy === 'create' ? <LoaderCircle className={styles.spin} size={17} /> : <FilePlus2 size={17} />}
+                <button className={styles.primaryButton} disabled={Boolean(busy) || (!formSource && encounters.length === 0)} type="submit">
+                  {busy === 'create' ? <OrionMark animated size={20} /> : <FilePlus2 size={17} />}
                   Сохранить черновик
                 </button>
               </div>
@@ -892,6 +1032,14 @@ export function OrdersWorkspace() {
       )}
     </main>
   );
+}
+
+export function OrderLoadError({ message, sourceConflictHref, onRetry }: {
+  message?: string;
+  sourceConflictHref: string;
+  onRetry(): void;
+}) {
+  return <StatePanel icon={<AlertCircle />} title={sourceConflictHref ? 'Проверьте актуальную рекомендацию' : 'Не удалось загрузить данные'} text={message ?? 'Проверьте локальную базу и повторите.'} action={sourceConflictHref ? <a className={styles.primaryButton} href={sourceConflictHref}>Вернуться в этот приём</a> : <button className={styles.secondaryButton} onClick={onRetry} type="button">Повторить</button>} />;
 }
 
 function StatePanel({
@@ -980,23 +1128,34 @@ function OrderDetail({
         {order.current.clinicianNote && <article><span>Исполнителю</span><strong>{order.current.clinicianNote}</strong></article>}
       </section>
 
+      {order.recommendationSource && (
+        <section className={styles.transferSummary} aria-label="Источник направления">
+          <strong>Создано из принятой рекомендации · версия {order.recommendationSource.recommendationVersion}</strong>
+          <p>{order.recommendationSource.title}</p>
+          <small>Источник сохранён вместе с направлением. Принятие подсказки и подтверждение направления — разные решения врача. Внешняя отправка не выполняется.</small>
+        </section>
+      )}
+
       {actions.length > 0 && (
         <section className={styles.decisionPanel}>
           <header><span><ShieldCheck aria-hidden="true" size={18} /><strong>Решение по направлению</strong></span><small>сохранится новой версией</small></header>
           <textarea
             aria-label="Основание действия"
+            aria-describedby="order-action-guidance"
             maxLength={500}
             onChange={(event) => onActionReason(event.target.value)}
             placeholder="Укажите основание действия врача (минимум 3 символа)"
             rows={2}
             value={actionReason}
           />
+          <p className={styles.hint} id="order-action-guidance" role="status">
+            {orderActionBlocker('approve', Boolean(busy), actionReason, true)
+              ?? 'Выберите действие ниже. Решение сохранится в истории направления; внешняя отправка не выполняется.'}
+          </p>
           <div className={styles.actionRow}>
             {actions.map((action) => {
-              const disabled =
-                Boolean(busy) ||
-                actionReason.trim().length < 3 ||
-                (action === 'complete' && !order.canComplete);
+              const blocker = orderActionBlocker(action, Boolean(busy), actionReason, order.canComplete);
+              const disabled = blocker !== null;
               return (
                 <button
                   className={joinClass(
@@ -1007,18 +1166,19 @@ function OrderDetail({
                         : styles.dangerButton,
                   )}
                   disabled={disabled}
+                  aria-describedby={action === 'complete' && !order.canComplete ? 'order-action-guidance order-completion-guidance' : 'order-action-guidance'}
                   key={action}
                   onClick={() => onAction(action)}
-                  title={action === 'complete' && !order.canComplete ? 'Сначала загрузите финальный результат и подтвердите его проверку врачом' : undefined}
+                  title={blocker ?? undefined}
                   type="button"
                 >
-                  {busy === `action:${action}` ? <LoaderCircle className={styles.spin} size={16} /> : action === 'approve' ? <Check size={16} /> : action === 'resume' ? <Play size={16} /> : action === 'hold' ? <CirclePause size={16} /> : action === 'complete' ? <FileCheck2 size={16} /> : <Trash2 size={16} />}
+                  {busy === `action:${action}` ? <OrionMark animated size={20} /> : action === 'approve' ? <Check size={16} /> : action === 'resume' ? <Play size={16} /> : action === 'hold' ? <CirclePause size={16} /> : action === 'complete' ? <FileCheck2 size={16} /> : <Trash2 size={16} />}
                   {actionLabels[action]}
                 </button>
               );
             })}
           </div>
-          {status === 'active' && !order.canComplete && <p className={styles.hint}>Для завершения нужен финальный, дополненный или исправленный результат со статусом «Проверен врачом».</p>}
+          {status === 'active' && !order.canComplete && <p className={styles.hint} id="order-completion-guidance">Для завершения загрузите финальный, дополненный или исправленный результат ниже и подтвердите его проверку врачом.</p>}
         </section>
       )}
 
@@ -1078,7 +1238,7 @@ function OrderDetail({
             <label className={styles.fieldWide}><span>Причина добавления версии</span><input maxLength={500} minLength={3} name="changeReason" placeholder={currentReport ? 'Например, получен исправленный документ' : 'Например, получен финальный результат'} required /></label>
             <div className={joinClass(styles.uploadActions, styles.fieldWide)}>
               <small>Загрузка не означает клиническое подтверждение.</small>
-              <button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy === 'upload' ? <LoaderCircle className={styles.spin} size={16} /> : <Upload size={16} />}Сохранить результат</button>
+              <button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy === 'upload' ? <OrionMark animated size={20} /> : <Upload size={16} />}Сохранить результат</button>
             </div>
           </form>
         )}

@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { z } from 'zod';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import {
   AccessAssignmentNotFoundError,
@@ -135,12 +136,21 @@ export async function PATCH(
   let payload;
   try {
     payload = updatePatientProfileSchema.parse(await request.json());
-  } catch {
+  } catch (error) {
+    const fields: Record<string, string> = {
+      displayName: 'Имя: от 2 до 160 символов', birthDate: 'Дата рождения: корректная дата не в будущем',
+      phone: 'Телефон: от 5 до 40 символов или пустое поле', email: 'Электронная почта: корректный адрес или пустое поле',
+      address: 'Адрес: от 3 до 300 символов или пустое поле', changeReason: 'Причина изменения: от 3 до 300 символов',
+      expectedVersion: 'Версия карточки: обновите страницу', testDataAcknowledged: 'Подтвердите использование искусственных данных',
+    };
+    const invalid = error instanceof z.ZodError
+      ? [...new Set(error.issues.map((issue) => fields[String(issue.path[0])] ?? 'Проверьте заполнение формы'))].join('. ')
+      : 'Не удалось прочитать форму. Обновите страницу и повторите.';
     return apiFailure(
       context,
       400,
       'INVALID_PATIENT_UPDATE',
-      'Проверьте данные, причину изменения и текущую версию карточки.',
+      invalid,
     );
   }
   const { patientId } = await params;

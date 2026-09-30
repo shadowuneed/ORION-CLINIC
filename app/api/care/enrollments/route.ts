@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { resolveChronicCareAccess } from '@/lib/auth/chronic-care-access';
+import { requireChronicCarePermission, resolveChronicCareAccess } from '@/lib/auth/chronic-care-access';
 import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import { parseRuntimeConfig } from '@/lib/config/runtime';
 import { createChronicEnrollmentSchema } from '@/lib/domain/chronic-care';
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       payload.accessAssignmentId,
       payload.facilityId,
     );
+    requireChronicCarePermission(access.scope.role, 'enrollment.confirm');
     const enrollment = await new D1ChronicCareWorkflowRepository(
       env.DB,
       access.scope,

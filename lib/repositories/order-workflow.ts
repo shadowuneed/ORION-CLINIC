@@ -4,12 +4,15 @@ import {
   assertDiagnosticReportTransition,
   canCompleteServiceRequest,
   nextServiceRequestStatus,
+  orderRecommendationSelectionSchema,
   type DiagnosticArtifactMimeType,
   type DiagnosticReportStatus,
   type DiagnosticReviewState,
   type ServiceRequestKind,
   type ServiceRequestPriority,
   type ServiceRequestStatus,
+  type OrderRecommendationSelection,
+  type OrderRecommendationSource,
 } from '@/lib/domain/orders';
 
 export type OrderEncounterOption = {
@@ -85,10 +88,12 @@ export type ServiceRequestRecord = {
     history: DiagnosticReportHistoryEntry[];
   } | null;
   canComplete: boolean;
+  recommendationSource?: OrderRecommendationSource | null;
 };
 
 export type CreateServiceRequestCommand = {
   encounterId: string;
+  recommendationSource?: OrderRecommendationSelection;
   kind: ServiceRequestKind;
   priority: ServiceRequestPriority;
   requestedService: string;
@@ -280,6 +285,166 @@ export class D1OrderWorkflowRepository {
     private readonly database: D1Database,
     private readonly scope: OrderWorkflowAccessScope,
   ) {}
+
+  // The same query is evaluated inside the write transaction. URL selectors and
+  // prefilled form text never establish acceptance, scope or permission.
+  private recommendationQuery() {
+    return `select suggestion.id as recommendationId, head.lock_version as recommendationVersion,
+      decision.id as reviewDecisionId, decision.reviewed_derivative_version_id as derivativeVersionId,
+      suggestion.encounter_id as encounterId, head.state,
+      case when head.state='accepted' then suggestion.title else derivative.title end as title,
+      case when head.state='accepted' then suggestion.original_content else derivative.content end as medicalJustification
+      from clinical_suggestions suggestion
+      join suggestion_review_heads head on head.organization_id=suggestion.organization_id
+        and head.facility_id=suggestion.facility_id and head.encounter_id=suggestion.encounter_id
+        and head.suggestion_id=suggestion.id
+      join review_decisions decision on decision.id=head.current_decision_id
+        and decision.organization_id=head.organization_id and decision.facility_id=head.facility_id
+        and decision.encounter_id=head.encounter_id and decision.suggestion_id=head.suggestion_id
+        and decision.result_state=head.state and decision.expected_version+1=head.lock_version
+      left join suggestion_derivative_versions derivative on derivative.id=decision.reviewed_derivative_version_id
+        and derivative.organization_id=decision.organization_id and derivative.facility_id=decision.facility_id
+        and derivative.encounter_id=decision.encounter_id and derivative.suggestion_id=decision.suggestion_id
+      left join suggestion_derivative_heads derivative_head on derivative_head.organization_id=suggestion.organization_id
+        and derivative_head.facility_id=suggestion.facility_id and derivative_head.encounter_id=suggestion.encounter_id
+        and derivative_head.suggestion_id=suggestion.id
+      join encounters encounter on encounter.id=suggestion.encounter_id
+        and encounter.organization_id=suggestion.organization_id and encounter.facility_id=suggestion.facility_id
+        and encounter.clinician_membership_id=?3 and encounter.status in ('in_progress','review')
+      join patients patient on patient.id=encounter.patient_id and patient.organization_id=encounter.organization_id
+        and patient.facility_id=encounter.facility_id and patient.status='active'
+      left join patient_profile_heads profile_head on profile_head.organization_id=patient.organization_id
+        and profile_head.facility_id=patient.facility_id and profile_head.patient_id=patient.id
+      left join patient_profile_versions profile on profile.id=profile_head.current_version_id
+        and profile.organization_id=profile_head.organization_id and profile.facility_id=profile_head.facility_id
+        and profile.patient_id=profile_head.patient_id and profile.version=profile_head.lock_version
+      join order_access_assignment_permissions orders_access on orders_access.assignment_id=?5
+        and orders_access.organization_id=suggestion.organization_id and orders_access.facility_id=suggestion.facility_id
+        and orders_access.membership_id=?3
+      join encounter_access_assignment_permissions clinical_access on clinical_access.assignment_id=orders_access.assignment_id
+        and clinical_access.membership_id=orders_access.membership_id
+        and clinical_access.organization_id=orders_access.organization_id and clinical_access.facility_id=orders_access.facility_id
+        and clinical_access.can_read=1 and clinical_access.can_manage=1
+      join memberships actor on actor.id=?3 and actor.user_id=?4 and actor.organization_id=?1 and actor.facility_id=?2
+      join consent_heads consent_head on consent_head.organization_id=encounter.organization_id
+        and consent_head.facility_id=encounter.facility_id and consent_head.patient_id=patient.id
+        and consent_head.encounter_id=encounter.id and consent_head.consent_type='care'
+      join consent_events consent on consent.id=consent_head.current_consent_event_id
+        and consent.organization_id=consent_head.organization_id and consent.facility_id=consent_head.facility_id
+        and consent.patient_id=consent_head.patient_id and consent.encounter_id=consent_head.encounter_id
+        and consent.consent_type=consent_head.consent_type and consent.version=consent_head.lock_version
+      where suggestion.organization_id=?1 and suggestion.facility_id=?2 and suggestion.encounter_id=?6
+        and suggestion.id=?7 and head.lock_version=?8 and suggestion.category='action'
+        and (suggestion.expires_at is null or suggestion.expires_at>cast(unixepoch('subsec')*1000 as integer))
+        and (profile_head.id is null or (profile.id is not null and profile.status='active'))
+        and orders_access.effective_from<=cast(unixepoch('subsec')*1000 as integer)
+        and (orders_access.effective_until is null or orders_access.effective_until>cast(unixepoch('subsec')*1000 as integer))
+        and clinical_access.effective_from<=cast(unixepoch('subsec')*1000 as integer)
+        and (clinical_access.effective_until is null or clinical_access.effective_until>cast(unixepoch('subsec')*1000 as integer))
+        and consent.decision='granted' and consent.effective_at<=cast(unixepoch('subsec')*1000 as integer)
+        and (consent.expires_at is null or consent.expires_at>cast(unixepoch('subsec')*1000 as integer))
+        and ((head.state='accepted' and decision.decision='accept' and decision.reviewed_derivative_version_id is null)
+          or (head.state='edited_and_accepted' and decision.decision in ('accept','edit_and_accept')
+            and derivative.id is not null and derivative_head.current_derivative_version_id=derivative.id))`;
+  }
+
+  private recommendationBindings(encounterId: string, source: OrderRecommendationSelection) {
+    return [this.scope.organizationId, this.scope.facilityId, this.scope.membershipId,
+      this.scope.userId, this.scope.accessAssignmentId, encounterId,
+      source.recommendationId, source.recommendationVersion];
+  }
+
+  async getRecommendationSource(input: OrderRecommendationSelection & { encounterId: string }) {
+    this.requireClinician();
+    const selected = orderRecommendationSelectionSchema.parse({
+      recommendationId: input.recommendationId, recommendationVersion: input.recommendationVersion,
+    });
+    const source = await this.database.prepare(this.recommendationQuery())
+      .bind(...this.recommendationBindings(input.encounterId, selected)).first<OrderRecommendationSource>();
+    if (!source) throw new OrderWorkflowConflictError('Accepted recommendation is unavailable or changed');
+    const existing = await this.database.prepare(`select request.id from audit_events audit
+      join service_requests request on request.id=audit.entity_id and request.organization_id=audit.organization_id
+        and request.facility_id=audit.facility_id and request.encounter_id=?3
+      where audit.organization_id=?1 and audit.facility_id=?2 and audit.action='service_request.create_draft'
+        and audit.entity_type='service_request'
+        and json_extract(audit.metadata_json,'$.recommendationSource.reviewDecisionId')=?4 limit 1`)
+      .bind(this.scope.organizationId, this.scope.facilityId, input.encounterId, source.reviewDecisionId)
+      .first<{ id: string }>();
+    // Reauthorize after the asynchronous duplicate lookup before returning text.
+    const current = await this.database.prepare(this.recommendationQuery())
+      .bind(...this.recommendationBindings(input.encounterId, selected)).first<OrderRecommendationSource>();
+    if (!current || current.reviewDecisionId !== source.reviewDecisionId ||
+      current.derivativeVersionId !== source.derivativeVersionId) {
+      throw new OrderWorkflowConflictError('Accepted recommendation changed');
+    }
+    return { ...current, existingOrderId: existing?.id ?? null };
+  }
+
+  private recommendationGuard(source: OrderRecommendationSource, committed?: {
+    orderId: string; auditId: string; commandId: string; versionId: string;
+    auditLockVersion: number; responseJson: string;
+  }) {
+    const complete = committed ? `and exists (select 1 from service_request_heads head
+        join service_request_versions version on version.id=head.current_version_id
+          and version.service_request_id=head.service_request_id and version.organization_id=head.organization_id
+          and version.facility_id=head.facility_id and version.version=head.lock_version
+        where head.organization_id=?1 and head.facility_id=?2 and head.service_request_id=?11
+          and head.current_version_id=?14 and head.lock_version=1 and version.status='draft'
+          and version.approved_by_membership_id is null and version.approved_at is null)
+      and exists (select 1 from audit_events audit join audit_stream_heads head
+        on head.organization_id=audit.organization_id and head.facility_id=audit.facility_id
+          and head.last_sequence=audit.sequence and head.last_event_hash=audit.event_hash and head.lock_version=?15
+        where audit.id=?12 and audit.organization_id=?1 and audit.facility_id=?2 and audit.entity_id=?11
+          and audit.action='service_request.create_draft' and audit.entity_type='service_request'
+          and json_extract(audit.metadata_json,'$.recommendationSource.reviewDecisionId')=?9)
+      and exists (select 1 from command_idempotency where id=?13 and organization_id=?1 and facility_id=?2
+        and actor_membership_id=?3 and access_assignment_id=?5 and operation='order.create'
+        and status='succeeded' and result_resource_type='service_request' and result_resource_id=?11 and response_json=?16)
+      and (select count(*) from audit_events where organization_id=?1 and facility_id=?2
+        and action='service_request.create_draft' and entity_type='service_request'
+        and json_extract(metadata_json,'$.recommendationSource.reviewDecisionId')=?9)=1` :
+      `and not exists (select 1 from audit_events where organization_id=?1 and facility_id=?2
+        and action='service_request.create_draft' and entity_type='service_request'
+        and json_extract(metadata_json,'$.recommendationSource.reviewDecisionId')=?9)`;
+    return this.database.prepare(`select case when exists (
+      select 1 from (${this.recommendationQuery()}) current_source
+      where current_source.reviewDecisionId=?9 and current_source.derivativeVersionId is ?10
+    ) ${complete} then 1 else json('order_recommendation_source_conflict') end as verified`)
+      .bind(...this.recommendationBindings(source.encounterId, source), source.reviewDecisionId, source.derivativeVersionId,
+        ...(committed ? [committed.orderId, committed.auditId, committed.commandId, committed.versionId,
+          committed.auditLockVersion, committed.responseJson] : []));
+  }
+
+  private async getOrderRecommendationSource(orderId: string): Promise<OrderRecommendationSource | null> {
+    // Audit stores only immutable source references. Text is reconstructed from
+    // the exact original/accepted derivative, never the recommendation's new head.
+    return this.database.prepare(`select suggestion.id as recommendationId,
+      json_extract(audit.metadata_json,'$.recommendationSource.recommendationVersion') as recommendationVersion,
+      decision.id as reviewDecisionId, decision.reviewed_derivative_version_id as derivativeVersionId,
+      suggestion.encounter_id as encounterId, decision.result_state as state,
+      case when decision.result_state='accepted' then suggestion.title else derivative.title end as title,
+      case when decision.result_state='accepted' then suggestion.original_content else derivative.content end as medicalJustification
+      from audit_events audit
+      join clinical_suggestions suggestion on suggestion.id=json_extract(audit.metadata_json,'$.recommendationSource.recommendationId')
+        and suggestion.organization_id=audit.organization_id and suggestion.facility_id=audit.facility_id
+        and suggestion.encounter_id=json_extract(audit.metadata_json,'$.encounterId')
+      join review_decisions decision on decision.id=json_extract(audit.metadata_json,'$.recommendationSource.reviewDecisionId')
+        and decision.organization_id=suggestion.organization_id and decision.facility_id=suggestion.facility_id
+        and decision.encounter_id=suggestion.encounter_id and decision.suggestion_id=suggestion.id
+      left join suggestion_derivative_versions derivative on derivative.id=decision.reviewed_derivative_version_id
+        and derivative.organization_id=decision.organization_id and derivative.facility_id=decision.facility_id
+        and derivative.encounter_id=decision.encounter_id and derivative.suggestion_id=decision.suggestion_id
+      where audit.organization_id=?1 and audit.facility_id=?2 and audit.entity_id=?3
+        and audit.entity_type='service_request' and audit.action='service_request.create_draft'
+        and exists (select 1 from encounter_access_assignment_permissions access
+          join memberships actor on actor.id=access.membership_id and actor.user_id=?6
+          where access.organization_id=audit.organization_id and access.facility_id=audit.facility_id
+            and access.assignment_id=?4 and access.membership_id=?5 and access.can_read=1
+            and access.effective_from<=cast(unixepoch('subsec')*1000 as integer)
+            and (access.effective_until is null or access.effective_until>cast(unixepoch('subsec')*1000 as integer))) limit 1`)
+      .bind(this.scope.organizationId, this.scope.facilityId, orderId,
+        this.scope.accessAssignmentId, this.scope.membershipId, this.scope.userId).first<OrderRecommendationSource>();
+  }
 
   async listEncounterOptions(): Promise<OrderEncounterOption[]> {
     this.requireClinician();
@@ -482,6 +647,7 @@ export class D1OrderWorkflowRepository {
         reportStatus: row.reportStatus,
         reviewState: row.reviewState,
       }),
+      recommendationSource: await this.getOrderRecommendationSource(row.id),
     };
   }
 
@@ -542,8 +708,11 @@ export class D1OrderWorkflowRepository {
 
   async createDraft(input: CreateServiceRequestCommand) {
     this.requireClinician();
+    const sourceSelection = input.recommendationSource
+      ? orderRecommendationSelectionSchema.parse(input.recommendationSource) : undefined;
     const normalized = {
       ...input,
+      recommendationSource: sourceSelection,
       requestedService: normalizeText(input.requestedService),
       targetSpecialty: normalizeNullable(input.targetSpecialty),
       medicalJustification: normalizeText(input.medicalJustification),
@@ -560,10 +729,23 @@ export class D1OrderWorkflowRepository {
         medicalJustification: normalized.medicalJustification,
         clinicianNote: normalized.clinicianNote,
         dataMode: 'synthetic-only',
+        ...(sourceSelection ? { recommendationSource: sourceSelection } : {}),
       }),
     );
+    const source = sourceSelection ? await this.getRecommendationSource({
+      ...sourceSelection, encounterId: normalized.encounterId,
+    }) : null;
     const replay = await this.findIdempotency('order.create', input.idempotencyKey);
-    if (replay) return this.resolveReplay(replay, requestHash);
+    if (replay) {
+      const record = await this.resolveReplay(replay, requestHash);
+      if (sourceSelection) await this.getRecommendationSource({ ...sourceSelection, encounterId: normalized.encounterId });
+      return record;
+    }
+    if (source?.existingOrderId) {
+      // Only the original idempotency key may replay. A different key cannot
+      // report success without durably binding that key to the existing order.
+      throw new OrderWorkflowConflictError('A draft already exists for the accepted recommendation');
+    }
 
     const encounter = await this.getEncounter(normalized.encounterId);
     if (!encounter) throw new OrderWorkflowNotFoundError('Encounter unavailable');
@@ -600,6 +782,11 @@ export class D1OrderWorkflowRepository {
         status: 'draft',
         encounterId: encounter.id,
         dataMode: 'synthetic-only',
+        ...(source ? { recommendationSource: {
+          recommendationId: source.recommendationId, recommendationVersion: source.recommendationVersion,
+          reviewDecisionId: source.reviewDecisionId, derivativeVersionId: source.derivativeVersionId,
+          encounterId: source.encounterId, state: source.state,
+        } } : {}),
       },
       occurredAt: now,
     });
@@ -608,6 +795,11 @@ export class D1OrderWorkflowRepository {
       operation: 'order.create',
       key: input.idempotencyKey,
       requestHash,
+      precondition: source ? this.recommendationGuard(source) : undefined,
+      verification: source ? this.recommendationGuard(source, {
+        orderId: serviceRequestId, auditId: audit.id, commandId, versionId,
+        auditLockVersion: auditHead.lockVersion + 1, responseJson: JSON.stringify(responseSnapshot),
+      }) : undefined,
       statements: [
       this.database
         .prepare(`
@@ -688,8 +880,9 @@ export class D1OrderWorkflowRepository {
       expectedStatements: 7,
       message: 'Service request draft was not committed',
     });
-    if (replayRecord) return replayRecord;
-    return this.getRecordSnapshot(responseSnapshot);
+    const record = replayRecord ?? await this.getRecordSnapshot(responseSnapshot);
+    if (sourceSelection) await this.getRecommendationSource({ ...sourceSelection, encounterId: normalized.encounterId });
+    return record;
   }
 
   async transition(input: ServiceRequestTransitionCommand) {
@@ -2302,10 +2495,16 @@ export class D1OrderWorkflowRepository {
     statements: D1PreparedStatement[];
     expectedStatements: number;
     message: string;
+    precondition?: D1PreparedStatement;
+    verification?: D1PreparedStatement;
   }): Promise<ServiceRequestRecord | null> {
     try {
-      const results = await this.database.batch(input.statements);
-      this.assertCommitted(results, input.expectedStatements, input.message);
+      const results = await this.database.batch([
+        ...(input.precondition ? [input.precondition] : []), ...input.statements,
+        ...(input.verification ? [input.verification] : []),
+      ]);
+      const offset = input.precondition ? 1 : 0;
+      this.assertCommitted(results.slice(offset, offset + input.expectedStatements), input.expectedStatements, input.message);
       return null;
     } catch (error) {
       const replay = await this.findIdempotency(input.operation, input.key);

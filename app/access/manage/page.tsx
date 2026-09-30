@@ -43,6 +43,7 @@ export default async function AccessAdministrationPage({
   const principal = toSiteIdentityPrincipal({
     id: context.user.userId,
     email: context.user.email,
+    issuer: context.user.issuer,
   });
 
   let result:

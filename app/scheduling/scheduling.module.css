@@ -104,6 +104,23 @@
 .stats strong { font-size: 1.05rem; }
 .stats small { margin-top: 3px; color: var(--ink-muted); font-size: .69rem; }
 
+.queueBoard { margin: 14px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.queueBoardHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 19px; }
+.queueBoardHeader h2 { margin: 5px 0 0; color: var(--ink); font-size: 1.14rem; }
+.queueBoardHeader p { max-width: 760px; margin: 6px 0 0; color: var(--ink-soft); font-size: .72rem; line-height: 1.5; }
+.queueBoardCount { flex: 0 0 auto; padding: 7px 10px; border-radius: 8px; color: var(--brand); background: var(--brand-soft); font-size: .71rem; font-weight: 750; }
+.queueBoardList { max-height: 370px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border-top: 1px solid var(--line); }
+.queueBoardList li + li { border-top: 1px solid var(--line); }
+.queueBoardList button { width: 100%; display: grid; grid-template-columns: 86px minmax(160px, 1fr) minmax(100px, auto) minmax(130px, auto) 17px; align-items: center; gap: 13px; padding: 12px 19px; border: 0; color: var(--ink); background: transparent; text-align: left; cursor: pointer; }
+.queueBoardList button:hover, .queueBoardList button:focus-visible { background: var(--brand-soft); }
+.queueBoardNumber { color: var(--brand); font-family: var(--font-mono); font-size: .86rem; }
+.queueBoardPatient { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.queueBoardPatient strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .78rem; }
+.queueBoardPatient small, .queueBoardRoom, .queueBoardFoot, .queueBoardEmpty { color: var(--ink-muted); font-size: .69rem; }
+.queueBoardPatient small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queueBoardFoot { margin: 0; padding: 10px 19px 13px; border-top: 1px solid var(--line); line-height: 1.45; }
+.queueBoardEmpty { margin: 0; padding: 18px 19px; border-top: 1px solid var(--line); }
+
 .toolbar {
   justify-content: space-between;
   gap: 14px;
@@ -312,8 +329,7 @@
 .primaryButton,
 .secondaryButton,
 .dangerButton { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border-radius: 8px; font-size: .73rem; font-weight: 700; cursor: pointer; }
-.primaryButton { border: 1px solid var(--brand); color: white; background: var(--brand); }
-html[data-theme='dark'] .primaryButton { color: #10201c; }
+.primaryButton { border: 1px solid var(--brand); color: var(--on-brand); background: var(--brand); }
 .secondaryButton { border: 1px solid var(--line-strong); color: var(--ink-soft); background: var(--surface-strong); }
 .dangerButton { border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--line)); color: var(--danger); background: var(--danger-soft); }
 .primaryButton:hover:not(:disabled) { background: var(--brand-strong); }
@@ -425,6 +441,10 @@ html[data-theme='dark'] .primaryButton { color: #10201c; }
   .toolbar { align-items: stretch; flex-direction: column; }
   .toolbarActions { justify-content: space-between; }
   .stats article { min-height: 68px; padding: 10px; }
+  .queueBoardHeader { flex-direction: column; }
+  .queueBoardList button { grid-template-columns: 70px minmax(0, 1fr) 17px; gap: 8px; }
+  .queueBoardList .status, .queueBoardRoom { grid-column: 2; }
+  .queueBoardList button > svg { grid-column: 3; grid-row: 1; }
   .detail { padding: 13px; }
   .detailHeader { flex-direction: column; }
   .patientIdentity { width: 100%; max-width: none; }

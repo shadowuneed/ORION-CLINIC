@@ -1,5 +1,12 @@
 'use client';
 
+import { clinicalEditorBlocker } from '@/lib/workspace-ux';
+import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
+import { EncounterReviewGuide, ResumeReviewAction } from './encounter-review-guide';
+import { ProtocolDocument, EncounterMaterials } from './protocol-document';
+import { OrionMark } from './brand/orion-brand';
+import type { ProtocolPreview } from '@/lib/domain/protocol-preview';
+
 import { useWorkspaceFetch, useWorkspaceUrl, useWorkspaceCanManage } from '@/lib/workspace-access-context';
 
 import {
@@ -31,6 +38,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { isEncounterResumable } from '@/lib/domain/encounter';
 import { useLocalSpeechCapture } from '@/lib/local-speech-client';
+import { clinicalAnalysisWindow } from '@/lib/domain/analysis-window';
 import styles from './clinical-workspace.module.css';
 
 type RecommendationState = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -451,6 +459,7 @@ export function ClinicalWorkspace() {
   const [protocolVersion, setProtocolVersion] =
     useState<ProtocolVersionSummary | null>(null);
   const [showProtocolSigning, setShowProtocolSigning] = useState(false);
+  const [protocolPreview, setProtocolPreview] = useState<ProtocolPreview | null>(null);
   const [protocolSigningAcknowledged, setProtocolSigningAcknowledged] =
     useState(false);
   const [protocolSigningPending, setProtocolSigningPending] = useState(false);
@@ -476,8 +485,6 @@ export function ClinicalWorkspace() {
   const [newPatientSex, setNewPatientSex] =
     useState<WorkspaceEncounter['patient']['sexAtBirth']>('not_recorded');
   const [newReasonForVisit, setNewReasonForVisit] = useState('');
-  const [syntheticDataAcknowledged, setSyntheticDataAcknowledged] =
-    useState(false);
   const [persistenceState, setPersistenceState] =
     useState<PersistenceState>('loading');
   const [recoverySnapshot, setRecoverySnapshot] =
@@ -507,6 +514,7 @@ export function ClinicalWorkspace() {
   const [acknowledgedTranscriptFingerprint, setAcknowledgedTranscriptFingerprint] =
     useState<string | null>(null);
   const [clinicalSections, setClinicalSections] = useState<ClinicalSection[]>([]);
+  const openedRecordAnchor = useRef<string | null>(null);
   const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
   const [editingSectionCode, setEditingSectionCode] = useState<string | null>(null);
   const [pendingSectionCode, setPendingSectionCode] = useState<string | null>(null);
@@ -551,6 +559,7 @@ export function ClinicalWorkspace() {
           recommendations?: Recommendation[];
           clinicalSections?: ClinicalSection[];
           protocolDraft?: ProtocolVersionSummary | null;
+          protocolPreview?: ProtocolPreview | null;
           amendments?: ProtocolAmendmentSummary[];
           exports?: ExportArtifactSummary[];
           accessAudit?: AccessAuditReceipt;
@@ -566,6 +575,7 @@ export function ClinicalWorkspace() {
           setRecommendations([]);
           setClinicalSections([]);
           setProtocolVersion(null);
+          setProtocolPreview(null);
           setAmendments([]);
           setExportArtifacts([]);
           setRecoverySnapshot(null);
@@ -583,6 +593,7 @@ export function ClinicalWorkspace() {
           setRecommendations([]);
           setClinicalSections([]);
           setProtocolVersion(null);
+          setProtocolPreview(null);
           setAmendments([]);
           setExportArtifacts([]);
           setRecoverySnapshot(null);
@@ -622,12 +633,13 @@ export function ClinicalWorkspace() {
         setRecommendations(payload.recommendations);
         setClinicalSections(payload.clinicalSections);
         setProtocolVersion(payload.protocolDraft ?? null);
+        setProtocolPreview(payload.protocolPreview ?? null);
         setAmendments(payload.amendments ?? []);
         setExportArtifacts(payload.exports ?? []);
         setRecoverySnapshot(payload.recovery ?? null);
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.set('encounterId', payload.encounter.id);
-        window.history.replaceState(null, '', scopeUrl(`${currentUrl.pathname}${currentUrl.search}`));
+        window.history.replaceState(null, '', scopeUrl(`${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`));
         setPersistenceState('saved');
         return true;
       } catch {
@@ -685,6 +697,15 @@ export function ClinicalWorkspace() {
       sectionDrafts[section.code] !== section.content,
   );
   const selectedEncounterId = workspaceContext?.encounter.id ?? null;
+  useEffect(() => {
+    if (persistenceState !== 'saved' || clinicalSections.length === 0) return;
+    const hash = window.location.hash;
+    if (hash !== '#clinical-record' && hash !== '#patient-consents') return;
+    const targetKey = `${selectedEncounterId}:${hash}`;
+    if (openedRecordAnchor.current === targetKey) return;
+    openedRecordAnchor.current = targetKey;
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [persistenceState, clinicalSections.length, selectedEncounterId]);
   const resumableEncounters = useMemo(
     () =>
       (workspaceContext?.encounters ?? []).filter((encounter) =>
@@ -756,6 +777,7 @@ export function ClinicalWorkspace() {
       ),
     [transcript],
   );
+  const analysisWindow = clinicalAnalysisWindow(finalTranscript.length);
   const transcriptSnapshotFingerprint = useMemo(
     () =>
       finalTranscript
@@ -815,6 +837,14 @@ export function ClinicalWorkspace() {
     !workspaceActionsLocked &&
     (workspaceContext?.encounter.status === 'in_progress' ||
       workspaceContext?.encounter.status === 'review');
+  const editorBlocker = clinicalEditorBlocker(canManageWorkspace, serverStateConfirmed,
+    recoveryConfirmed, workspaceContext?.encounter.status);
+  const showResumeAction = Boolean(activeRecovery) && !recoveryConfirmed && canManageWorkspace;
+  const unresolvedProtocolTranscript = hasCurrentTranscriptConsent
+    ? transcript.filter((segment) => segment.state === 'provisional' || segment.role === 'unknown').length : 0;
+  const protocolBuildBlocker = editorBlocker || (!hasCurrentCareConsent
+    ? 'Сначала зафиксируйте согласие на приём в разделе «Решения пациента».'
+    : hasUnsavedChanges ? 'Сохраните правки, остановите запись и дождитесь окончания анализа.' : null);
   const recommendationEditable =
     !workspaceActionsLocked &&
     workspaceContext?.encounter.status === 'in_progress' &&
@@ -840,6 +870,7 @@ export function ClinicalWorkspace() {
   }, [hasUnsavedChanges]);
 
   function resetLocalEncounterState() {
+    setProtocolPreview(null);
     void speech.stop('cancelled');
     setSectionDrafts({});
     setEditingSectionCode(null);
@@ -909,7 +940,7 @@ export function ClinicalWorkspace() {
 
     const query = new URLSearchParams({ facilityId: encounter.facilityId });
     router.push(
-      `/patients/${encodeURIComponent(encounter.patient.id)}?${query.toString()}`,
+      scopeUrl(`/patients/${encodeURIComponent(encounter.patient.id)}?${query.toString()}`),
     );
   }
 
@@ -972,7 +1003,6 @@ export function ClinicalWorkspace() {
     setRecoveryMessage(
       'Показана подтверждённая серверная версия. Несохранённые данные браузера не восстанавливались.',
     );
-    window.requestAnimationFrame(() => workspaceGridRef.current?.focus());
   }
 
   function beginTranscriptEdit(turn: TranscriptTurn) {
@@ -1234,6 +1264,11 @@ export function ClinicalWorkspace() {
     }
 
     const commandFingerprint = `${encounter.id}:review:${encounter.version}`;
+    if (hasUnsavedChanges || reviewedSectionCount !== 8 || unresolvedProtocolTranscript > 0) {
+      setEncounterMessage('Проверьте все 8 разделов, говорящих и сохраните изменения перед сборкой.');
+      document.getElementById('clinical-record')?.scrollIntoView({ block: 'start' });
+      return;
+    }
     const idempotencyKey =
       protocolCommandKeys.current[commandFingerprint] ?? crypto.randomUUID();
     protocolCommandKeys.current[commandFingerprint] = idempotencyKey;
@@ -1276,6 +1311,8 @@ export function ClinicalWorkspace() {
         );
         if (payload.error?.code === 'VERSION_CONFLICT') {
           await loadWorkspace(encounter.id);
+        } else {
+          setPersistenceState('saved');
         }
         return;
       }
@@ -1293,9 +1330,11 @@ export function ClinicalWorkspace() {
       delete protocolCommandKeys.current[commandFingerprint];
       setProtocolVersion(payload.protocol);
       setEncounterMessage(
-        `Черновик протокола v${payload.protocol.version} создан из подтверждённых версий. Подписание ещё недоступно.`,
+        `Протокол v${payload.protocol.version} сохранён. Проверьте документ ниже и отдельно подтвердите подпись.`,
       );
-      await loadWorkspace(encounter.id);
+      if (await loadWorkspace(encounter.id)) {
+        window.requestAnimationFrame(() => document.getElementById('protocol-document')?.scrollIntoView({ block: 'start' }));
+      }
     } catch {
       setPersistenceState('error');
       setEncounterMessage(
@@ -1613,11 +1652,10 @@ export function ClinicalWorkspace() {
     event.preventDefault();
     if (
       !canManageWorkspace ||
-      encounterCreationPending ||
-      !syntheticDataAcknowledged
+      encounterCreationPending
     ) {
       setEncounterCreationMessage(
-        'Подтвердите, что вводите только вымышленные тестовые данные.',
+        'Создание приёма сейчас недоступно.',
       );
       return;
     }
@@ -1663,7 +1701,7 @@ export function ClinicalWorkspace() {
           delete encounterCreationKeys.current[commandFingerprint];
         }
         setEncounterCreationMessage(
-          payload.error?.message ?? 'Не удалось создать тестовый приём.',
+          payload.error?.message ?? 'Не удалось создать приём.',
         );
         setPersistenceState(response.status === 409 ? 'saved' : 'error');
         return;
@@ -1674,7 +1712,6 @@ export function ClinicalWorkspace() {
       setNewPatientBirthDate('');
       setNewPatientSex('not_recorded');
       setNewReasonForVisit('');
-      setSyntheticDataAcknowledged(false);
       setShowEncounterCreation(false);
       setEncounterCreationMessage(null);
       await loadWorkspace(payload.created.encounter.id);
@@ -2191,7 +2228,7 @@ export function ClinicalWorkspace() {
       return;
     }
 
-    const snapshot = finalTranscript.map(({ id, version }) => ({ id, version }));
+    const snapshot = finalTranscript.slice(-24).map(({ id, version }) => ({ id, version }));
     const commandFingerprint = JSON.stringify({
       encounterId: selectedEncounterId,
       snapshot,
@@ -2201,7 +2238,7 @@ export function ClinicalWorkspace() {
     analysisCommandKeys.current[commandFingerprint] = idempotencyKey;
     setAnalysisState('generating');
     setAnalysisMessage(
-      `Groq анализирует ${finalTranscript.length} подтверждённых реплик…`,
+      `Groq анализирует ${snapshot.length} последних сохранённых реплик${analysisWindow.omitted ? `; ещё ${analysisWindow.omitted} ранних реплик вне контекста` : ''}…`,
     );
 
     try {
@@ -2255,16 +2292,17 @@ export function ClinicalWorkspace() {
   }
 
   const persistenceLabel = {
-    loading: 'D1 · загрузка состояния',
-    saved: 'D1 · сохранено на сервере',
-    saving: 'D1 · сохраняем решение',
-    error: 'D1 · ошибка сохранения',
+    loading: 'Загружаем запись приёма…',
+    saved: protocolVersion?.status === 'signed' ? 'Подписанный протокол сохранён' : 'Запись в базе · протокол не подписан',
+    saving: 'Сохраняем решение…',
+    error: 'Не удалось подтвердить сохранение',
     unauthenticated: 'Требуется вход врача',
     forbidden: 'Нет доступа к приёму',
   }[persistenceState];
 
+  const signedDocumentView = protocolVersion?.status === 'signed' && Boolean(protocolPreview) && serverStateConfirmed;
   return (
-    <div className={styles.workspace}>
+    <div className={`${styles.workspace} ${signedDocumentView ? styles.signedWorkspace : ''}`}>
       <main className={styles.main}>
         <section className={styles.patientHeader}>
           <div>
@@ -2279,7 +2317,6 @@ export function ClinicalWorkspace() {
                   {encounterStatusLabels[workspaceContext.encounter.status]}
                 </span>
               )}
-              <span className={styles.syntheticLabel}>тестовые данные в БД</span>
               {accessAuditReceipt && (
                 <span
                   className={styles.accessAuditBadge}
@@ -2341,7 +2378,7 @@ export function ClinicalWorkspace() {
               }}
               type="button"
             >
-              <Plus size={17} /> Новый тестовый приём
+              <Plus size={17} /> Новый приём
             </button>
             {nextEncounterStatus ? (
               <button
@@ -2361,35 +2398,37 @@ export function ClinicalWorkspace() {
                 className={styles.primaryButton}
                 disabled={
                   encounterTransitionPending ||
-                  workspaceActionsLocked ||
-                  speech.isRecording ||
-                  speech.isBusy ||
-                  speech.hasProvisional ||
-                  analysisState === 'generating'
+                  persistenceState === 'loading' || persistenceState === 'saving'
                 }
-                onClick={() => void beginProtocolReview()}
+                onClick={() => {
+                  if (protocolBuildBlocker || reviewedSectionCount !== 8 || unresolvedProtocolTranscript > 0) {
+                    document.getElementById('clinical-record')?.scrollIntoView({ block: 'start' });
+                  } else {
+                    void beginProtocolReview();
+                  }
+                }}
                 type="button"
                 title={
                   speech.isRecording || speech.isBusy || speech.hasProvisional
                     ? 'Сначала завершите локальную расшифровку'
                     : analysisState === 'generating'
                       ? 'Дождитесь завершения анализа'
-                      : undefined
+                      : protocolBuildBlocker || (reviewedSectionCount !== 8 ? 'Проверьте все 8 разделов записи' : unresolvedProtocolTranscript > 0 ? 'Уточните роли говорящих в расшифровке' : undefined)
                 }
               >
                 {encounterTransitionPending
                   ? 'Фиксируем версии…'
-                  : `К проверке · ${reviewedSectionCount}/8`}
+                  : protocolBuildBlocker || reviewedSectionCount !== 8 || unresolvedProtocolTranscript > 0
+                    ? `Проверить запись · ${reviewedSectionCount}/8`
+                    : 'Собрать протокол'}
               </button>
             ) : workspaceContext?.encounter.status === 'review' &&
               protocolVersion?.status === 'draft' ? (
               <button
                 className={styles.primaryButton}
-                disabled={hasUnsavedChanges || workspaceActionsLocked}
+                disabled={!protocolPreview || !serverStateConfirmed}
                 onClick={() => {
-                  setShowProtocolSigning((value) => !value);
-                  setProtocolSigningAcknowledged(false);
-                  setEncounterMessage(null);
+                  document.getElementById('protocol-document')?.scrollIntoView({ block: 'start' });
                 }}
                 type="button"
                 title={
@@ -2398,7 +2437,7 @@ export function ClinicalWorkspace() {
                     : undefined
                 }
               >
-                Проверить и подписать · v{protocolVersion.version}
+                Открыть протокол · v{protocolVersion.version}
               </button>
             ) : ['finalized', 'amended'].includes(
                 workspaceContext?.encounter.status ?? '',
@@ -2406,11 +2445,12 @@ export function ClinicalWorkspace() {
               protocolVersion?.status === 'signed' ? (
               <button
                 className={styles.primaryButton}
-                disabled
-                title="Подписанная версия неизменяема"
+                disabled={!protocolPreview || !serverStateConfirmed}
+                onClick={() => document.getElementById('protocol-document')?.scrollIntoView({ block: 'start' })}
+                title="Открыть сохранённый документ и скачивание"
                 type="button"
               >
-                Подписан · v{protocolVersion.version}
+                Открыть протокол · v{protocolVersion.version}
               </button>
             ) : (
               <button
@@ -2529,11 +2569,21 @@ export function ClinicalWorkspace() {
           </section>
         )}
 
+        {protocolPreview && protocolPreview.id === protocolVersion?.id && serverStateConfirmed && (
+          <ProtocolDocument document={protocolPreview} blocked={workspaceActionsLocked || hasUnsavedChanges}
+            onSign={() => {
+              setShowProtocolSigning(true);
+              setProtocolSigningAcknowledged(false);
+              window.requestAnimationFrame(() => document.getElementById('protocol-signing')?.scrollIntoView({ block: 'start' }));
+            }} />
+        )}
+
         {showProtocolSigning &&
           workspaceContext?.encounter.status === 'review' &&
           protocolVersion?.status === 'draft' && (
             <section
               className={styles.protocolSigningPanel}
+              id="protocol-signing"
               aria-labelledby="protocol-signing-title"
             >
               <div>
@@ -2578,7 +2628,7 @@ export function ClinicalWorkspace() {
                     disabled={
                       protocolSigningPending ||
                       !protocolSigningAcknowledged ||
-                      hasUnsavedChanges
+                      hasUnsavedChanges || workspaceActionsLocked
                     }
                     onClick={() => void signProtocol()}
                     type="button"
@@ -2598,6 +2648,7 @@ export function ClinicalWorkspace() {
           protocolVersion?.status === 'signed' && (
             <section
               className={styles.exportPanel}
+              id="protocol-exports"
               aria-labelledby="protocol-export-title"
             >
               <div className={styles.exportIntro}>
@@ -2857,22 +2908,19 @@ export function ClinicalWorkspace() {
           >
             <div className={styles.encounterCreationIntro}>
               <span className={styles.sectionEyebrow}>Локальный контур</span>
-              <h2 id="encounter-creation-title">Новый синтетический приём</h2>
-              <p>
-                Не вводите имя или сведения реального пациента. Карточка будет
-                назначена текущему врачу, а согласия останутся незаполненными.
-              </p>
+              <h2 id="encounter-creation-title">Новый приём</h2>
+              <p>Карточка будет назначена текущему врачу, а согласия останутся незаполненными.</p>
             </div>
             <form
               className={styles.encounterCreationForm}
               onSubmit={(event) => void createSyntheticEncounter(event)}
             >
               <label>
-                <span>Вымышленное имя</span>
+                <span>Имя пациента</span>
                 <input
                   maxLength={120}
                   onChange={(event) => setNewPatientName(event.target.value)}
-                  placeholder="Например, Тестовый пациент К."
+                  placeholder="Имя пациента"
                   required
                   value={newPatientName}
                 />
@@ -2908,20 +2956,10 @@ export function ClinicalWorkspace() {
                 <textarea
                   maxLength={500}
                   onChange={(event) => setNewReasonForVisit(event.target.value)}
-                  placeholder="Только вымышленный сценарий"
+                  placeholder="Например, причина обращения"
                   rows={2}
                   value={newReasonForVisit}
                 />
-              </label>
-              <label className={styles.syntheticConfirmation}>
-                <input
-                  checked={syntheticDataAcknowledged}
-                  onChange={(event) =>
-                    setSyntheticDataAcknowledged(event.target.checked)
-                  }
-                  type="checkbox"
-                />
-                <span>Подтверждаю: данные полностью вымышлены.</span>
               </label>
               <div className={styles.encounterCreationActions}>
                 <button
@@ -2949,6 +2987,7 @@ export function ClinicalWorkspace() {
           </section>
         )}
 
+        <EncounterMaterials archived={signedDocumentView}>
         <section
           className={styles.consentPanel}
           aria-labelledby="consent-title"
@@ -2966,7 +3005,7 @@ export function ClinicalWorkspace() {
             <div className={styles.consentPolicyBox}>
               <span>Уведомление</span>
               <strong>{consentPolicy?.version ?? 'не загружено'}</strong>
-              <em>только синтетический тест · не утверждено клиникой</em>
+              <em>клиническое уведомление ещё не утверждено</em>
               <div className={styles.languageToggle} aria-label="Язык уведомления">
                 {(['ru', 'kk'] as const).map((language) => (
                   <button
@@ -3125,7 +3164,7 @@ export function ClinicalWorkspace() {
           ref={workspaceGridRef}
           tabIndex={-1}
         >
-          <section className={styles.transcriptPane}>
+          <section className={styles.transcriptPane} id="encounter-transcript">
             <div className={styles.paneHeader}>
               <div>
                 <span className={styles.sectionEyebrow}>Разговор</span>
@@ -3177,7 +3216,7 @@ export function ClinicalWorkspace() {
                         title={
                           clinicalRecordEditable
                             ? 'Исправить текст, роль или язык новой версией'
-                            : 'Подписанный приём неизменяем'
+                            : editorBlocker ?? 'Редактирование сейчас недоступно'
                         }
                       >
                         <Pencil size={14} />
@@ -3348,7 +3387,7 @@ export function ClinicalWorkspace() {
           <section className={styles.notePane} id="clinical-record">
             <div className={styles.paneHeader}>
               <div>
-                <span className={styles.sectionEyebrow}>Протокол приёма</span>
+                <span className={styles.sectionEyebrow}>{protocolVersion?.status === 'signed' ? 'Подписанный протокол' : 'Запись приёма · до подписания'}</span>
                 <h2>Клиническая запись · 8 разделов</h2>
               </div>
               <span
@@ -3356,32 +3395,28 @@ export function ClinicalWorkspace() {
               >
                 {persistenceState === 'saved' ? <Check size={15} /> : <Clock3 size={15} />}
                 {persistenceState === 'unauthenticated' ? (
-                  <a href="/signin-with-chatgpt?return_to=/" target="_top">
+                  <a href={chatGPTSignInPath('/')} target="_top">
                     Войти для сохранения
                   </a>
                 ) : persistenceLabel}
               </span>
             </div>
 
-            <div className={styles.noteGuide} role="note">
-              <div>
-                <strong>Что нужно сделать врачу</strong>
-                <p>
-                  Откройте каждый раздел, внесите или исправьте сведения и нажмите
-                  «Проверить раздел». Если данных действительно нет — отдельно
-                  выберите «Сведений нет». Только эти подтверждённые решения войдут
-                  в протокол.
-                </p>
-              </div>
-              <div
-                className={styles.noteGuideProgress}
-                aria-label={`Проверено разделов: ${reviewedSectionCount} из 8`}
-              >
-                <strong>{reviewedSectionCount}<span>/8</span></strong>
-                <small>разделов проверено</small>
-                <progress max={8} value={reviewedSectionCount} />
-              </div>
-            </div>
+            <EncounterReviewGuide reviewed={reviewedSectionCount} accepted={acceptedCount}
+              onHistory={openPatientHistory}
+              unresolvedTranscript={unresolvedProtocolTranscript} status={workspaceContext?.encounter.status}
+              blocked={protocolBuildBlocker} message={encounterMessage} onBuild={() => void beginProtocolReview()}
+              onNext={() => {
+                const next = clinicalSections.find((section) => !['reviewed', 'explicitly_absent'].includes(section.reviewState));
+                if (next) {
+                  requestSectionSwitch(next.code);
+                  window.requestAnimationFrame(() => document.getElementById('active-section-title')?.scrollIntoView({ block: 'start' }));
+                }
+              }}
+              onSign={() => {
+                document.getElementById('protocol-document')?.scrollIntoView({ block: 'start' });
+              }}
+              onTranscript={() => document.getElementById('encounter-transcript')?.scrollIntoView({ block: 'start' })} />
 
             <div className={styles.noteBody}>
               <nav className={styles.sectionRail} aria-label="Разделы протокола">
@@ -3431,6 +3466,9 @@ export function ClinicalWorkspace() {
                     )}
                   </div>
 
+                  {editorBlocker && (showResumeAction ? <ResumeReviewAction
+                    busy={recoveryActionState === 'checking'} disabled={persistenceState === 'saving' || hasUnsavedChanges}
+                    message={recoveryMessage} onResume={() => void resumeCurrentEncounter()} /> : <p role="status">{editorBlocker}</p>)}
                   {editingSectionCode === selectedSection.code ? (
                     <div className={styles.editorForm}>
                       <label htmlFor={`section-${selectedSection.code}`}>
@@ -3476,7 +3514,7 @@ export function ClinicalWorkspace() {
                       {selectedSection.reviewState === 'explicitly_absent'
                         ? 'Врач явно подтвердил отсутствие сведений для этого раздела.'
                         : selectedSection.content ||
-                          'Раздел не заполнен. Внесите сведения или явно подтвердите их отсутствие.'}
+                          'ИИ ещё не заполнил этот раздел. После анализа разговора здесь появится черновик, если в тексте есть основания. Можно внести сведения вручную. Пустой раздел не означает отсутствие жалоб или заболеваний.'}
                     </div>
                   )}
 
@@ -3575,7 +3613,7 @@ export function ClinicalWorkspace() {
                         <small>
                           {selectedSection.reviewedBy && selectedSection.reviewedAt
                             ? `${selectedSection.reviewedBy} · ${new Date(selectedSection.reviewedAt).toLocaleString('ru-RU')}`
-                            : selectedDraft.trim()
+                            : editorBlocker ? 'Редактирование пока недоступно — следующий шаг указан выше.' : selectedDraft.trim()
                               ? 'Сверьте текст и подтвердите его отдельным действием'
                               : 'Сначала нажмите «Редактировать» либо подтвердите «Сведений нет»'}
                         </small>
@@ -3641,9 +3679,10 @@ export function ClinicalWorkspace() {
             </div>
           </section>
         </div>
+        </EncounterMaterials>
       </main>
 
-      <aside className={styles.assistantPane}>
+      {!signedDocumentView && <aside className={styles.assistantPane}>
         <div className={styles.assistantHeader}>
           <div>
             <span className={styles.sectionEyebrow}>Только для врача</span>
@@ -3664,13 +3703,18 @@ export function ClinicalWorkspace() {
           <div className={styles.analysisLauncherHeader}>
             <span className={styles.analysisIcon}><Sparkles aria-hidden="true" size={18} /></span>
             <div>
-              <strong>Создать новые черновики</strong>
+              <strong>Собрать разделы записи и подсказки</strong>
               <small>
-                В Groq будет передан только выбранный текст из {finalTranscript.length}{' '}
-                финальных реплик. Аудио не передаётся.
+                В Groq будет передан текст {Math.min(24, finalTranscript.length)} последних
+                сохранённых реплик этого приёма. Аудио не передаётся.
               </small>
             </div>
           </div>
+          {analysisWindow.omitted > 0 && (
+            <p className={styles.analysisRequirement} role="status">
+              {analysisWindow.omitted} ранних реплик не войдут в этот анализ. Проверьте их в полной расшифровке: ИИ может не учесть жалобы и анамнез из начала приёма.
+            </p>
+          )}
           <label className={styles.analysisAcknowledgement}>
             <input
               checked={transcriptSnapshotAcknowledged}
@@ -3701,7 +3745,7 @@ export function ClinicalWorkspace() {
             <Sparkles aria-hidden="true" size={17} />
             {analysisState === 'generating'
               ? 'Создаём и проверяем…'
-              : `Создать черновики из ${finalTranscript.length} реплик`}
+              : `Собрать запись из ${Math.min(24, finalTranscript.length)} последних реплик`}
           </button>
           {analysisMessage && (
             <div
@@ -3720,17 +3764,20 @@ export function ClinicalWorkspace() {
           <span>{rejectedCount} в корзине</span>
         </div>
 
-        {!recommendationEditable && workspaceContext && (
+        {showResumeAction && <ResumeReviewAction
+          busy={recoveryActionState === 'checking'} disabled={persistenceState === 'saving' || hasUnsavedChanges}
+          message={recoveryMessage} onResume={() => void resumeCurrentEncounter()} />}
+        {!recommendationEditable && workspaceContext && !showResumeAction && (
           <div className={styles.recommendationLock} role="status">
             <ShieldCheck size={17} />
             <span>
-              {!hasCurrentCareConsent
+              {editorBlocker || (!hasCurrentCareConsent
                 ? 'Решения недоступны до фиксации действующего согласия на приём.'
                 : workspaceContext.encounter.status === 'review'
                   ? 'Черновик протокола уже зафиксирован. Подсказки доступны только для чтения.'
                   : ['finalized', 'amended'].includes(workspaceContext.encounter.status)
                     ? 'Подписанный протокол неизменяем. Исправления оформляются отдельной корректировкой.'
-                    : 'Начните приём, чтобы рассматривать клинические подсказки.'}
+                    : 'Начните приём, чтобы рассматривать клинические подсказки.')}
             </span>
           </div>
         )}
@@ -3768,7 +3815,7 @@ export function ClinicalWorkspace() {
         >
           {persistenceState === 'loading' ? (
             <div className={styles.recommendationEmpty} role="status">
-              <Activity size={20} />
+              <OrionMark animated size={48} />
               <strong>Загружаем клинические подсказки</strong>
               <span>Получаем неизменяемые источники и решения из D1.</span>
             </div>
@@ -3957,6 +4004,15 @@ export function ClinicalWorkspace() {
                     ) : null}
                   </div>
 
+                  {selectedEncounterId && ['accepted', 'edited_and_accepted'].includes(item.review.state) && item.tone === 'action' && !/лекар|препарат|медикамент/iu.test(item.eyebrow) && (
+                    <div className={styles.recommendationActions}>
+                      <a className={styles.acceptButton} href={scopeUrl(`/orders?${new URLSearchParams({ encounterId: selectedEncounterId, recommendationId: item.id, recommendationVersion: String(item.review.version) }).toString()}`)}>
+                        Создать черновик направления
+                      </a>
+                      <small>Сначала проверьте поля. Подтверждение направления — отдельное действие.</small>
+                    </div>
+                  )}
+
                   {!isEditing && item.review.state === 'pending' ? (
                     <div className={styles.recommendationActions}>
                       <button
@@ -4010,9 +4066,9 @@ export function ClinicalWorkspace() {
 
         <div className={styles.assistantFooter}>
           <Activity size={16} />
-          <span>Речь распознаётся локально; Groq вызывается только после явного подтверждения врача</span>
+          <span>Речь распознаётся локально. ИИ создаёт только черновики при действующем согласии на передачу текста; решения подтверждает врач.</span>
         </div>
-      </aside>
+      </aside>}
     </div>
   );
 }

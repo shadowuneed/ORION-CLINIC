@@ -13,6 +13,7 @@ export type PatientProfilePermissions = {
 };
 
 export type FacilityAccessScope = {
+  accessAssignmentId?: string;
   organizationId: string;
   facilityId: string;
   userId: string;

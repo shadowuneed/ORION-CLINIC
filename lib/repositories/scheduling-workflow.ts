@@ -641,9 +641,29 @@ export class D1SchedulingWorkflowRepository {
         approvedAt: row.approvedAt as number,
       }));
 
+    // Never return patient-specific scheduling rows merely because the staff
+    // member can read the facility. A clinician's exact assigned, consented
+    // referrals (and the registrar's eligible referrals) bound this response.
+    const eligiblePatientsByReferral = new Map(
+      eligibleReferrals.map((referral) => [referral.serviceRequestId, referral.patient.id]),
+    );
+
     const from = input.dateFrom ? Date.parse(`${input.dateFrom}T00:00:00Z`) : null;
     const to = input.dateTo ? Date.parse(`${input.dateTo}T23:59:59.999Z`) : null;
     const limit = input.limit ?? 100;
+    const appointments = appointmentResult.results
+      .filter((row) => eligiblePatientsByReferral.get(row.serviceRequestId) === row.patientId)
+      .filter(
+        (row) =>
+          !input.appointmentStatus ||
+          input.appointmentStatus === 'all' ||
+          row.currentStatus === input.appointmentStatus,
+      )
+      .slice(0, limit)
+      .map(toAppointment);
+    const visibleAppointmentsById = new Map(
+      appointments.map((appointment) => [appointment.id, appointment.patient.id]),
+    );
     const slots = slotResult.results
       .filter((row) => from === null || row.startsAt >= from)
       .filter((row) => to === null || row.startsAt <= to)
@@ -670,30 +690,26 @@ export class D1SchedulingWorkflowRepository {
             id: row.currentVersionId,
             version: row.currentVersion,
             status: row.currentStatus,
-            appointmentId: row.appointmentId,
+            appointmentId: row.appointmentId && visibleAppointmentsById.has(row.appointmentId)
+              ? row.appointmentId : null,
             holdExpiresAt: row.holdExpiresAt,
           },
         }),
       );
-    const appointments = appointmentResult.results
-      .filter(
-        (row) =>
-          !input.appointmentStatus ||
-          input.appointmentStatus === 'all' ||
-          row.currentStatus === input.appointmentStatus,
-      )
-      .slice(0, limit)
-      .map(toAppointment);
-
     return {
       eligibleReferrals,
       specialties: specialtyResult.results,
       services: serviceResult.results,
       providers: providerResult.results,
       slots,
-      preferences: preferenceResult.results,
+      preferences: preferenceResult.results.filter(
+        (preference) => eligiblePatientsByReferral.get(preference.serviceRequestId) === preference.patientId,
+      ),
       appointments,
-      queue: queueResult.results.slice(0, limit).map(toQueueTicket),
+      queue: queueResult.results
+        .filter((ticket) => visibleAppointmentsById.get(ticket.appointmentId) === ticket.patientId)
+        .slice(0, limit)
+        .map(toQueueTicket),
       capabilities: schedulingCapabilities(this.scope.role),
     };
   }

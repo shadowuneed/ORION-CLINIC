@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
 
 export {
   chatGPTSignInPath,
@@ -12,6 +13,7 @@ export type ChatGPTUser = {
   displayName: string;
   email: string | null;
   fullName: string | null;
+  issuer?: string;
 };
 
 const USER_ID_HEADER = 'oai-authenticated-user-id';
@@ -26,6 +28,8 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const userId = requestHeaders.get(USER_ID_HEADER)?.trim();
   const email = requestHeaders.get(USER_EMAIL_HEADER)?.trim() || null;
   if (!userId) return null;
+  if (localAccountModeEnabled() && (!requestHeaders.get('x-orion-local-issuer')?.trim() ||
+    !/^[a-f0-9]{32}$/.test(requestHeaders.get('x-orion-local-generation') ?? ''))) return null;
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
   const fullName =
@@ -39,6 +43,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
     displayName: fullName ?? email ?? `Пользователь ${userId.slice(-6)}`,
     email,
     fullName,
+    ...(localAccountModeEnabled() ? { issuer: requestHeaders.get('x-orion-local-issuer') ?? '' } : {}),
   };
 }
 

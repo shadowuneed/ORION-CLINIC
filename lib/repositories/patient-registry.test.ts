@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import {
   D1PatientRegistryRepository,
   PatientAlreadyArchivedError,
@@ -124,7 +125,9 @@ function fixture(role: 'clinician' | 'registrar' = 'clinician') {
       id, organization_id, facility_id, last_sequence, last_event_hash, lock_version
     ) values ('audit-head-a', 'org-a', 'fac-a', 0, null, 1);
   `);
+  database.exec(readFileSync('db/bootstrap.local.sql', 'utf8'));
   const scope: FacilityAccessScope = {
+    accessAssignmentId: 'access-assignment-a-general-medicine',
     organizationId: 'org-a',
     facilityId: 'fac-a',
     userId: 'user-a',
@@ -133,6 +136,7 @@ function fixture(role: 'clinician' | 'registrar' = 'clinician') {
   };
   return {
     database,
+    scope,
     repository: new D1PatientRegistryRepository(createD1Adapter(database), scope),
   };
 }
@@ -150,11 +154,256 @@ const patientInput = {
   requestId: 'request-create-patient',
 };
 
+function profileCommand(patientId: string) {
+  return {
+    ...patientInput, patientId, phone: '+7 701 111 22 33',
+    expectedVersion: 1, changeReason: 'Synthetic profile correction',
+    idempotencyKey: crypto.randomUUID(), requestId: 'profile-security-test',
+  };
+}
+
+function changeProfileAssignment(database: DatabaseSync, patch: Record<string, SQLInputValue>) {
+  const current = database.prepare(`select version.* from department_access_assignment_versions version
+    join department_access_assignment_heads head on head.current_version_id = version.id
+    where head.assignment_id = 'access-assignment-a-general-medicine'`).get()!;
+  const successor: Record<string, SQLInputValue> = {
+    ...current, id: crypto.randomUUID(), version: Number(current.version) + 1,
+    supersedes_version_id: current.id, changed_at: Date.now(), created_at: Date.now(), ...patch,
+  };
+  const columns = Object.keys(successor);
+  database.prepare(`insert into department_access_assignment_versions (${columns.join(',')})
+    values (${columns.map(() => '?').join(',')})`).run(...columns.map(column => successor[column]));
+  database.prepare(`update department_access_assignment_heads set current_version_id = ?,
+    lock_version = lock_version + 1, updated_at = ? where assignment_id = 'access-assignment-a-general-medicine'`)
+    .run(successor.id, Date.now());
+}
+
+function addAlternativeProfileAssignment(database: DatabaseSync) {
+  // A second valid department must not rescue a revoked selected assignment or
+  // take ownership of a command issued under the first assignment.
+  const clone = (table: string, where: string, patch: Record<string, SQLInputValue>) => {
+    const row = { ...database.prepare(`select * from ${table} where ${where}`).get()!, ...patch };
+    const columns = Object.keys(row);
+    database.prepare(`insert into ${table} (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+      .run(...columns.map(column => row[column]));
+  };
+  clone('departments', "id = 'department-a-general-medicine'", { id: 'department-alternative', code: 'alternative' });
+  clone('department_versions', "id = 'department-a-general-medicine-v1'", {
+    id: 'department-alternative-v1', department_id: 'department-alternative',
+  });
+  clone('department_heads', "department_id = 'department-a-general-medicine'", {
+    id: 'department-alternative-head', department_id: 'department-alternative', current_version_id: 'department-alternative-v1',
+  });
+  clone('department_access_assignments', "id = 'access-assignment-a-general-medicine'", {
+    id: 'assignment-alternative', department_id: 'department-alternative',
+  });
+  clone('department_access_assignment_versions', "id = 'access-assignment-a-general-medicine-v1'", {
+    id: 'assignment-alternative-v1', assignment_id: 'assignment-alternative', department_id: 'department-alternative',
+  });
+  clone('department_access_assignment_heads', "assignment_id = 'access-assignment-a-general-medicine'", {
+    id: 'assignment-alternative-head', assignment_id: 'assignment-alternative', department_id: 'department-alternative',
+    current_version_id: 'assignment-alternative-v1', lock_version: 1,
+  });
+}
+
 afterEach(() => {
   for (const database of databases.splice(0)) database.close();
 });
 
 describe('D1 patient registry', () => {
+  describe.each(['updateProfile', 'archiveProfile'] as const)('%s exact writer authority', operation => {
+    it('attributes successful writes and exact replay to the selected registrar assignment', async () => {
+      const { database, repository, scope } = fixture('registrar');
+      const patient = await repository.create(patientInput);
+      changeProfileAssignment(database, { roles_json: '["registrar"]' });
+      const command = profileCommand(patient.id);
+      const first = await repository[operation](command);
+      expect(await repository[operation]({ ...command, requestId: 'replay' })).toEqual(first);
+      expect(database.prepare(`select access_assignment_id as assignmentId, actor_membership_id as member,
+        json_extract(response_json, '$.actorId') as actor from command_idempotency
+        where operation in ('patient.update', 'patient.archive')`).get()).toEqual({
+        assignmentId: scope.accessAssignmentId, member: scope.membershipId, actor: scope.userId,
+      });
+      expect(database.prepare(`select actor_id as actor, json_extract(metadata_json, '$.accessAssignmentId') as assignmentId
+        from audit_events where action in ('patient.update', 'patient.archive')`).get())
+        .toEqual({ actor: scope.userId, assignmentId: scope.accessAssignmentId });
+    });
+
+    it('denies wrong actors, missing scope, revoked, expired, future, explicit-deny and service assignments without fallback', async () => {
+      const { database, repository, scope } = fixture();
+      const patient = await repository.create(patientInput);
+      const command = profileCommand(patient.id);
+      addAlternativeProfileAssignment(database);
+      await expect(repository[operation]({ ...command, actorId: 'wrong-user' }))
+        .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      const missing = new D1PatientRegistryRepository(createD1Adapter(database), { ...scope, accessAssignmentId: undefined });
+      await expect(missing[operation](command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      for (const patch of [
+        { status: 'revoked' }, { effective_until: Date.now() - 1000 }, { effective_from: Date.now() + 60_000 },
+        { deny_permissions_json: '["patient.profile.write"]' },
+        { roles_json: '["service"]', allow_permissions_json: '["patient.profile.write"]' },
+        { roles_json: '["nurse"]' },
+      ]) {
+        changeProfileAssignment(database, {
+          status: 'active', effective_from: 1704067200000, effective_until: null,
+          roles_json: '["doctor","administrator"]', allow_permissions_json: '[]', deny_permissions_json: '[]', ...patch,
+        });
+        await expect(repository[operation](command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      }
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(1);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+    });
+
+    it('permits an explicit interactive grant without requiring the legacy clinician role', async () => {
+      const { database, repository } = fixture('registrar');
+      const patient = await repository.create(patientInput);
+      changeProfileAssignment(database, { roles_json: '["nurse"]', allow_permissions_json: '["patient.profile.write"]' });
+      expect((await repository[operation](profileCommand(patient.id))).version).toBe(2);
+    });
+
+    it('rejects replay after revocation and replay under another current assignment', async () => {
+      const { database, repository, scope } = fixture();
+      const patient = await repository.create(patientInput);
+      const command = profileCommand(patient.id);
+      await repository[operation](command);
+      addAlternativeProfileAssignment(database);
+      const alternative = new D1PatientRegistryRepository(createD1Adapter(database), {
+        ...scope, accessAssignmentId: 'assignment-alternative',
+      });
+      await expect(alternative[operation](command)).rejects.toBeInstanceOf(PatientRegistryConflictError);
+      changeProfileAssignment(database, { status: 'revoked' });
+      await expect(repository[operation](command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(2);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(2);
+    });
+
+    it('rolls back when the selected assignment is revoked immediately before batch', async () => {
+      const { database, repository, scope } = fixture();
+      const patient = await repository.create(patientInput);
+      addAlternativeProfileAssignment(database);
+      const d1 = createD1Adapter(database);
+      const batch = d1.batch.bind(d1);
+      let attempts = 0;
+      d1.batch = async statements => {
+        attempts += 1;
+        changeProfileAssignment(database, { status: 'revoked' });
+        return batch(statements);
+      };
+      const raced = new D1PatientRegistryRepository(d1, scope);
+      await expect(raced[operation](profileCommand(patient.id))).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      expect(attempts).toBe(1);
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(1);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+      expect(database.prepare('select count(*) as n from command_idempotency').get()?.n).toBe(1);
+      expect((await repository.get(patient.id))?.version).toBe(1);
+    });
+
+    it('rolls back if authority disappears within the transaction after its initial guard', async () => {
+      const { database, repository } = fixture();
+      const patient = await repository.create(patientInput);
+      database.exec(`create trigger revoke_profile_writer after update on patient_profile_heads
+        begin update memberships set status = 'disabled' where id = 'membership-a'; end`);
+      await expect(repository[operation](profileCommand(patient.id))).rejects.toBeInstanceOf(PatientRegistryConflictError);
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(1);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+      expect(database.prepare('select count(*) as n from command_idempotency').get()?.n).toBe(1);
+      expect(database.prepare("select status from memberships where id = 'membership-a'").get()?.status).toBe('active');
+      expect((await repository.get(patient.id))?.version).toBe(1);
+    });
+
+    it('fails closed on a legacy command with no recorded assignment', async () => {
+      const { database, repository } = fixture();
+      const patient = await repository.create(patientInput);
+      const command = profileCommand(patient.id);
+      await repository[operation](command);
+      const legacyKey = crypto.randomUUID();
+      const original = database.prepare('select * from command_idempotency where idempotency_key = ?').get(command.idempotencyKey)!;
+      const legacy: Record<string, SQLInputValue> = {
+        ...original,
+        id: crypto.randomUUID(), idempotency_key: legacyKey, access_assignment_id: null,
+        status: 'processing', result_resource_type: null, result_resource_id: null, response_json: null, completed_at: null,
+      };
+      const columns = Object.keys(legacy);
+      database.prepare(`insert into command_idempotency (${columns.join(',')}) values (${columns.map(() => '?').join(',')})`)
+        .run(...columns.map(column => legacy[column]));
+      database.prepare(`update command_idempotency set status = 'succeeded', result_resource_type = ?,
+        result_resource_id = ?, response_json = ?, completed_at = ? where id = ?`)
+        .run(original.result_resource_type, original.result_resource_id, original.response_json, original.completed_at, legacy.id);
+      await expect(repository[operation]({ ...command, idempotencyKey: legacyKey })).rejects.toBeInstanceOf(PatientRegistryConflictError);
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(2);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(2);
+    });
+
+    it.each(['patient_profile_heads', 'audit_stream_heads', 'command_idempotency'])(
+      'rolls back an ignored %s publication inside the transaction', async table => {
+        const { database, repository } = fixture();
+        const patient = await repository.create(patientInput);
+        database.exec(`create trigger skip_profile_publication before update on ${table} begin select raise(ignore); end`);
+        await expect(repository[operation](profileCommand(patient.id))).rejects.toBeInstanceOf(PatientRegistryConflictError);
+        expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(1);
+        expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+        expect(database.prepare('select count(*) as n from command_idempotency').get()?.n).toBe(1);
+        expect((await repository.get(patient.id))?.version).toBe(1);
+      },
+    );
+
+    it.each(['committed', 'replayed'] as const)('does not disclose a %s result after authority disappears during response loading', async mode => {
+      const { database, repository, scope } = fixture();
+      const patient = await repository.create(patientInput);
+      const command = profileCommand(patient.id);
+      if (mode === 'replayed') await repository[operation](command);
+      const raced = new D1PatientRegistryRepository(createD1Adapter(database), scope);
+      const get = raced.get.bind(raced);
+      let reads = 0;
+      raced.get = async id => {
+        const result = await get(id);
+        reads += 1;
+        if (mode === 'replayed' || reads === 2) changeProfileAssignment(database, { status: 'revoked' });
+        return result;
+      };
+      await expect(raced[operation](command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+      // A commit preceding revocation remains durable; it is never undone or repeated.
+      expect(database.prepare('select count(*) as n from patient_profile_versions').get()?.n).toBe(2);
+      expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(2);
+    });
+  });
+
+  it.each(['clinical_section_heads', 'audit_stream_heads'])('rolls back skipped publication of %s', async table => {
+    const { repository, database } = fixture();
+    const patient = await repository.create(patientInput);
+    database.exec(`create trigger skip_publication before ${table === 'audit_stream_heads' ? 'update' : 'insert'} on ${table} begin select raise(ignore); end`);
+    await expect(repository.createEncounter({ patientId: patient.id, reasonForVisit: 'Проверка',
+      actorId: 'user-a', requestId: 'skip', idempotencyKey: crypto.randomUUID() })).rejects.toThrow();
+    expect(database.prepare('select count(*) as n from encounters').get()?.n).toBe(0);
+    expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+    expect(database.prepare("select count(*) as n from command_idempotency where operation='encounter.create_for_patient'").get()?.n).toBe(0);
+  });
+  it('denies a revoked creator and rejects wrong actor without creating an encounter', async () => {
+    const { repository, database } = fixture();
+    const patient = await repository.create(patientInput);
+    const command = { patientId: patient.id, reasonForVisit: 'Проверка', actorId: 'wrong-user',
+      requestId: 'request', idempotencyKey: crypto.randomUUID() };
+    await expect(repository.createEncounter(command)).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    database.exec("update memberships set status='disabled' where id='membership-a'");
+    await expect(repository.createEncounter({ ...command, actorId: 'user-a' })).rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from encounters').get()?.n).toBe(0);
+  });
+  it('rolls back when creator access disappears immediately before the transaction', async () => {
+    const { repository, database, scope } = fixture();
+    const patient = await repository.create(patientInput);
+    const d1 = createD1Adapter(database);
+    const batch = d1.batch.bind(d1);
+    d1.batch = async statements => {
+      database.exec("update memberships set status='disabled' where id='membership-a'");
+      return batch(statements);
+    };
+    const raced = new D1PatientRegistryRepository(d1, scope);
+    await expect(raced.createEncounter({ patientId: patient.id, reasonForVisit: 'Проверка',
+      actorId: 'user-a', requestId: 'race', idempotencyKey: crypto.randomUUID() }))
+      .rejects.toBeInstanceOf(AccessPermissionRequiredError);
+    expect(database.prepare('select count(*) as n from encounters').get()?.n).toBe(0);
+    expect(database.prepare('select count(*) as n from audit_events').get()?.n).toBe(1);
+  });
   it('searches long Cyrillic names literally without LIKE wildcard expansion', async () => {
     const { repository } = fixture();
     const displayName = 'Тест интерфейса 15 сентября — вымышленный пациент';

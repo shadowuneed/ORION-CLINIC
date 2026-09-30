@@ -178,8 +178,7 @@
   cursor: pointer;
 }
 
-.primaryButton { color: white; background: var(--brand-strong); }
-html[data-theme='dark'] .primaryButton { color: #13231f; }
+.primaryButton { color: var(--on-brand); background: var(--brand-strong); }
 .secondaryButton { border-color: var(--line-strong); color: var(--ink); background: var(--surface-strong); }
 .warningButton { border-color: color-mix(in srgb, var(--warning) 35%, var(--line)); color: var(--warning); background: var(--warning-soft); }
 .dangerButton { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); color: var(--danger); background: var(--danger-soft); }

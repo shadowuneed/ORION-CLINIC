@@ -136,6 +136,67 @@ async function readApiError(response: Response, fallback: string) {
   }
 }
 
+export function createLocalSpeechUploadQueue(options: {
+  fetchImpl: (input: string, init?: RequestInit) => Promise<Response>;
+  encounterId: string;
+  sessionId: string;
+}) {
+  let pending: Promise<void> = Promise.resolve();
+  let nextIndex = 0;
+  let failure: Error | null = null;
+
+  return {
+    enqueue(wav: ArrayBuffer): Promise<LocalSpeechSegment | null> {
+      const upload = pending.then(async () => {
+        if (failure) throw failure;
+        try {
+          const response = await options.fetchImpl(
+            '/api/workspace/transcript/speech/transcribe',
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'audio/wav',
+                'x-orion-encounter-id': options.encounterId,
+                'x-orion-speech-session-id': options.sessionId,
+                'x-orion-utterance-index': String(nextIndex),
+              },
+              body: wav,
+            },
+          );
+          if (!response.ok) {
+            throw new Error(
+              await readApiError(response, 'Не удалось распознать реплику.'),
+            );
+          }
+          const payload = (await response.json()) as {
+            skipped?: unknown;
+            segment?: LocalSpeechSegment | null;
+          } | null;
+          // Silence is not persisted, so the next queued audio reuses this index.
+          if (payload?.skipped === 'no_speech' && payload.segment === null) {
+            return null;
+          }
+          if (!payload?.segment || payload.skipped !== undefined) {
+            throw new Error('Локальная модель вернула некорректный ответ.');
+          }
+          nextIndex += 1;
+          return payload.segment;
+        } catch (error) {
+          failure = error instanceof Error
+            ? error
+            : new Error('Локальное распознавание остановлено.');
+          throw failure;
+        }
+      });
+      // Drain remains awaitable after failure, but queued audio must not be sent
+      // after a fatal API/network error has cancelled the capture session.
+      pending = upload.then(() => undefined, () => undefined);
+      return upload;
+    },
+    drain: () => pending,
+  };
+}
+
 export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
   const fetch = useWorkspaceFetch();
   const [status, setStatus] = useState<LocalSpeechStatus>('idle');
@@ -144,8 +205,7 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
   const [pendingUtterances, setPendingUtterances] = useState(0);
   const [speechActive, setSpeechActive] = useState(false);
   const runtimeRef = useRef<CaptureRuntime | null>(null);
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
-  const utteranceIndexRef = useRef(0);
+  const queueRef = useRef<ReturnType<typeof createLocalSpeechUploadQueue> | null>(null);
   const startAttemptRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -186,7 +246,7 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
       if (mountedRef.current) setStatus('stopping');
       if (reason === 'completed') runtime.flushPending?.();
       await releaseAudio();
-      await queueRef.current.catch(() => undefined);
+      await queueRef.current?.drain();
       const encounterId = encounterIdRef.current;
       if (encounterId) {
         await fetch('/api/workspace/transcript/speech/session', {
@@ -308,8 +368,12 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
         flushPending: null,
       };
       runtimeRef.current = runtime;
-      utteranceIndexRef.current = 0;
-      queueRef.current = Promise.resolve();
+      const uploadQueue = createLocalSpeechUploadQueue({
+        fetchImpl: fetch,
+        encounterId: options.encounterId,
+        sessionId: runtime.sessionId,
+      });
+      queueRef.current = uploadQueue;
 
       let calibratedMs = 0;
       let noiseFloor = 0.004;
@@ -322,34 +386,11 @@ export function useLocalSpeechCapture(options: UseLocalSpeechOptions) {
       let utteranceFrames: Float32Array[] | null = null;
 
       const enqueue = (frames: Float32Array[]) => {
-        const index = utteranceIndexRef.current;
-        utteranceIndexRef.current += 1;
         const wav = encodeWav(concatFrames(frames), runtime.sampleRate);
         setPendingUtterances((count) => count + 1);
-        queueRef.current = queueRef.current
-          .then(async () => {
-            const response = await fetch(
-              '/api/workspace/transcript/speech/transcribe',
-              {
-                method: 'POST',
-                headers: {
-                  'content-type': 'audio/wav',
-                  'x-orion-encounter-id': options.encounterId!,
-                  'x-orion-speech-session-id': runtime.sessionId,
-                  'x-orion-utterance-index': String(index),
-                },
-                body: wav,
-              },
-            );
-            if (!response.ok) {
-              throw new Error(
-                await readApiError(response, 'Не удалось распознать реплику.'),
-              );
-            }
-            const payload = (await response.json()) as {
-              segment: LocalSpeechSegment;
-            };
-            onSegmentRef.current(payload.segment);
+        void uploadQueue.enqueue(wav)
+          .then((segment) => {
+            if (segment) onSegmentRef.current(segment);
           })
           .catch((uploadError: unknown) => {
             const message =

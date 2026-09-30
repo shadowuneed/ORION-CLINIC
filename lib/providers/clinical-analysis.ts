@@ -11,7 +11,7 @@ export const clinicalSectionCodes = [
   'treatment_plan',
 ] as const;
 
-export const analysisPolicyVersion = 'orion-clinical-drafts-v1';
+export const analysisPolicyVersion = 'orion-clinical-drafts-v2';
 
 export type AnalysisTranscriptSegment = {
   id: string;

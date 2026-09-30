@@ -142,6 +142,7 @@ export async function resolvePatientDirectoryAccess(
     },
     facility: { id: selected.facility.id, name: selected.facility.name },
     scope: {
+      accessAssignmentId: selected.assignmentId,
       organizationId: selected.organization.id,
       facilityId: selected.facility.id,
       userId: selected.user.id,

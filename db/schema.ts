@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -207,6 +208,107 @@ export const users = sqliteTable(
     check('users_version_positive', sql`${table.version} > 0`),
   ],
 );
+
+// Authentication foundation only. This table is not an activated login flow.
+// Revoked rows remain as tombstones so a token or session id cannot be reused.
+export const staffSessions = sqliteTable('staff_sessions', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull(),
+  userId: text('user_id').notNull().references(() => users.id),
+  userVersion: integer('user_version').notNull(),
+  identityIssuer: text('identity_issuer').notNull(),
+  identitySubject: text('identity_subject').notNull(),
+  createdAt: integer('created_at').notNull(),
+  lastSeenAt: integer('last_seen_at').notNull(),
+  idleExpiresAt: integer('idle_expires_at').notNull(),
+  absoluteExpiresAt: integer('absolute_expires_at').notNull(),
+  revokedAt: integer('revoked_at'),
+  version: integer('version').notNull().default(1),
+}, table => [
+  uniqueIndex('staff_sessions_token_hash_uidx').on(table.tokenHash),
+  index('staff_sessions_user_idx').on(table.userId, table.revokedAt),
+  check('staff_sessions_id_valid', sql`length(${table.id}) between 1 and 128 and ${table.id} = trim(${table.id})`),
+  check('staff_sessions_hash_valid', sql`length(${table.tokenHash}) = 64 and ${table.tokenHash} not glob '*[^0-9a-f]*'`),
+  check('staff_sessions_user_version_positive', sql`typeof(${table.userVersion}) = 'integer' and ${table.userVersion} > 0`),
+  check('staff_sessions_identity_valid', sql`length(trim(${table.identityIssuer})) > 0 and length(trim(${table.identitySubject})) > 0`),
+  check('staff_sessions_created_at_valid', sql`typeof(${table.createdAt}) = 'integer' and ${table.createdAt} > 0`),
+  check('staff_sessions_last_seen_valid', sql`typeof(${table.lastSeenAt}) = 'integer' and ${table.lastSeenAt} >= ${table.createdAt} and ${table.lastSeenAt} < ${table.absoluteExpiresAt}`),
+  check('staff_sessions_absolute_lifetime', sql`typeof(${table.absoluteExpiresAt}) = 'integer' and ${table.absoluteExpiresAt} = ${table.createdAt} + 28800000`),
+  check('staff_sessions_idle_lifetime', sql`typeof(${table.idleExpiresAt}) = 'integer' and ${table.idleExpiresAt} = min(${table.absoluteExpiresAt}, ${table.lastSeenAt} + 1800000)`),
+  check('staff_sessions_revoked_at_valid', sql`${table.revokedAt} is null or (typeof(${table.revokedAt}) = 'integer' and ${table.revokedAt} > 0)`),
+  check('staff_sessions_version_positive', sql`typeof(${table.version}) = 'integer' and ${table.version} > 0`),
+]);
+
+// Internal, unmounted credential lifecycle. Clinical roles remain in assignments.
+export const staffCredentials = sqliteTable('staff_credentials', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  loginNormalized: text('login_normalized').notNull(),
+  identityIssuer: text('identity_issuer').notNull(),
+  identitySubject: text('identity_subject').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  status: text('status', { enum: ['active', 'disabled'] }).notNull(),
+  version: integer('version').notNull(),
+  userVersion: integer('user_version').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  eventId: text('event_id').notNull(),
+  actorId: text('actor_id').notNull().references(() => users.id),
+  actorVersion: integer('actor_version').notNull(),
+  actorIssuer: text('actor_issuer').notNull(),
+  actorSubject: text('actor_subject').notNull(),
+}, table => [
+  uniqueIndex('staff_credentials_user_uidx').on(table.userId),
+  uniqueIndex('staff_credentials_login_uidx').on(table.loginNormalized),
+  uniqueIndex('staff_credentials_event_uidx').on(table.eventId),
+  check('staff_credentials_login_valid', sql`length(${table.loginNormalized}) between 3 and 128 and ${table.loginNormalized} not glob '*[^a-z0-9._@+-]*' and substr(${table.loginNormalized}, 1, 1) glob '[a-z0-9]'`),
+  enumCheck('staff_credentials_status_valid', table.status, ['active', 'disabled']),
+  check('staff_credentials_versions_valid', sql`typeof(${table.version}) = 'integer' and ${table.version} > 0 and typeof(${table.userVersion}) = 'integer' and ${table.userVersion} > 1 and typeof(${table.actorVersion}) = 'integer' and ${table.actorVersion} > 0`),
+  check('staff_credentials_times_valid', sql`typeof(${table.createdAt}) = 'integer' and ${table.createdAt} > 0 and typeof(${table.updatedAt}) = 'integer' and ${table.updatedAt} >= ${table.createdAt}`),
+]);
+
+// PHI/password-free append-only lifecycle audit, populated by credential triggers.
+export const staffCredentialEvents = sqliteTable('staff_credential_events', {
+  id: text('id').primaryKey(),
+  credentialId: text('credential_id').notNull().references(() => staffCredentials.id),
+  userId: text('user_id').notNull().references(() => users.id),
+  actorId: text('actor_id').notNull().references(() => users.id),
+  actorVersion: integer('actor_version').notNull(),
+  actorIssuer: text('actor_issuer').notNull(),
+  actorSubject: text('actor_subject').notNull(),
+  action: text('action', { enum: ['provision', 'reset', 'disable'] }).notNull(),
+  previousVersion: integer('previous_version').notNull(),
+  version: integer('version').notNull(),
+  userVersion: integer('user_version').notNull(),
+  occurredAt: integer('occurred_at').notNull(),
+}, table => [
+  uniqueIndex('staff_credential_events_version_uidx').on(table.credentialId, table.version),
+  enumCheck('staff_credential_events_action_valid', table.action, ['provision', 'reset', 'disable']),
+  check('staff_credential_events_version_valid', sql`${table.version} = ${table.previousVersion} + 1 and ${table.previousVersion} >= 0`),
+]);
+
+// Every admitted attempt counts, including abandoned and successful reservations.
+export const staffLoginAttempts = sqliteTable('staff_login_attempts', {
+  id: text('id').primaryKey(),
+  loginNormalized: text('login_normalized').notNull(),
+  credentialId: text('credential_id').references(() => staffCredentials.id),
+  credentialVersion: integer('credential_version'),
+  userId: text('user_id').references(() => users.id),
+  userVersion: integer('user_version'),
+  identityIssuer: text('identity_issuer'),
+  identitySubject: text('identity_subject'),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  status: text('status', { enum: ['pending', 'failed', 'verified'] }).notNull(),
+  completedAt: integer('completed_at'),
+}, table => [
+  index('staff_login_attempts_window_idx').on(table.loginNormalized, table.createdAt),
+  check('staff_login_attempts_login_valid', sql`length(${table.loginNormalized}) between 3 and 128 and ${table.loginNormalized} not glob '*[^a-z0-9._@+-]*' and substr(${table.loginNormalized}, 1, 1) glob '[a-z0-9]'`),
+  enumCheck('staff_login_attempts_status_valid', table.status, ['pending', 'failed', 'verified']),
+  check('staff_login_attempts_times_valid', sql`typeof(${table.createdAt}) = 'integer' and ${table.createdAt} > 0 and ${table.expiresAt} = ${table.createdAt} + 120000 and (${table.completedAt} is null or (typeof(${table.completedAt}) = 'integer' and ${table.completedAt} >= ${table.createdAt}))`),
+  check('staff_login_attempts_snapshot_valid', sql`(${table.credentialId} is null and ${table.credentialVersion} is null and ${table.userId} is null and ${table.userVersion} is null and ${table.identityIssuer} is null and ${table.identitySubject} is null) or (${table.credentialId} is not null and ${table.credentialVersion} > 0 and ${table.userId} is not null and ${table.userVersion} > 0 and ${table.identityIssuer} is not null and ${table.identitySubject} is not null)`),
+  check('staff_login_attempts_completion_valid', sql`(${table.status} = 'pending' and ${table.completedAt} is null) or (${table.status} <> 'pending' and ${table.completedAt} is not null)`),
+]);
 
 export const memberships = sqliteTable(
   'memberships',
@@ -791,6 +893,46 @@ export const patients = sqliteTable(
     check('patients_version_positive', sql`${table.version} > 0`),
   ],
 );
+
+// MOBILE-1/M1a: an unmounted, clinic-verified adult self relationship.
+// This is not a credential, patient session, publication or mobile API grant.
+export const patientSelfLinks = sqliteTable('patient_self_links', {
+  id: text('id').primaryKey(),
+  identityIssuer: text('identity_issuer').notNull(),
+  identitySubject: text('identity_subject').notNull(),
+  ...tenantScope(),
+  patientId: text('patient_id').notNull().references(() => patients.id),
+  purpose: text('purpose', { enum: ['protocol.read'] }).notNull(),
+  verificationRef: text('verification_ref').notNull(),
+  verifiedByMembershipId: text('verified_by_membership_id').notNull().references(() => memberships.id),
+  status: text('status', { enum: ['active', 'revoked'] }).notNull(),
+  version: integer('version').notNull(),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  revokedAt: integer('revoked_at'),
+}, table => [
+  uniqueIndex('patient_self_links_active_identity_patient_uidx')
+    .on(table.identityIssuer, table.identitySubject, table.organizationId, table.facilityId, table.patientId, table.purpose)
+    .where(sql`${table.status} = 'active'`),
+  index('patient_self_links_patient_idx').on(table.organizationId, table.facilityId, table.patientId, table.status),
+  foreignKey({
+    name: 'patient_self_links_scope_patient_fk',
+    columns: [table.organizationId, table.facilityId, table.patientId],
+    foreignColumns: [patients.organizationId, patients.facilityId, patients.id],
+  }),
+  foreignKey({
+    name: 'patient_self_links_scope_verifier_fk',
+    columns: [table.organizationId, table.facilityId, table.verifiedByMembershipId],
+    foreignColumns: [memberships.organizationId, memberships.facilityId, memberships.id],
+  }),
+  enumCheck('patient_self_links_purpose', table.purpose, ['protocol.read']),
+  enumCheck('patient_self_links_status', table.status, ['active', 'revoked']),
+  check('patient_self_links_version', sql`${table.version} > 0`),
+  check('patient_self_links_clock', sql`${table.createdAt} > 0 and ${table.expiresAt} > ${table.createdAt} and (${table.revokedAt} is null or ${table.revokedAt} >= ${table.createdAt})`),
+  check('patient_self_links_state', sql`(${table.status} = 'active' and ${table.revokedAt} is null) or (${table.status} = 'revoked' and ${table.revokedAt} is not null)`),
+  check('patient_self_links_identity', sql`length(trim(${table.identityIssuer})) between 1 and 128 and length(trim(${table.identitySubject})) between 1 and 256`),
+  check('patient_self_links_verification', sql`length(trim(${table.verificationRef})) between 1 and 128`),
+]);
 
 export const patientProfileVersions = sqliteTable(
   'patient_profile_versions',
@@ -7490,3 +7632,82 @@ export const patientObservationHeads = sqliteTable(
     check('patient_observation_heads_lock_positive', sql`${table.lockVersion} > 0`),
   ],
 );
+
+// Internal non-authorizing registry. These rows are not access/key-release grants.
+// State publication/CAS and immutable-history guards live in migration 0050.
+export const localMaterialReservations = sqliteTable('local_material_reservations', {
+  id: text('id').primaryKey(),
+  requestHash: text('request_hash').notNull(),
+  descriptorJson: text('descriptor_json').notNull(),
+  payloadKind: text('payload_kind', { enum: ['audio', 'transcript'] }).notNull(),
+  materialId: text('material_id').notNull(),
+  recordingRunId: text('recording_run_id').notNull(),
+  ownerUserId: text('owner_user_id').notNull().references(() => users.id),
+  revision: integer('revision').notNull(),
+  expectedReceiptId: text('expected_receipt_id').references((): AnySQLiteColumn => localMaterialReceipts.id),
+  authorityFingerprint: text('authority_fingerprint').notNull(),
+  sessionId: text('session_id').notNull().references(() => staffSessions.id),
+  keyId: text('key_id').notNull(),
+  policyId: text('policy_id').notNull(),
+  wrappingProviderId: text('wrapping_provider_id').notNull(),
+  wrappingKeyRef: text('wrapping_key_ref'),
+  wrappedKey: text('wrapped_key'),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  state: text('state', { enum: ['preparing', 'prepared', 'committed', 'retired'] }).notNull(),
+  retireReason: text('retire_reason', { enum: ['expired', 'cancelled', 'authority_changed', 'preparation_failed'] }),
+}, table => [
+  uniqueIndex('local_material_reservations_key_uidx').on(table.keyId),
+  index('local_material_reservations_stream_idx').on(table.materialId, table.payloadKind, table.revision),
+  index('local_material_reservations_owner_idx').on(table.ownerUserId, table.state),
+  check('local_material_reservation_id_valid', sql`typeof(${table.id}) = 'text' and length(${table.id}) between 1 and 128 and ${table.id} = trim(${table.id})`),
+  check('local_material_reservation_request_hash', sql`length(${table.requestHash}) = 64 and ${table.requestHash} not glob '*[^0-9a-f]*'`),
+  check('local_material_reservation_authority_hash', sql`length(${table.authorityFingerprint}) = 64 and ${table.authorityFingerprint} not glob '*[^0-9a-f]*'`),
+  check('local_material_reservation_descriptor', sql`json_valid(${table.descriptorJson}) and length(${table.descriptorJson}) <= 16384`),
+  check('local_material_reservation_material_valid', sql`length(${table.materialId}) between 1 and 256 and ${table.materialId} = trim(${table.materialId}) and length(${table.recordingRunId}) between 1 and 256 and ${table.recordingRunId} = trim(${table.recordingRunId})`),
+  check('local_material_reservation_revision_valid', sql`typeof(${table.revision}) = 'integer' and ${table.revision} between 1 and 9007199254740991`),
+  check('local_material_reservation_key_valid', sql`length(${table.keyId}) between 16 and 128 and ${table.keyId} not glob '*[^A-Za-z0-9_-]*'`),
+  check('local_material_reservation_policy_valid', sql`length(${table.policyId}) between 1 and 256 and ${table.policyId} = trim(${table.policyId}) and length(${table.wrappingProviderId}) between 1 and 256 and ${table.wrappingProviderId} = trim(${table.wrappingProviderId})`),
+  check('local_material_reservation_wrap_pair', sql`(${table.wrappingKeyRef} is null and ${table.wrappedKey} is null) or (typeof(${table.wrappingKeyRef}) = 'text' and length(${table.wrappingKeyRef}) between 1 and 256 and typeof(${table.wrappedKey}) = 'text' and length(${table.wrappedKey}) between 1 and 16384)`),
+  check('local_material_reservation_clock', sql`typeof(${table.createdAt}) = 'integer' and ${table.createdAt} > 0 and typeof(${table.expiresAt}) = 'integer' and ${table.expiresAt} = ${table.createdAt} + 120000 and ${table.expiresAt} <= 9007199254740991`),
+  enumCheck('local_material_reservation_kind', table.payloadKind, ['audio', 'transcript']),
+  enumCheck('local_material_reservation_state', table.state, ['preparing', 'prepared', 'committed', 'retired']),
+  check('local_material_reservation_state_wrap', sql`(${table.state} = 'preparing' and ${table.wrappedKey} is null) or (${table.state} in ('prepared', 'committed') and ${table.wrappedKey} is not null) or ${table.state} = 'retired'`),
+  check('local_material_reservation_retirement', sql`(${table.state} <> 'retired' and ${table.retireReason} is null) or (${table.state} = 'retired' and ${table.retireReason} is not null and ${table.retireReason} in ('expired', 'cancelled', 'authority_changed', 'preparation_failed'))`),
+]);
+
+export const localMaterialReceipts = sqliteTable('local_material_receipts', {
+  id: text('id').primaryKey(),
+  reservationId: text('reservation_id').notNull().references((): AnySQLiteColumn => localMaterialReservations.id),
+  envelopeHash: text('envelope_hash').notNull(),
+  envelopeBytes: integer('envelope_bytes').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  uniqueIndex('local_material_receipts_reservation_uidx').on(table.reservationId),
+  check('local_material_receipt_id_valid', sql`typeof(${table.id}) = 'text' and length(${table.id}) between 1 and 128 and ${table.id} = trim(${table.id})`),
+  check('local_material_receipt_envelope_hash', sql`length(${table.envelopeHash}) = 64 and ${table.envelopeHash} not glob '*[^0-9a-f]*'`),
+  check('local_material_receipt_envelope_bytes', sql`typeof(${table.envelopeBytes}) = 'integer' and ${table.envelopeBytes} between 1 and 2097152`),
+  check('local_material_receipt_clock', sql`typeof(${table.createdAt}) = 'integer' and ${table.createdAt} > 0`),
+]);
+
+export const localMaterialHeads = sqliteTable('local_material_heads', {
+  materialId: text('material_id').notNull(),
+  payloadKind: text('payload_kind', { enum: ['audio', 'transcript'] }).notNull(),
+  receiptId: text('receipt_id').notNull().references(() => localMaterialReceipts.id),
+  revision: integer('revision').notNull(),
+}, table => [
+  primaryKey({ columns: [table.materialId, table.payloadKind] }),
+  uniqueIndex('local_material_heads_receipt_uidx').on(table.receiptId),
+  enumCheck('local_material_head_kind', table.payloadKind, ['audio', 'transcript']),
+  check('local_material_head_revision', sql`typeof(${table.revision}) = 'integer' and ${table.revision} between 1 and 9007199254740991`),
+]);
+
+export const localMaterialRegistryEvents = sqliteTable('local_material_registry_events', {
+  reservationId: text('reservation_id').notNull().references(() => localMaterialReservations.id),
+  eventType: text('event_type', { enum: ['reserved', 'prepared', 'committed', 'retired'] }).notNull(),
+  occurredAt: integer('occurred_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.reservationId, table.eventType] }),
+  enumCheck('local_material_registry_event_type', table.eventType, ['reserved', 'prepared', 'committed', 'retired']),
+  check('local_material_registry_event_clock', sql`typeof(${table.occurredAt}) = 'integer' and ${table.occurredAt} > 0`),
+]);

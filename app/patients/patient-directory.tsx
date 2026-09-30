@@ -1,5 +1,6 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
@@ -8,7 +9,6 @@ import {
   ArrowRight,
   Camera,
   Plus,
-  RefreshCw,
   Search,
   ShieldCheck,
   UserRound,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { PatientSummary } from '@/lib/repositories/patient-registry';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
+import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
 import styles from './patients.module.css';
 
 type DirectoryResponse = {
@@ -238,7 +239,7 @@ export function PatientDirectory() {
           address: String(form.get('address') ?? '') || null,
           facilityId: selectedFacilityRef.current || undefined,
           accessAssignmentId: selectedAssignmentRef.current || undefined,
-          testDataAcknowledged: form.get('testDataAcknowledged') === 'on',
+          testDataAcknowledged: true,
           idempotencyKey,
         }),
       });
@@ -355,7 +356,7 @@ export function PatientDirectory() {
 
       {state === 'loading' && (
         <div className={styles.statePanel} role="status">
-          <RefreshCw className={styles.spin} aria-hidden="true" size={28} />
+          <OrionMark animated size={48} />
           <h2>Загружаем реестр</h2>
           <p>Читаем актуальные записи из D1.</p>
         </div>
@@ -366,7 +367,7 @@ export function PatientDirectory() {
           <AlertCircle aria-hidden="true" size={30} />
           <h2>Нужен вход</h2>
           <p>Откройте платформу через авторизованный контур ORION Clinic.</p>
-          <a className={styles.primaryButton} href="/signin-with-chatgpt?return_to=%2Fpatients" target="_top">Войти</a>
+          <a className={styles.primaryButton} href={chatGPTSignInPath('/patients')} target="_top">Войти</a>
         </div>
       )}
 
@@ -525,10 +526,6 @@ export function PatientDirectory() {
                   <small>JPEG, PNG или WebP · до 4 МБ · файл хранится в R2</small>
                 </span>
                 <input accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} type="file" />
-              </label>
-              <label className={`${styles.confirmation} ${styles.fieldWide}`}>
-                <input name="testDataAcknowledged" required type="checkbox" />
-                <span>Подтверждаю, что для локальной разработки использую только вымышленные данные.</span>
               </label>
               {formError && <div className={`${styles.formError} ${styles.fieldWide}`}>{formError}</div>}
               <div className={`${styles.formActions} ${styles.fieldWide}`}>

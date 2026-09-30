@@ -39,7 +39,7 @@
   place-items: center;
   border-radius: 10px;
   background: var(--brand-strong);
-  color: white;
+  color: var(--on-brand);
   font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -103,7 +103,7 @@
   font-size: 13px;
 }
 
-.searchBox input::placeholder { color: #8c9692; }
+.searchBox input::placeholder { color: var(--ink-muted); opacity: 1; }
 .searchBox:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px rgb(32 105 82 / 12%); }
 
 .searchBox > span {
@@ -494,7 +494,7 @@
 .protocolSigningDecision input { width: 17px; height: 17px; flex: 0 0 auto; margin-top: 1px; accent-color: var(--brand); }
 .protocolSigningDecision > div { display: flex; justify-content: flex-end; gap: 8px; }
 .protocolSigningDecision button { min-height: 38px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface-strong); color: var(--ink); font-size: 11px; font-weight: 680; cursor: pointer; }
-.protocolSigningDecision .signProtocolButton { border-color: var(--brand); background: var(--brand); color: white; }
+.protocolSigningDecision .signProtocolButton { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
 .protocolSigningDecision button:disabled { cursor: not-allowed; opacity: 0.52; }
 
 .exportPanel {
@@ -550,7 +550,7 @@
   gap: 7px;
   border: 1px solid var(--brand);
   background: var(--brand);
-  color: white;
+  color: var(--on-brand);
   text-decoration: none;
 }
 .exportBundleLink:hover { background: var(--brand-strong); }
@@ -729,7 +729,7 @@
   font-weight: 700;
   cursor: pointer;
 }
-.amendmentActions .signProtocolButton { border-color: var(--brand); background: var(--brand); color: white; }
+.amendmentActions .signProtocolButton { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
 .amendmentActions button:disabled { cursor: not-allowed; opacity: 0.52; }
 .amendmentMessage {
   padding: 9px 10px;
@@ -918,7 +918,7 @@
   padding: 0 15px;
   border: 1px solid var(--brand-strong);
   background: var(--brand-strong);
-  color: white;
+  color: var(--on-brand);
 }
 .primaryButton:disabled { cursor: not-allowed; opacity: 0.55; }
 .secondaryButton:disabled { cursor: not-allowed; opacity: 0.55; }
@@ -983,6 +983,30 @@
 
 .transcriptPane,
 .notePane { min-width: 0; display: flex; flex-direction: column; }
+.notePane, .consentPanel { scroll-margin-top: 88px; }
+.reviewWorkflow { padding: 20px 24px; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.6; }
+.reviewWorkflow ol { padding-left: 20px; margin: 12px 0; }
+.reviewWorkflow li + li { margin-top: 8px; }
+.reviewWorkflow small { display: block; margin-top: 10px; }
+.reviewWorkflow a { text-decoration: underline; }
+.resumeAction p { font-size: 13px; line-height: 1.5; margin: 8px 0; }
+.resumeAction strong { font-size: 14px; }
+.workspace.signedWorkspace { grid-template-columns: minmax(0, 1fr); }
+.signedWorkspace > .main { width: 100%; max-width: 1280px; margin: 0 auto; }
+.encounterMaterials { margin: 16px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.encounterMaterials > summary { cursor: pointer; padding: 18px; font-weight: 600; }
+.reviewSummary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.reviewWorkflow details { color: var(--ink-soft); margin: 10px 0; }
+.reviewWorkflow summary { cursor: pointer; }
+.protocolDocument { padding: 24px; margin-bottom: 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-strong); scroll-margin-top: 88px; overflow-wrap: anywhere; }
+.protocolDocument > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.protocolDocument h2 { margin: 8px 0; font-size: 24px; }
+.protocolDocument h3 { font-size: 16px; margin: 0 0 8px; }
+.protocolDocument p { white-space: pre-wrap; line-height: 1.6; }
+.protocolDocumentSections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 0 24px; }
+.protocolDocumentSections > section, .protocolDocument > section { padding: 18px 0; border-top: 1px solid var(--line); }
+.protocolDocument details { font-size: 12px; color: var(--ink-muted); }
+.protocolSigningPanel, .exportPanel, .transcriptPane, .editor h3 { scroll-margin-top: 88px; }
 .transcriptPane { border-right: 1px solid var(--line); background: var(--surface-muted); }
 
 .paneHeader,
@@ -1048,7 +1072,7 @@
 .transcriptEditor textarea:focus { border-color: var(--brand); outline: 3px solid rgb(32 105 82 / 13%); }
 .transcriptEditorActions { display: flex; justify-content: flex-end; gap: 8px; }
 .transcriptEditorActions button { min-height: 34px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface-strong); color: var(--ink); font-size: 11px; font-weight: 650; cursor: pointer; }
-.transcriptEditorActions .transcriptSaveButton { border-color: var(--brand); background: var(--brand); color: #fff; }
+.transcriptEditorActions .transcriptSaveButton { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
 .transcriptEditorActions button:disabled { cursor: not-allowed; opacity: 0.55; }
 .transcriptMessage { margin: 10px 0 2px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--brand-soft); color: var(--brand-strong); font-size: 11px; line-height: 1.45; }
 
@@ -1078,7 +1102,7 @@
 .speechControls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .speechStartButton,
 .speechStopButton { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border-radius: 8px; font-size: 11px; font-weight: 680; cursor: pointer; }
-.speechStartButton { border: 1px solid var(--brand); background: var(--brand); color: #fff; }
+.speechStartButton { border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
 .speechStopButton { border: 1px solid var(--danger); background: var(--danger-soft); color: var(--danger); }
 .speechStartButton:disabled,
 .speechStopButton:disabled { cursor: not-allowed; opacity: 0.5; }
@@ -1158,7 +1182,7 @@
 .reviewRow small { display: block; }
 .reviewRow strong { font-size: 10px; }
 .reviewRow small { margin-top: 2px; color: #647873; font-size: 9px; }
-.reviewButton { min-height: 34px; padding: 0 11px; border: 1px solid var(--brand); background: var(--brand); color: white; }
+.reviewButton { min-height: 34px; padding: 0 11px; border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
 .reviewActions { display: flex; flex-wrap: wrap; justify-content: flex-end; }
 .absentButton { border: 1px solid #b9c4bf; background: transparent; color: var(--ink-soft); }
 .noteGate { display: grid; align-content: center; justify-items: center; min-height: 360px; padding: 30px; color: var(--ink-muted); text-align: center; }
@@ -1198,7 +1222,7 @@
 .analysisAcknowledgement:has(input:disabled) { cursor: not-allowed; opacity: 0.62; }
 .analysisAcknowledgement input { width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--brand); }
 .analysisRequirement { margin: 0; padding: 9px 10px; border-left: 3px solid var(--warning); background: var(--warning-soft); color: var(--warning); font-size: 11px; line-height: 1.45; }
-.analysisButton { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid var(--brand); border-radius: 8px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.analysisButton { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid var(--brand); border-radius: 8px; background: var(--brand); color: var(--on-brand); font-size: 12px; font-weight: 700; cursor: pointer; }
 .analysisButton:disabled { cursor: not-allowed; opacity: 0.48; }
 .analysisMessage { padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--brand-soft); color: var(--brand-strong); font-size: 11px; line-height: 1.45; }
 .analysisMessageError { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
@@ -1257,7 +1281,7 @@
 .acceptButton,
 .editButton,
 .rejectButton { min-height: 44px; padding: 0 12px; }
-.acceptButton { border: 1px solid var(--brand); background: var(--brand); color: white; }
+.acceptButton { border: 1px solid var(--brand); background: var(--brand); color: var(--on-brand); }
 .recommendationActions .acceptButton { flex: 1 1 190px; }
 .editButton,
 .rejectButton { border: 1px solid var(--line-strong); background: var(--surface-strong); color: var(--ink-soft); }

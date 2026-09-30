@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   SpeechProviderError,
+  type SpeechTranscription,
   type SpeechToTextProvider,
 } from './speech-to-text';
 
@@ -15,7 +16,7 @@ const transcriptionResponseSchema = z
   .object({
     sessionId: z.string().min(1).max(200),
     utteranceIndex: z.number().int().nonnegative(),
-    text: z.string().trim().min(1).max(8_000),
+    text: z.string().trim().max(8_000),
     language: z.string().nullable().optional(),
     speaker: z
       .object({
@@ -30,6 +31,13 @@ const transcriptionResponseSchema = z
     processingMs: z.number().int().nonnegative(),
   })
   .passthrough();
+
+// The current sidecar reports this specific audio-validation outcome as 422.
+// Match the complete detail; malformed/short audio and request validation errors
+// must not be turned into a successful empty transcription.
+const noSpeechResponseSchema = z.object({
+  detail: z.literal('В реплике не обнаружен различимый голос.'),
+});
 
 type LocalGigaamOptions = {
   baseUrl: string;
@@ -140,7 +148,7 @@ export class LocalGigaamProvider implements SpeechToTextProvider {
     utteranceIndex: number;
     audio: Uint8Array;
     signal?: AbortSignal;
-  }) {
+  }): Promise<SpeechTranscription> {
     const form = new FormData();
     const audioBuffer = Uint8Array.from(input.audio).buffer;
     form.set('audio', new Blob([audioBuffer], { type: 'audio/wav' }), 'utterance.wav');
@@ -161,6 +169,30 @@ export class LocalGigaamProvider implements SpeechToTextProvider {
       throw new SpeechProviderError('unavailable');
     }
     if (!response.ok) {
+      if (response.status === 422) {
+        const failure = noSpeechResponseSchema.safeParse(
+          await response.json().catch(() => null),
+        );
+        if (failure.success) {
+          // Reuse the API's empty-result path: no segment or sequence advance.
+          // The sidecar did not run inference, so timing/role are unavailable.
+          return {
+            upstreamSessionId: input.upstreamSessionId,
+            utteranceIndex: input.utteranceIndex,
+            text: '',
+            language: 'unknown',
+            role: 'unknown',
+            roleSource: 'unassigned',
+            speakerConfidenceBasisPoints: null,
+            startedAtMs: 0,
+            endedAtMs: 0,
+            durationMs: 0,
+            processingMs: 0,
+            providerPayload: failure.data,
+          };
+        }
+        throw new SpeechProviderError('invalid_audio');
+      }
       throw new SpeechProviderError(
         response.status === 400 || response.status === 413
           ? 'invalid_audio'

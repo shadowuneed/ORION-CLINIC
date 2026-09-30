@@ -1,9 +1,25 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { AccessAdministrationWorkspace } from './access-administration-workspace';
+import { AccessAdministrationWorkspace, AssignmentDialog } from './access-administration-workspace';
 
 describe('access administration workspace', () => {
+  it.each(['clinician', 'nurse', 'registrar', 'administrator'] as const)(
+    'does not preselect grant privileges from legacy role %s', (legacyRole) => {
+      const html = renderToStaticMarkup(createElement(AssignmentDialog, {
+        assignment: null, busy: false, error: null, mode: 'grant',
+        initialEffectiveFrom: 1704067200000,
+        memberships: [{ id: 'test-member', displayName: 'Test member', legacyRole, status: 'active' }],
+        department: { id: 'test-department', code: 'test', name: 'Test department',
+          kind: 'clinical', status: 'active', version: 1, versionId: 'v1', lockVersion: 1,
+          changeReason: 'Test fixture', changedAt: 1704067200000 },
+        onClose: () => {}, onSubmit: () => {},
+      }));
+      expect(html).not.toMatch(/<input[^>]*checked/);
+      expect(html).toMatch(/<button[^>]*disabled[^>]*type="submit"/);
+      expect(html).toContain('Выберите роли явно');
+    },
+  );
   it('renders operational department and assignment controls from D1 data', () => {
     const html = renderToStaticMarkup(
       createElement(AccessAdministrationWorkspace, {

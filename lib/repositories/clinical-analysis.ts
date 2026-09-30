@@ -44,7 +44,7 @@ export type PreparedClinicalAnalysis = {
   sourceIds: string[];
   consentEventIds: string[];
   sectionHeads: SectionHeadRow[];
-  acknowledgedAt: number;
+  acknowledgedAt: number | null;
 };
 
 export class ClinicalAnalysisConsentRequiredError extends Error {}
@@ -85,7 +85,7 @@ export class D1ClinicalAnalysisRepository {
     idempotencyKey: string;
     actorId: string;
     requestId: string;
-    acknowledged: true;
+    acknowledged: boolean;
     provider: string;
     model: string;
     modelVersion: string;
@@ -105,7 +105,8 @@ export class D1ClinicalAnalysisRepository {
     if (segments.length === 0 || !sameSnapshot(segments, input.snapshot)) {
       throw new ClinicalAnalysisSnapshotConflictError();
     }
-    const acknowledgedAt = Date.now();
+    const requestedAt = Date.now();
+    const acknowledgedAt = input.acknowledged ? requestedAt : null;
     const canonicalInput = JSON.stringify({
       policyVersion: analysisPolicyVersion,
       segments,
@@ -169,7 +170,7 @@ export class D1ClinicalAnalysisRepository {
             started_at, created_at, access_assignment_id
           )
           select ?1, ?2, ?3, ?4, 'suggestions', ?5, ?6, ?7, ?8, ?9,
-            ?10, ?11, ?12, ?13, ?14, 'running', ?14, ?14, ?16
+            ?10, ?11, ?12, ?13, ?17, 'running', ?14, ?14, ?16
           where exists (
             select 1 from encounters encounter
             where encounter.organization_id = ?2 and encounter.facility_id = ?3
@@ -191,7 +192,7 @@ export class D1ClinicalAnalysisRepository {
                 )
             )
             and ?15 = (
-              select count(*) from transcript_segments segment
+              select min(24, count(*)) from transcript_segments segment
               where segment.organization_id = ?2 and segment.facility_id = ?3
                 and segment.encounter_id = ?4
                 and segment.state in ('final', 'corrected')
@@ -242,9 +243,10 @@ export class D1ClinicalAnalysisRepository {
           this.scope.reviewerMembershipId,
           input.requestId,
           consentJson,
-          acknowledgedAt,
+          requestedAt,
           sourceIds.length,
           this.scope.accessAssignmentId!,
+          acknowledgedAt,
         ),
       this.database
         .prepare(`
@@ -267,7 +269,7 @@ export class D1ClinicalAnalysisRepository {
           this.scope.reviewerMembershipId,
           input.idempotencyKey,
           requestHash,
-          acknowledgedAt,
+          requestedAt,
           this.scope.encounterId,
           runId,
           this.scope.accessAssignmentId!,
@@ -419,7 +421,7 @@ export class D1ClinicalAnalysisRepository {
                 )
             )
             and ?13 = (
-              select count(*) from transcript_segments segment
+              select min(24, count(*)) from transcript_segments segment
               where segment.organization_id = ?5 and segment.facility_id = ?6
                 and segment.encounter_id = ?7
                 and segment.state in ('final', 'corrected')
@@ -757,7 +759,7 @@ export class D1ClinicalAnalysisRepository {
               and successor.encounter_id = segment.encounter_id
               and successor.supersedes_segment_id = segment.id
           )
-        order by segment.segment_index, segment.version
+        order by segment.segment_index desc, segment.version desc
         limit 24
       `)
       .bind(
@@ -766,7 +768,7 @@ export class D1ClinicalAnalysisRepository {
         this.scope.encounterId,
       )
       .all<AnalysisTranscriptSegment>();
-    return result.results;
+    return result.results.reverse();
   }
 
   private async getAnalysisConsentIds(at = Date.now()) {

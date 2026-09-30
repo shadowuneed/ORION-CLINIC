@@ -47,9 +47,10 @@ const commandSchema = z.object({
     )
     .min(1)
     .max(24),
-  acknowledged: z.literal(true),
+  acknowledged: z.boolean(),
+  mode: z.enum(['reviewed', 'automatic']).default('reviewed'),
   idempotencyKey: z.string().uuid(),
-});
+}).refine((command) => command.mode === 'automatic' ? !command.acknowledged : command.acknowledged);
 
 export async function POST(request: Request) {
   const context = createApiRequestContext(
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
       idempotencyKey: payload.data.idempotencyKey,
       actorId: access.user.id,
       requestId: context.requestId,
-      acknowledged: true,
+      acknowledged: payload.data.acknowledged,
       provider: 'groq',
       model: config.groq.model,
       modelVersion: config.groq.model,
@@ -116,6 +117,7 @@ export async function POST(request: Request) {
     });
     const providerResult = await provider.analyze({
       segments: prepared.segments,
+      mode: payload.data.mode === 'automatic' ? 'live' : 'structured',
       signal: AbortSignal.timeout(30_000),
     });
     const completed = await repository.complete(prepared, providerResult, {
@@ -172,10 +174,16 @@ export async function POST(request: Request) {
       return apiFailure(context, 409, 'ANALYSIS_CONFLICT', 'Этот запрос уже выполнялся или изменился.');
     }
     if (error instanceof ClinicalAnalysisProviderError) {
+      if (error.code === 'rate_limited') {
+        const seconds = error.retryAfterSeconds ?? 60;
+        const response = apiFailure(context, 429, 'AI_RATE_LIMITED',
+          `Groq ограничил запросы. Автоматическая пауза: ${seconds} сек.`,
+          { retryAfterSeconds: seconds });
+        response.headers.set('Retry-After', String(seconds));
+        return response;
+      }
       const message =
-        error.code === 'rate_limited'
-          ? 'Groq временно ограничил частоту запросов. Повторите позже.'
-          : error.code === 'unauthorized'
+        error.code === 'unauthorized'
             ? 'Серверный ключ Groq недействителен.'
             : error.code === 'invalid_response'
               ? 'Ответ Groq не прошёл проверку доказательств и не сохранён.'

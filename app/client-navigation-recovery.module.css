@@ -1,0 +1,9 @@
+.banner { position: fixed; z-index: 10000; left: 20px; right: 20px; bottom: 20px; margin: 0 auto; max-width: 1040px; display: flex; align-items: center; gap: 16px; padding: 20px; color: var(--ink); background: var(--surface-strong); border: 1px solid var(--warning); border-left: 5px solid var(--warning); border-radius: 12px; box-shadow: 0 8px 30px rgb(0 0 0 / 18%); }
+.banner > svg { flex-shrink: 0; color: var(--warning); }
+.copy { flex: 1; min-width: 0; }
+.copy strong { font-size: 16px; }
+.copy p { margin: 7px 0 0; line-height: 1.5; font-size: 14px; color: var(--ink-soft); }
+.reload, .dismiss { display: inline-flex; gap: 8px; justify-content: center; align-items: center; min-height: 44px; cursor: pointer; border-radius: 8px; padding: 10px 14px; border: 1px solid var(--line); }
+.reload { flex-shrink: 0; background: var(--brand); color: var(--surface-strong); font-size: 14px; font-weight: 650; }
+.dismiss { background: transparent; color: var(--ink-soft); }
+@media(max-width: 720px) { .banner { left: 12px; right: 12px; bottom: 12px; padding: 16px; gap: 12px; flex-wrap: wrap; } .copy { flex-basis: calc(100% - 40px); } .reload { flex: 1; } }

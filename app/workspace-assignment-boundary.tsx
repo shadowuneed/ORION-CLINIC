@@ -19,7 +19,7 @@ export async function WorkspaceAssignmentBoundary({ user, returnTo, children }: 
     const selection = workspaceRequestSelection(new Request(`https://orion.invalid${returnTo}`));
     selected = await resolveEncounterAssignmentAccess(
       new D1AccessGovernanceRepository(env.DB),
-      toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
+      toSiteIdentityPrincipal({ id: user.userId, email: user.email, issuer: user.issuer }),
       'encounter.read', selection,
     );
   } catch (error) {

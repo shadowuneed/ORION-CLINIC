@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
     '.next/**',
     '.vinext/**',
     '.wrangler/**',
+    '.orion-runtime/**',
     'dist/**',
     'out/**',
     'outputs/**',

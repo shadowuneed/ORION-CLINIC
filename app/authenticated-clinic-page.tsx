@@ -8,8 +8,11 @@ import {
   toSiteIdentityPrincipal,
 } from '@/lib/auth/site-identity';
 import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
+import { staffProfileFromAssignments } from '@/lib/auth/staff-profile-summary';
 import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
+// The server boundary owns first-paint shell styles, not only the client module.
+import './clinic-shell.module.css';
 import styles from './authenticated-clinic-page.module.css';
 
 export type ClinicCapability =
@@ -20,11 +23,13 @@ export type ClinicCapability =
   | 'chronic-care'
   | 'observations'
   | 'communications'
+  | 'pathway'
   | 'access'
   | 'access-administration';
 
 export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
+  profile: { staffName: string; roles: string[]; workplace: string | null };
   capabilities: {
     clinician: boolean;
     patientDirectory: boolean;
@@ -33,6 +38,7 @@ export type AuthenticatedClinicContext = {
     chronicCare: boolean;
     observations: boolean;
     communications: boolean;
+    pathway: boolean;
     accessOverview: boolean;
     accessAdministration: boolean;
   };
@@ -50,16 +56,13 @@ export async function getAuthenticatedClinicContext(
     accessAssignments = await new D1AccessGovernanceRepository(
       env.DB,
     ).listPrincipalAssignments(
-      toSiteIdentityPrincipal({ id: user.userId, email: user.email }),
+      toSiteIdentityPrincipal({ id: user.userId, email: user.email, issuer: user.issuer }),
     );
   } catch {
     accessCheck = 'unavailable';
   }
 
-  return {
-    user,
-    accessCheck,
-    capabilities: {
+  const capabilities = {
       clinician: accessAssignments.some((assignment) =>
         isAccessAssignmentCurrentlyActive(assignment) &&
         assignment.roles.includes('doctor') && !assignment.roles.includes('service') &&
@@ -108,8 +111,6 @@ export async function getAuthenticatedClinicContext(
           ['doctor', 'nurse', 'registrar'].some((role) => assignment.roles.includes(role as 'doctor' | 'nurse' | 'registrar')) &&
           assignment.effectivePermissions.includes('communications.manage'),
       ),
-      // Every authenticated principal may reach the resolver, which then
-      // requires a current interactive assignment with access.self.read.
       accessOverview: true,
       accessAdministration: accessAssignments.some(
         (assignment) =>
@@ -117,7 +118,12 @@ export async function getAuthenticatedClinicContext(
           !assignment.roles.includes('service') &&
           assignment.effectivePermissions.includes('access.manage'),
       ),
-    },
+    };
+  return {
+    user,
+    profile: staffProfileFromAssignments(accessAssignments, user.displayName),
+    accessCheck,
+    capabilities: { ...capabilities, pathway: capabilities.orders || capabilities.chronicCare || capabilities.observations || capabilities.communications },
   };
 }
 
@@ -138,12 +144,13 @@ export function AuthenticatedClinicPage({
     'chronic-care': context.capabilities.chronicCare,
     observations: context.capabilities.observations,
     communications: context.capabilities.communications,
+    pathway: context.capabilities.pathway,
     access: context.capabilities.accessOverview,
     'access-administration': context.capabilities.accessAdministration,
   }[requiredCapability];
 
   return (
-    <ClinicShell capabilities={context.capabilities} user={context.user}>
+    <ClinicShell capabilities={context.capabilities} user={context.user} profile={context.profile}>
       {context.accessCheck === 'unavailable' ? (
         <AccessState
           title="Проверка доступа недоступна"
@@ -171,6 +178,8 @@ function capabilityDenialMessage(capability: ClinicCapability) {
       return 'Нужно действующее назначение врача или медсестры с правом работы с показателями.';
     case 'communications':
       return 'Нужна активная роль врача, медсестры или регистратора в выбранной клинике.';
+    case 'pathway':
+      return 'Нужен доступ хотя бы к одному разделу маршрута пациента.';
     case 'access':
       return 'Для этого пользователя нет доступного рабочего контура.';
     case 'access-administration':

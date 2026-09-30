@@ -61,6 +61,21 @@ export type DiagnosticReviewState =
   | 'reviewed'
   | 'needs_reconciliation';
 
+export const orderRecommendationSelectionSchema = z.object({
+  recommendationId: z.string().trim().min(1).max(160),
+  recommendationVersion: z.number().int().positive(),
+}).strict();
+
+export type OrderRecommendationSelection = z.infer<typeof orderRecommendationSelectionSchema>;
+export type OrderRecommendationSource = OrderRecommendationSelection & {
+  reviewDecisionId: string;
+  derivativeVersionId: string | null;
+  encounterId: string;
+  state: 'accepted' | 'edited_and_accepted';
+  title: string;
+  medicalJustification: string;
+};
+
 export const orderListQuerySchema = z.object({
   facilityId: z.string().trim().min(1).max(100).optional(),
   accessAssignmentId: z.string().trim().min(1).max(160).optional(),
@@ -68,6 +83,16 @@ export const orderListQuerySchema = z.object({
   kind: z.enum([...serviceRequestKinds, 'all']).default('all'),
   query: z.string().trim().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  requestId: z.string().trim().min(1).max(160).optional(),
+  encounterId: z.string().trim().min(1).max(160).optional(),
+  recommendationId: z.string().trim().min(1).max(160).optional(),
+  recommendationVersion: z.coerce.number().int().positive().optional(),
+}).superRefine((value, context) => {
+  const supplied = [value.encounterId, value.recommendationId, value.recommendationVersion]
+    .filter(item => item !== undefined).length;
+  if (supplied !== 0 && supplied !== 3) context.addIssue({
+    code: 'custom', path: ['recommendationId'], message: 'Укажите точную принятую рекомендацию и приём',
+  });
 });
 
 export const createServiceRequestSchema = z
@@ -75,6 +100,7 @@ export const createServiceRequestSchema = z
     facilityId: z.string().trim().min(1).max(100).optional(),
     accessAssignmentId: z.string().trim().min(1).max(160).optional(),
     encounterId: z.string().trim().min(1).max(160),
+    recommendationSource: orderRecommendationSelectionSchema.optional(),
     kind: z.enum(serviceRequestKinds),
     priority: z.enum(serviceRequestPriorities),
     requestedService: cleanText(2, 300),

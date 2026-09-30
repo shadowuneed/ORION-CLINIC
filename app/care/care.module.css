@@ -5,6 +5,20 @@
   padding: 32px 32px 54px;
 }
 
+.navigationNotice {
+  padding: 14px 16px;
+  border-left: 3px solid var(--brand);
+  color: var(--ink);
+  background: var(--brand-soft);
+  line-height: 1.5;
+}
+
+.returnedTask { outline: 2px solid var(--brand); outline-offset: 3px; }
+.measurementLink { display: grid; gap: 7px; margin-top: 12px; }
+.measurementLink a { text-decoration: none; }
+.measurementLink small { color: var(--ink-muted); line-height: 1.4; }
+.measurementLink a[aria-disabled] { opacity: .6; cursor: default; }
+
 .pageHeader,
 .toolbar,
 .detailHeader,
@@ -160,8 +174,7 @@
   cursor: pointer;
 }
 
-.primaryButton { background: var(--brand-strong); color: white; }
-html[data-theme='dark'] .primaryButton { color: #13231f; }
+.primaryButton { background: var(--brand-strong); color: var(--on-brand); }
 .secondaryButton { border-color: var(--line-strong); background: var(--surface-strong); color: var(--ink); }
 .warningButton { border-color: color-mix(in srgb, var(--warning) 35%, var(--line)); background: var(--warning-soft); color: var(--warning); }
 .dangerButton { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); background: var(--danger-soft); color: var(--danger); }
@@ -387,6 +400,7 @@ html[data-theme='dark'] .primaryButton { color: #13231f; }
 .confirmCheck input { width: 18px; height: 18px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--brand); }
 .confirmCheck strong { font-size: .74rem; }
 .confirmCheck small { margin-top: 3px; color: var(--ink-muted); font-size: .65rem; }
+.formNotice { margin: 0 20px 12px; padding: 10px 12px; border-left: 3px solid var(--brand); background: var(--surface-muted); color: var(--ink-soft); font-size: .72rem; line-height: 1.5; }
 
 .editorSection { margin: 0 20px 16px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .editorSection > header { justify-content: space-between; gap: 14px; min-height: 65px; padding: 11px 13px; border-bottom: 1px solid var(--line); }

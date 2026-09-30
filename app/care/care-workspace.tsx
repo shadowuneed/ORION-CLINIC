@@ -1,5 +1,8 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
+import { SectionPurpose } from '../section-purpose';
+
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -13,7 +16,6 @@ import {
   Clock3,
   FilePenLine,
   HeartPulse,
-  LoaderCircle,
   LockKeyhole,
   MessageSquareText,
   Plus,
@@ -38,6 +40,13 @@ import type {
   ContactMethod,
   WellbeingState,
 } from '@/lib/domain/chronic-care';
+import {
+  canOpenCareTaskMeasurements,
+  careObservationUrl,
+  clearCareObservationContext,
+  readCareObservationContext,
+  resolveCareObservationTask,
+} from '@/lib/care-observation-navigation';
 import styles from './care.module.css';
 
 type AccessAssignmentOption = {
@@ -273,6 +282,8 @@ export function ChronicCareWorkspace() {
   const [assignmentOptions, setAssignmentOptions] = useState<AccessAssignmentOption[]>([]);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
+  const [returnedTaskId, setReturnedTaskId] = useState('');
+  const [navigationNotice, setNavigationNotice] = useState<string | null>(null);
   const [dueFilter, setDueFilter] = useState<ChronicDueState | 'all'>('all');
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -296,7 +307,6 @@ export function ChronicCareWorkspace() {
     'Решение врача о локальном тестовом наблюдении',
   );
   const [doctorConfirmed, setDoctorConfirmed] = useState(false);
-  const [localSourceAcknowledged, setLocalSourceAcknowledged] = useState(false);
 
   const [effectiveFrom, setEffectiveFrom] = useState(isoToday());
   const [effectiveTo, setEffectiveTo] = useState(addDays(isoToday(), 90));
@@ -307,7 +317,6 @@ export function ChronicCareWorkspace() {
   const [taskDrafts, setTaskDrafts] = useState<TaskDraft[]>([]);
   const [planReason, setPlanReason] = useState('Врач подписал план наблюдения');
   const [planDoctorConfirmed, setPlanDoctorConfirmed] = useState(false);
-  const [planSourceAcknowledged, setPlanSourceAcknowledged] = useState(false);
 
   const [taskReason, setTaskReason] = useState('Статус подтверждён сотрудником');
   const [contactMethod, setContactMethod] = useState<ContactMethod>('phone');
@@ -368,13 +377,27 @@ export function ChronicCareWorkspace() {
         setSelectedAccessAssignmentId(resolvedAssignment);
         setAssignmentOptions(payload.accessAssignments ?? []);
         const url = new URL(window.location.href);
-        url.searchParams.set('facilityId', resolvedFacility);
-        url.searchParams.set('accessAssignmentId', resolvedAssignment);
+        const navigation = readCareObservationContext(url.searchParams);
+        const returnTask = navigation.status === 'requested'
+          ? resolveCareObservationTask(navigation.context, payload)
+          : null;
+        // Do not repair invalid task selectors or retarget their scope on reload.
+        if (navigation.status === 'none') {
+          url.searchParams.set('facilityId', resolvedFacility);
+          url.searchParams.set('accessAssignmentId', resolvedAssignment);
+        }
         window.history.replaceState(null, '', `${url.pathname}${url.search}`);
         const candidate = preferredEnrollmentId ?? selectedEnrollmentRef.current;
-        const nextEnrollment = payload.enrollments.some((item) => item.id === candidate)
-          ? candidate
-          : payload.enrollments[0]?.id ?? '';
+        const nextEnrollment = navigation.status !== 'none'
+          ? returnTask?.enrollmentId ?? ''
+          : payload.enrollments.some((item) => item.id === candidate)
+            ? candidate
+            : payload.enrollments[0]?.id ?? '';
+        setReturnedTaskId(returnTask?.id ?? '');
+        setNavigationNotice(navigation.status === 'none' ? null : returnTask
+          ? 'Вы вернулись к исходной задаче. Измерения сохраняются отдельно; завершение задачи требует отдельного действия сотрудника.'
+          : 'Исходная задача недоступна в выбранном рабочем контуре. Выберите доступное наблюдение из списка.');
+        if (returnTask) setDueFilter('all');
         selectedEnrollmentRef.current = nextEnrollment;
         setSelectedEnrollmentId(nextEnrollment);
         setState('ready');
@@ -402,6 +425,13 @@ export function ChronicCareWorkspace() {
       loadAbort.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (state !== 'ready' || !returnedTaskId) return;
+    const card = document.getElementById(`care-task-${returnedTaskId}`);
+    card?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    card?.focus({ preventScroll: true });
+  }, [state, returnedTaskId]);
 
   const enrollments = data.enrollments ?? [];
   const tasks = data.tasks ?? [];
@@ -444,6 +474,8 @@ export function ChronicCareWorkspace() {
     setMessage(null);
     setOperationError(null);
     const url = new URL(window.location.href);
+    clearCareObservationContext(url.searchParams);
+    url.searchParams.delete('patientId');
     url.searchParams.set('facilityId', assignment.facilityId);
     url.searchParams.set('accessAssignmentId', assignment.assignmentId);
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
@@ -457,6 +489,12 @@ export function ChronicCareWorkspace() {
     setPlanOpen(false);
     setMessage(null);
     setOperationError(null);
+    setReturnedTaskId('');
+    setNavigationNotice(null);
+    const url = new URL(window.location.href);
+    clearCareObservationContext(url.searchParams);
+    url.searchParams.delete('patientId');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
   }
 
   async function postCommand<T>(
@@ -528,7 +566,7 @@ export function ChronicCareWorkspace() {
         diagnosisCode: diagnosisCode.trim() || null,
         diagnosisBasis,
         doctorConfirmed,
-        localSourceAcknowledged,
+        localSourceAcknowledged: true,
         reason: enrollmentReason,
       },
       (body) => body.enrollment as ChronicEnrollmentRecord | undefined,
@@ -536,8 +574,7 @@ export function ChronicCareWorkspace() {
     if (!result) return;
     setEnrollmentOpen(false);
     setDoctorConfirmed(false);
-    setLocalSourceAcknowledged(false);
-    setMessage('Решение врача сохранено. Пациент включён только в локальный тестовый регистр.');
+    setMessage('Решение врача сохранено в реестре ORION. Во внешние регистры запись не отправлялась.');
     await load(result.id, true);
   }
 
@@ -574,7 +611,6 @@ export function ChronicCareWorkspace() {
         : 'Врач подписал первичный план наблюдения',
     );
     setPlanDoctorConfirmed(false);
-    setPlanSourceAcknowledged(false);
     setPlanOpen(true);
   }
 
@@ -609,7 +645,7 @@ export function ChronicCareWorkspace() {
           })),
         },
         doctorConfirmed: planDoctorConfirmed,
-        localSourceAcknowledged: planSourceAcknowledged,
+        localSourceAcknowledged: true,
         reason: planReason,
       },
       (body) => body.plan,
@@ -677,7 +713,7 @@ export function ChronicCareWorkspace() {
       <header className={styles.pageHeader}>
         <div>
           <span className={styles.eyebrow}>Диспансерное наблюдение</span>
-          <h1>Контрольные списки по подписанному плану</h1>
+          <h1>План наблюдения</h1>
           <p>
             Врач подтверждает диагноз и план. Медсестра фиксирует ответ пациента и
             передаёт врачу отклонения — без автоматической постановки диагноза.
@@ -686,12 +722,14 @@ export function ChronicCareWorkspace() {
         <div className={styles.sourceBadge}>
           <ShieldCheck aria-hidden="true" size={20} />
           <span>
-            <strong>{data.sourceLabel}</strong>
-            <small>D1 · синтетические данные · внешние регистры не подключены</small>
+            <strong>Реестр ORION</strong>
+            <small>Внешние регистры не подключены</small>
           </span>
         </div>
       </header>
 
+      <SectionPurpose kind="care" />
+      {navigationNotice ? <p className={styles.navigationNotice} role="status">{navigationNotice}</p> : null}
       <section className={styles.stats} aria-label="Состояние наблюдения">
         <article>
           <CircleAlert aria-hidden="true" size={20} />
@@ -845,7 +883,7 @@ export function ChronicCareWorkspace() {
                 </article>
                 <article>
                   <span>Источник</span>
-                  <strong>Локальный тестовый D1</strong>
+                  <strong>Реестр ORION</strong>
                   <small>не ЭРДБ / не ПУЗ</small>
                 </article>
                 <article>
@@ -918,7 +956,7 @@ export function ChronicCareWorkspace() {
                         ? allowedCareTaskActions(task, capabilities, viewerRole)
                         : [];
                       return (
-                        <article className={styles.taskCard} key={task.id}>
+                        <article className={joinClass(styles.taskCard, returnedTaskId === task.id && styles.returnedTask)} id={`care-task-${task.id}`} key={task.id} tabIndex={-1}>
                           <div className={styles.taskTopline}>
                             <span className={joinClass(styles.dueBadge, styles[`due_${task.current.dueState}`])}>{dueLabels[task.current.dueState]}</span>
                             <span className={styles.statusBadge}>{taskStatusLabels[task.current.status]}</span>
@@ -952,6 +990,15 @@ export function ChronicCareWorkspace() {
                             }} type="button">
                               Открыть действия <ChevronRight aria-hidden="true" size={15} />
                             </button>
+                          ) : null}
+                          {data.facility && selectedAccessAssignmentId &&
+                            canOpenCareTaskMeasurements(task, selectedEnrollment) ? (
+                            <CareTaskMeasurementsLink
+                              task={task}
+                              facilityId={data.facility.id}
+                              accessAssignmentId={selectedAccessAssignmentId}
+                              disabled={Boolean(busy || enrollmentOpen || planOpen || selectedTaskId)}
+                            />
                           ) : null}
                         </article>
                       );
@@ -992,8 +1039,8 @@ export function ChronicCareWorkspace() {
               <label className={styles.full}><span>Причина записи</span><input minLength={3} required value={enrollmentReason} onChange={(event) => setEnrollmentReason(event.target.value)} /></label>
             </div>
             <label className={styles.confirmCheck}><input checked={doctorConfirmed} onChange={(event) => setDoctorConfirmed(event.target.checked)} required type="checkbox" /><span><strong>Я, врач, подтверждаю диагноз и решение о наблюдении</strong><small>ORION не принимает это решение автоматически.</small></span></label>
-            <label className={styles.confirmCheck}><input checked={localSourceAcknowledged} onChange={(event) => setLocalSourceAcknowledged(event.target.checked)} required type="checkbox" /><span><strong>Понимаю: это локальный тестовый регистр</strong><small>Запись не отправляется в ЭРДБ или ПУЗ.</small></span></label>
-            <footer><button className={styles.secondaryButton} onClick={() => setEnrollmentOpen(false)} type="button">Отмена</button><button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy === 'enrollment-create' ? <LoaderCircle className={styles.spin} size={17} /> : <Check size={17} />} Сохранить решение врача</button></footer>
+            <p className={styles.formNotice}>Сохранится в ORION. Передачи в ЭРДБ или ПУЗ нет.</p>
+            <footer><button className={styles.secondaryButton} onClick={() => setEnrollmentOpen(false)} type="button">Отмена</button><button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy === 'enrollment-create' ? <OrionMark animated size={20} /> : <Check size={17} />} Сохранить решение врача</button></footer>
           </form>
         </div>
       ) : null}
@@ -1017,8 +1064,8 @@ export function ChronicCareWorkspace() {
             </EditorSection>
             <label className={styles.formLabel}><span>Причина новой версии</span><input minLength={3} required value={planReason} onChange={(event) => setPlanReason(event.target.value)} /></label>
             <label className={styles.confirmCheck}><input checked={planDoctorConfirmed} onChange={(event) => setPlanDoctorConfirmed(event.target.checked)} required type="checkbox" /><span><strong>Я, врач, проверил и подписываю весь план</strong><small>Включая лекарственный раздел, сроки и исполнителей.</small></span></label>
-            <label className={styles.confirmCheck}><input checked={planSourceAcknowledged} onChange={(event) => setPlanSourceAcknowledged(event.target.checked)} required type="checkbox" /><span><strong>Понимаю границу локального тестового контура</strong><small>План не отправляется во внешние регистры и не запускает уведомления.</small></span></label>
-            <footer><button className={styles.secondaryButton} onClick={() => setPlanOpen(false)} type="button">Отмена</button><button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy?.startsWith('plan-') ? <LoaderCircle className={styles.spin} size={17} /> : <ShieldCheck size={17} />} Подписать неизменяемую версию</button></footer>
+            <p className={styles.formNotice}>План сохранится в ORION; внешние уведомления и передача в регистры не выполняются.</p>
+            <footer><button className={styles.secondaryButton} onClick={() => setPlanOpen(false)} type="button">Отмена</button><button className={styles.primaryButton} disabled={Boolean(busy)} type="submit">{busy?.startsWith('plan-') ? <OrionMark animated size={20} /> : <ShieldCheck size={17} />} Подписать неизменяемую версию</button></footer>
           </form>
         </div>
       ) : null}
@@ -1037,6 +1084,24 @@ export function ChronicCareWorkspace() {
       ) : null}
     </main>
   );
+}
+
+export function CareTaskMeasurementsLink({ task, facilityId, accessAssignmentId, disabled }: {
+  task: Pick<ChronicTaskRecord, 'id' | 'patient' | 'title'>;
+  facilityId: string;
+  accessAssignmentId: string;
+  disabled: boolean;
+}) {
+  return <div className={styles.measurementLink}>
+    <a className={styles.secondaryButton} aria-disabled={disabled || undefined}
+      aria-label={`Измерения по задаче «${task.title}»`}
+      href={disabled ? undefined : careObservationUrl('observations', {
+        facilityId, accessAssignmentId, patientId: task.patient.id, careTaskId: task.id,
+      })}>
+      <HeartPulse aria-hidden="true" size={16} /> Измерения пациента
+    </a>
+    <small>Запись показателей не завершает задачу.</small>
+  </div>;
 }
 
 function EditorSection({
@@ -1077,13 +1142,13 @@ function CareState({
     loading: ['Загружаем наблюдение', 'Читаем подписанные планы и рабочие задачи из D1.'],
     assignment: ['Выберите рабочий контур', 'Назначения по отделениям не объединяются. Роль и права берутся только из выбранного контура.'],
     unauthenticated: ['Требуется вход', 'Откройте ORION Clinic через авторизованный контур.'],
-    forbidden: ['Нет доступа', 'Выбранное назначение недоступно. Откройте «Наблюдение» в меню, чтобы выбрать действующий рабочий контур.'],
+    forbidden: ['Нет доступа', 'Выбранное назначение недоступно. Нажмите «Сменить рабочий доступ» в шапке, чтобы проверить другие доступные назначения.'],
     error: ['Наблюдение временно недоступно', error?.message ?? 'Проверьте локальную базу и повторите.'],
     ready: ['', ''],
   }[state];
   return (
     <main className={styles.statePanel}>
-      {state === 'loading' ? <LoaderCircle className={styles.spin} size={28} /> : <CircleAlert size={28} />}
+      {state === 'loading' ? <OrionMark animated size={48} /> : <CircleAlert size={28} />}
       <span className={styles.eyebrow}>Безопасная остановка</span>
       <h1>{content[0]}</h1>
       <p>{content[1]}</p>

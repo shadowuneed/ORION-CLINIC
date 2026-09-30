@@ -1,5 +1,8 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
+import { SectionPurpose } from '../section-purpose';
+
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -10,7 +13,6 @@ import {
   FileClock,
   Gauge,
   History,
-  LoaderCircle,
   Pencil,
   Plus,
   RefreshCw,
@@ -28,6 +30,16 @@ import type {
   ObservationWorkspace,
   PatientObservationRecord,
 } from '@/lib/repositories/patient-observations';
+import {
+  careObservationUrl,
+  clearCareObservationContext,
+  loadCareObservationTask,
+  matchesCareObservationSelection,
+  readCareObservationContext,
+  type CareObservationContext,
+  type CareObservationRequest,
+  type CareObservationTask,
+} from '@/lib/care-observation-navigation';
 import styles from './observations.module.css';
 
 type AccessAssignmentOption = {
@@ -96,7 +108,6 @@ type MeasurementDraft = {
   temperatureC: string;
   note: string;
   reason: string;
-  acknowledged: boolean;
   idempotencyKey: string;
 };
 
@@ -146,7 +157,6 @@ function emptyDraft(): MeasurementDraft {
     temperatureC: '',
     note: '',
     reason: 'Первичная запись показателей',
-    acknowledged: false,
     idempotencyKey: crypto.randomUUID(),
   };
 }
@@ -166,7 +176,6 @@ function draftFromObservation(observation: PatientObservationRecord): Measuremen
     temperatureC: values.temperatureC?.toString() ?? '',
     note: observation.current.note ?? '',
     reason: 'Исправление ранее записанных показателей',
-    acknowledged: false,
     idempotencyKey: crypto.randomUUID(),
   };
 }
@@ -268,7 +277,12 @@ export function ObservationWorkspaceView() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [careTask, setCareTask] = useState<{
+    context: CareObservationContext; task: CareObservationTask;
+  } | null>(null);
+  const [careContextUnavailable, setCareContextUnavailable] = useState(false);
 
+  const careNavigationRef = useRef<CareObservationRequest>({ status: 'none' });
   const facilityRef = useRef('');
   const accessAssignmentRef = useRef('');
   const loadAbort = useRef<AbortController | null>(null);
@@ -286,6 +300,8 @@ export function ObservationWorkspaceView() {
     loadAbort.current = controller;
     setLoadState('loading');
     setError(null);
+    setCareTask(null);
+    setCareContextUnavailable(false);
     try {
       const response = await fetch(
         `/api/observations?${buildObservationAccessQuery(
@@ -324,11 +340,30 @@ export function ObservationWorkspaceView() {
       }
       const resolvedFacilityId = payload.facility.id;
       const resolvedAssignmentId = payload.accessAssignment.assignmentId;
+      const navigation = careNavigationRef.current;
+      let resolvedTask: CareObservationTask | null = null;
+      if (navigation.status === 'requested' &&
+        navigation.context.facilityId === resolvedFacilityId &&
+        navigation.context.accessAssignmentId === resolvedAssignmentId &&
+        payload.patients.some((patient) => patient.id === navigation.context.patientId)) {
+        try {
+          resolvedTask = await loadCareObservationTask(navigation.context, controller.signal);
+        } catch {
+          // A failed care read must not disclose URL-provided task data or select another patient.
+        }
+      }
+      if (controller.signal.aborted || generation !== loadGeneration.current) return;
+      setCareTask(navigation.status === 'requested' && resolvedTask
+        ? { context: navigation.context, task: resolvedTask } : null);
+      setCareContextUnavailable(navigation.status !== 'none' && !resolvedTask);
       facilityRef.current = resolvedFacilityId;
       accessAssignmentRef.current = resolvedAssignmentId;
       const resolvedUrl = new URL(window.location.href);
-      resolvedUrl.searchParams.set('facilityId', resolvedFacilityId);
-      resolvedUrl.searchParams.set('accessAssignmentId', resolvedAssignmentId);
+      // Keep invalid/mismatched task selectors fail-closed after a full reload.
+      if (navigation.status === 'none') {
+        resolvedUrl.searchParams.set('facilityId', resolvedFacilityId);
+        resolvedUrl.searchParams.set('accessAssignmentId', resolvedAssignmentId);
+      }
       window.history.replaceState(
         null,
         '',
@@ -339,6 +374,9 @@ export function ObservationWorkspaceView() {
       setAccessAssignmentId(resolvedAssignmentId);
       setWorkspace(payload);
       setSelectedPatientId((current) => {
+        if (navigation.status !== 'none') {
+          return navigation.status === 'requested' && resolvedTask ? navigation.context.patientId : '';
+        }
         const preferredPatientId = requestedPatientId ?? current;
         return payload.patients.some(
           (patient) => patient.id === preferredPatientId,
@@ -367,6 +405,7 @@ export function ObservationWorkspaceView() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    careNavigationRef.current = readCareObservationContext(params);
     const requestedFacility = params.get('facilityId') ?? undefined;
     const requestedAssignment =
       params.get('accessAssignmentId') ?? undefined;
@@ -396,6 +435,9 @@ export function ObservationWorkspaceView() {
   const selectedPatient = workspace?.patients.find(
     (patient) => patient.id === selectedPatientId,
   );
+  const currentCareTask = careTask && matchesCareObservationSelection(careTask.context, {
+    patientId: selectedPatientId, facilityId, accessAssignmentId,
+  }) ? careTask : null;
   const selectedObservations = useMemo(
     () =>
       workspace?.observations.filter(
@@ -423,6 +465,11 @@ export function ObservationWorkspaceView() {
     setAccessAssignmentId(assignment.assignmentId);
     setFacilityId(assignment.facilityId);
     const url = new URL(window.location.href);
+    clearCareObservationContext(url.searchParams);
+    careNavigationRef.current = { status: 'none' };
+    setCareTask(null);
+    setCareContextUnavailable(false);
+    setSuccess(null);
     url.searchParams.set('accessAssignmentId', assignment.assignmentId);
     url.searchParams.set('facilityId', assignment.facilityId);
     url.searchParams.delete('patientId');
@@ -432,8 +479,19 @@ export function ObservationWorkspaceView() {
   }
 
   function choosePatient(patient: ObservationPatient) {
+    if (pending || dialog) return;
     setSelectedPatientId(patient.id);
     const url = new URL(window.location.href);
+    if (careNavigationRef.current.status !== 'none' &&
+      (careNavigationRef.current.status !== 'requested' ||
+        careNavigationRef.current.context.patientId !== patient.id || !careTask)) {
+      clearCareObservationContext(url.searchParams);
+      careNavigationRef.current = { status: 'none' };
+      setCareTask(null);
+      setCareContextUnavailable(false);
+    }
+    setSuccess(null);
+    setError(null);
     url.searchParams.set('patientId', patient.id);
     if (facilityId) url.searchParams.set('facilityId', facilityId);
     if (accessAssignmentId) {
@@ -444,7 +502,10 @@ export function ObservationWorkspaceView() {
 
   function openCreate() {
     if (!selectedPatient) return;
-    setDraft(emptyDraft());
+    setDraft({ ...emptyDraft(), ...(currentCareTask ? {
+      context: 'follow_up' as const,
+      reason: 'Запись показателей при выполнении задачи наблюдения',
+    } : {}) });
     setDialog({ mode: 'create', observation: null });
     setError(null);
     setSuccess(null);
@@ -498,7 +559,7 @@ export function ObservationWorkspaceView() {
       values,
       note: draft.note.trim() || null,
       reason: draft.reason.trim(),
-      syntheticDataAcknowledged: draft.acknowledged,
+      syntheticDataAcknowledged: true,
       idempotencyKey: draft.idempotencyKey,
       ...(dialogSnapshot.mode === 'correct'
         ? { expectedVersion: dialogSnapshot.observation.current.version }
@@ -523,7 +584,9 @@ export function ObservationWorkspaceView() {
       setDialog(null);
       setSuccess(
         dialogSnapshot.mode === 'create'
-          ? 'Показатели записаны в D1 без автоматической медицинской оценки.'
+          ? currentCareTask
+            ? 'Измерение сохранено. Вернитесь к задаче: её статус не изменён, завершение выполняется отдельно.'
+            : 'Показатели записаны в D1 без автоматической медицинской оценки.'
           : `Исправление сохранено как версия ${result.observation.current.version}; предыдущая версия осталась в истории.`,
       );
       await load(
@@ -539,7 +602,7 @@ export function ObservationWorkspaceView() {
   }
 
   if (loadState === 'loading') {
-    return <PageState icon={<LoaderCircle className={styles.spin} />} title="Загружаем показатели" text="Читаем текущие версии и историю из D1." />;
+    return <PageState icon={<OrionMark animated size={48} />} title="Загружаем показатели" text="Читаем текущие версии и историю из D1." />;
   }
   if (loadState === 'assignment') {
     return (
@@ -577,8 +640,8 @@ export function ObservationWorkspaceView() {
     <main className={styles.main}>
       <header className={styles.pageHeader}>
         <div>
-          <span className={styles.eyebrow}>Phase 8A · фиксация без интерпретации</span>
-          <h1>Показатели пациента</h1>
+          <span className={styles.eyebrow}>Измеренные значения · без автоматического диагноза</span>
+          <h1>Измерения пациента</h1>
           <p>Рост, вес, рассчитанный ИМТ, артериальное давление и температура сохраняются как неизменяемые версии с источником, временем и автором.</p>
         </div>
         <div className={styles.headerActions}>
@@ -609,6 +672,9 @@ export function ObservationWorkspaceView() {
       {success ? <div className={styles.successMessage} role="status"><CheckCircle2 size={18} /><span>{success}</span><button aria-label="Закрыть сообщение" onClick={() => setSuccess(null)} type="button"><X size={17} /></button></div> : null}
       {error && !dialog ? <div className={styles.errorMessage} role="alert"><AlertCircle size={18} /><span><strong>{error.message}</strong>{error.requestId ? <small>{error.requestId}</small> : null}</span><button aria-label="Закрыть ошибку" onClick={() => setError(null)} type="button"><X size={17} /></button></div> : null}
 
+      <SectionPurpose kind="measurements" />
+      {currentCareTask ? <CareObservationTaskNotice {...currentCareTask} disabled={pending || dialog !== null} /> : null}
+      {careContextUnavailable ? <p className={styles.careTaskNotice} role="status">Исходная задача недоступна в выбранном рабочем контуре. Контекст задачи не применён. Выберите пациента явно или вернитесь в план наблюдения.</p> : null}
       <section className={styles.stats} aria-label="Сводка показателей">
         <article><UserRound size={20} /><span><strong>{workspace.patients.length}</strong><small>доступных пациентов</small></span></article>
         <article><Activity size={20} /><span><strong>{workspace.observations.length}</strong><small>текущих записей</small></span></article>
@@ -630,7 +696,7 @@ export function ObservationWorkspaceView() {
             {filteredPatients.map((patient) => {
               const count = workspace.observations.filter((item) => item.patient.id === patient.id).length;
               return (
-                <button className={`${styles.patientCard} ${selectedPatientId === patient.id ? styles.patientCardActive : ''}`} key={patient.id} onClick={() => choosePatient(patient)} type="button">
+                <button className={`${styles.patientCard} ${selectedPatientId === patient.id ? styles.patientCardActive : ''}`} disabled={pending || dialog !== null} key={patient.id} onClick={() => choosePatient(patient)} type="button">
                   <strong>{patient.displayName}</strong><small>{patient.medicalRecordNumber}</small><span>{count === 0 ? 'Нет измерений' : `${count} ${count === 1 ? 'запись' : 'записей'}`}</span>
                 </button>
               );
@@ -660,11 +726,11 @@ export function ObservationWorkspaceView() {
                   ))}
                 </div>
               ) : (
-                <div className={styles.emptyDetail}><Activity size={32} /><h3>Показателей пока нет</h3><p>Запишите одно или несколько измерений. Пустые группы не будут сохраняться, а ИМТ вычислится из роста и веса.</p><button className={styles.primaryButton} onClick={openCreate} type="button"><Plus size={18} />Первая запись</button></div>
+                <div className={styles.emptyDetail}><Activity size={32} /><h3>Показателей пока нет</h3><p>Запишите одно или несколько измерений. Снимите галочки с групп, которые не измеряли. ИМТ вычислится из роста и веса.</p><button className={styles.primaryButton} onClick={openCreate} type="button"><Plus size={18} />Первая запись</button></div>
               )}
             </>
           ) : (
-            <div className={styles.emptyDetail}><UserRound size={32} /><h3>Нет доступных пациентов</h3><p>Сначала создайте синтетическую карточку пациента в реестре.</p></div>
+            <div className={styles.emptyDetail}><UserRound size={32} /><h3>{workspace.patients.length ? 'Выберите пациента' : 'Нет доступных пациентов'}</h3><p>{workspace.patients.length ? 'Выберите доступную карточку в списке слева.' : 'Сначала создайте карточку пациента в реестре.'}</p></div>
           )}
         </div>
       </section>
@@ -672,6 +738,7 @@ export function ObservationWorkspaceView() {
       {dialog && selectedPatient ? (
         <div className={styles.dialogBackdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) closeDialog(); }}>
           <form aria-labelledby="observation-dialog-title" aria-modal="true" className={styles.dialog} onSubmit={submit} role="dialog">
+            <p>Оставьте выбранными только измеренные группы. Снимите галочки с остальных — их поля не потребуются и не будут сохранены.</p>
             <header><div><span className={styles.eyebrow}>{dialog.mode === 'create' ? 'Новая неизменяемая запись' : `Исправление версии ${dialog.observation.current.version}`}</span><h2 id="observation-dialog-title">{dialog.mode === 'create' ? 'Записать показатели' : 'Создать новую версию'}</h2><p>{selectedPatient.displayName} · {selectedPatient.medicalRecordNumber}</p></div><button aria-label="Закрыть" disabled={pending} onClick={closeDialog} type="button"><X size={20} /></button></header>
 
             {error ? <div className={styles.dialogError} role="alert"><AlertCircle size={18} /><span><strong>{error.message}</strong>{error.requestId ? <small>{error.requestId}</small> : null}</span></div> : null}
@@ -698,9 +765,7 @@ export function ObservationWorkspaceView() {
 
             <label className={styles.fullField}><span>Примечание</span><textarea maxLength={1000} onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))} placeholder="Например, измерено после пяти минут покоя" rows={3} value={draft.note} /></label>
             <label className={styles.fullField}><span>{dialog.mode === 'create' ? 'Основание записи' : 'Причина исправления'}</span><input maxLength={500} minLength={3} onChange={(event) => setDraft((current) => ({ ...current, reason: event.target.value }))} required value={draft.reason} /></label>
-            <label className={styles.confirmCheck}><input checked={draft.acknowledged} onChange={(event) => setDraft((current) => ({ ...current, acknowledged: event.target.checked }))} required type="checkbox" /><span><strong>Это синтетические тестовые данные</strong><small>ORION сохранит значения и происхождение, но не присвоит критический статус и не запустит перевод.</small></span></label>
-
-            <footer><button className={styles.secondaryButton} disabled={pending} onClick={closeDialog} type="button">Отмена</button><button className={styles.primaryButton} disabled={pending || !draft.acknowledged} type="submit">{pending ? <LoaderCircle className={styles.spin} size={18} /> : dialog.mode === 'create' ? <Plus size={18} /> : <Pencil size={18} />}{pending ? 'Сохраняем…' : dialog.mode === 'create' ? 'Записать в D1' : 'Сохранить новую версию'}</button></footer>
+            <footer><button className={styles.secondaryButton} disabled={pending} onClick={closeDialog} type="button">Отмена</button><button className={styles.primaryButton} disabled={pending} type="submit">{pending ? <OrionMark animated size={20} /> : dialog.mode === 'create' ? <Plus size={18} /> : <Pencil size={18} />}{pending ? 'Сохраняем…' : dialog.mode === 'create' ? 'Записать показатели' : 'Сохранить новую версию'}</button></footer>
           </form>
         </div>
       ) : null}
@@ -715,6 +780,18 @@ function MeasurementGroup({ checked, children, icon, label, onChange }: { checke
       <div className={styles.measurementFields}>{children}</div>
     </fieldset>
   );
+}
+
+export function CareObservationTaskNotice({ context, task, disabled }: {
+  context: CareObservationContext;
+  task: CareObservationTask;
+  disabled: boolean;
+}) {
+  return <section className={styles.careTaskNotice} aria-label="Задача наблюдения">
+    <div><strong>{task.title}</strong><p>Показатели сохраняются как отдельные измерения. Статус задачи изменяется только отдельным действием сотрудника в плане наблюдения.</p></div>
+    <a className={styles.secondaryButton} aria-disabled={disabled || undefined}
+      href={disabled ? undefined : careObservationUrl('care', context)}>Вернуться к задаче</a>
+  </section>;
 }
 
 function ObservationCard({ canCorrect, observation, onCorrect, timeZone }: { canCorrect: boolean; observation: PatientObservationRecord; onCorrect: () => void; timeZone: string }) {

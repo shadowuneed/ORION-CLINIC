@@ -71,6 +71,34 @@ export type ObservationWorkspace = {
   };
 };
 
+export type LatestAnthropometry = {
+  measuredAt: number;
+  heightCm: number;
+  weightKg: number;
+  sourceLabel: string;
+};
+
+type LatestMeasurementSource = {
+  observationId: string;
+  version: number;
+  measuredAt: number;
+  recordedBy: string;
+  sourceLabel: string;
+};
+
+export type LatestPatientVitals = {
+  anthropometry: (LatestMeasurementSource & {
+    heightCm: number;
+    weightKg: number;
+    bmi: number | null;
+  }) | null;
+  bloodPressure: (LatestMeasurementSource & {
+    systolicMmhg: number;
+    diastolicMmhg: number;
+  }) | null;
+  temperature: (LatestMeasurementSource & { temperatureC: number }) | null;
+};
+
 export type CreatePatientObservationCommand = {
   patientId: string;
   measuredAt: number;
@@ -317,6 +345,118 @@ export class D1PatientObservationRepository {
     private readonly database: D1Database,
     private readonly scope: ObservationScope,
   ) {}
+
+  async latestVitals(patientId: string): Promise<LatestPatientVitals> {
+    requireObservationPermission(this.scope.role, 'workspace.read');
+    // Rank each measurement group independently: a newer pressure-only record
+    // must not hide an earlier height/weight pair or mix its measurement date.
+    const result = await this.database.prepare(`
+      with current_measurements as (
+        select record.id as observationId, version.version,
+          version.measured_at as measuredAt, version.recorded_at as recordedAt,
+          version.height_mm as heightMm, version.weight_grams as weightGrams,
+          version.bmi_hundredths as bmiHundredths,
+          version.systolic_mmhg as systolicMmhg,
+          version.diastolic_mmhg as diastolicMmhg,
+          version.temperature_milli_c as temperatureMilliC,
+          record.source_label as sourceLabel, recorder_user.display_name as recordedBy
+        from patient_observation_records record
+        join patients patient on patient.id = record.patient_id
+          and patient.organization_id = record.organization_id
+          and patient.facility_id = record.facility_id
+        join patient_observation_heads head on head.observation_id = record.id
+          and head.organization_id = record.organization_id
+          and head.facility_id = record.facility_id and head.patient_id = record.patient_id
+        join patient_observation_versions version on version.id = head.current_version_id
+          and version.observation_id = record.id
+          and version.organization_id = record.organization_id
+          and version.facility_id = record.facility_id and version.patient_id = record.patient_id
+        join memberships recorder on recorder.id = version.recorded_by_membership_id
+          and recorder.organization_id = version.organization_id
+          and recorder.facility_id = version.facility_id
+        join users recorder_user on recorder_user.id = recorder.user_id
+        left join patient_profile_heads profile_head on profile_head.patient_id = patient.id
+          and profile_head.organization_id = patient.organization_id
+          and profile_head.facility_id = patient.facility_id
+        left join patient_profile_versions profile on profile.id = profile_head.current_version_id
+          and profile.patient_id = patient.id and profile.organization_id = patient.organization_id
+          and profile.facility_id = patient.facility_id
+        where record.organization_id = ?1 and record.facility_id = ?2
+          and record.patient_id = ?3 and patient.status = 'active'
+          and (profile_head.patient_id is null or profile.status = 'active')
+      ), groups as (
+        select *, 'anthropometry' as kind from current_measurements
+          where heightMm is not null and weightGrams is not null
+        union all
+        select *, 'bloodPressure' as kind from current_measurements
+          where systolicMmhg is not null and diastolicMmhg is not null
+        union all
+        select *, 'temperature' as kind from current_measurements
+          where temperatureMilliC is not null
+      )
+      select * from (
+        select *, row_number() over (
+          partition by kind order by measuredAt desc, recordedAt desc, observationId
+        ) as position from groups
+      ) where position = 1
+    `).bind(this.scope.organizationId, this.scope.facilityId, patientId).all<{
+      kind: 'anthropometry' | 'bloodPressure' | 'temperature';
+      observationId: string; version: number; measuredAt: number;
+      recordedBy: string; sourceLabel: string;
+      heightMm: number | null; weightGrams: number | null; bmiHundredths: number | null;
+      systolicMmhg: number | null; diastolicMmhg: number | null; temperatureMilliC: number | null;
+    }>();
+    const vitals: LatestPatientVitals = { anthropometry: null, bloodPressure: null, temperature: null };
+    for (const row of result.results) {
+      const source: LatestMeasurementSource = {
+        observationId: row.observationId, version: row.version, measuredAt: row.measuredAt,
+        recordedBy: row.recordedBy, sourceLabel: row.sourceLabel,
+      };
+      if (row.kind === 'anthropometry' && row.heightMm !== null && row.weightGrams !== null) {
+        vitals.anthropometry = { ...source, heightCm: row.heightMm / 10,
+          weightKg: row.weightGrams / 1000, bmi: row.bmiHundredths === null ? null : row.bmiHundredths / 100 };
+      } else if (row.kind === 'bloodPressure' && row.systolicMmhg !== null && row.diastolicMmhg !== null) {
+        vitals.bloodPressure = { ...source, systolicMmhg: row.systolicMmhg, diastolicMmhg: row.diastolicMmhg };
+      } else if (row.kind === 'temperature' && row.temperatureMilliC !== null) {
+        vitals.temperature = { ...source, temperatureC: row.temperatureMilliC / 1000 };
+      }
+    }
+    return vitals;
+  }
+
+  async latestAnthropometry(patientId: string): Promise<LatestAnthropometry | null> {
+    requireObservationPermission(this.scope.role, 'workspace.read');
+    const row = await this.database.prepare(`
+      select version.measured_at as measuredAt,
+        version.height_mm as heightMm,
+        version.weight_grams as weightGrams,
+        record.source_label as sourceLabel
+      from patient_observation_records record
+      join patients patient on patient.id = record.patient_id
+        and patient.organization_id = record.organization_id
+        and patient.facility_id = record.facility_id
+      join patient_observation_heads head on head.observation_id = record.id
+        and head.organization_id = record.organization_id
+        and head.facility_id = record.facility_id
+        and head.patient_id = record.patient_id
+      join patient_observation_versions version on version.id = head.current_version_id
+        and version.observation_id = record.id
+        and version.organization_id = record.organization_id
+        and version.facility_id = record.facility_id
+        and version.patient_id = record.patient_id
+      where record.organization_id = ?1 and record.facility_id = ?2
+        and record.patient_id = ?3 and patient.status = 'active'
+        and version.height_mm is not null and version.weight_grams is not null
+      order by version.measured_at desc, version.recorded_at desc, record.id
+      limit 1`).bind(this.scope.organizationId, this.scope.facilityId, patientId)
+      .first<{ measuredAt: number; heightMm: number; weightGrams: number; sourceLabel: string }>();
+    return row ? {
+      measuredAt: row.measuredAt,
+      heightCm: row.heightMm / 10,
+      weightKg: row.weightGrams / 1000,
+      sourceLabel: row.sourceLabel,
+    } : null;
+  }
 
   async list(input: {
     patientId?: string;

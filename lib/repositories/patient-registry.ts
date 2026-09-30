@@ -1,6 +1,53 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
+import { AccessPermissionRequiredError } from '@/lib/auth/access-governance';
+import { assertEncounterCreationAccess } from '@/lib/auth/encounter-creation-access';
 import type { FacilityAccessScope } from '@/lib/auth/facility-access';
+import { roleDefaultPermissions } from '@/lib/domain/access-governance';
 import { clinicalSectionCodeSchema } from '@/lib/domain/encounter';
+
+const profileWriterRoles = JSON.stringify(
+  Object.entries(roleDefaultPermissions)
+    .filter(([, permissions]) => (permissions as readonly string[]).includes('patient.profile.write'))
+    .map(([role]) => role),
+);
+
+// Use the selected assignment only; never combine grants from other departments.
+// The database clock is evaluated again inside the mutation transaction.
+const currentProfileWriterSql = `
+  select assignment.id
+  from department_access_assignments assignment
+  join department_access_assignment_heads head
+    on head.assignment_id = assignment.id and head.organization_id = assignment.organization_id
+    and head.facility_id = assignment.facility_id and head.membership_id = assignment.membership_id
+    and head.department_id = assignment.department_id
+  join department_access_assignment_versions version
+    on version.id = head.current_version_id and version.assignment_id = assignment.id
+    and version.organization_id = assignment.organization_id and version.facility_id = assignment.facility_id
+    and version.membership_id = assignment.membership_id and version.department_id = assignment.department_id
+  join department_heads department_head
+    on department_head.department_id = assignment.department_id
+    and department_head.organization_id = assignment.organization_id and department_head.facility_id = assignment.facility_id
+  join department_versions department_version
+    on department_version.id = department_head.current_version_id
+    and department_version.department_id = assignment.department_id
+    and department_version.organization_id = assignment.organization_id and department_version.facility_id = assignment.facility_id
+  join memberships member on member.id = assignment.membership_id
+    and member.organization_id = assignment.organization_id and member.facility_id = assignment.facility_id
+  join users user on user.id = member.user_id
+  join organizations organization on organization.id = assignment.organization_id
+  join facilities facility on facility.id = assignment.facility_id and facility.organization_id = assignment.organization_id
+  where assignment.id = ?1 and assignment.organization_id = ?2 and assignment.facility_id = ?3
+    and assignment.membership_id = ?4 and member.user_id = ?5
+    and version.status = 'active' and department_version.status = 'active'
+    and member.status = 'active' and user.status = 'active'
+    and organization.status = 'active' and facility.status = 'active'
+    and version.effective_from <= unixepoch('subsec') * 1000
+    and (version.effective_until is null or version.effective_until > unixepoch('subsec') * 1000)
+    and not exists (select 1 from json_each(version.roles_json) where value = 'service')
+    and not exists (select 1 from json_each(version.deny_permissions_json) where value = 'patient.profile.write')
+    and (exists (select 1 from json_each(version.roles_json) where value in (select value from json_each(?6)))
+      or exists (select 1 from json_each(version.allow_permissions_json) where value = 'patient.profile.write'))
+`;
 
 export type PatientSexAtBirth = 'female' | 'male' | 'unknown' | 'not_recorded';
 export type PatientStatus = 'active' | 'inactive' | 'merged';
@@ -149,6 +196,7 @@ type AuditHeadRow = {
 
 type IdempotencyRow = {
   requestHash: string;
+  accessAssignmentId: string | null;
   status: string;
   resultResourceId: string | null;
   responseJson: string | null;
@@ -487,6 +535,7 @@ export class D1PatientRegistryRepository {
   }
 
   async updateProfile(input: UpdatePatientProfileInput) {
+    await this.assertCurrentProfileWriter(input.actorId);
     const normalized = {
       displayName: normalizeText(input.displayName),
       birthDate: input.birthDate,
@@ -499,13 +548,15 @@ export class D1PatientRegistryRepository {
     const requestHash = await sha256(
       JSON.stringify({
         operation: 'patient.update',
+        accessAssignmentId: this.scope.accessAssignmentId,
+        actorId: input.actorId,
         patientId: input.patientId,
         expectedVersion: input.expectedVersion,
         ...normalized,
       }),
     );
     const replay = await this.findIdempotency('patient.update', input.idempotencyKey);
-    if (replay) return this.resolveProfileReplay(replay, requestHash);
+    if (replay) return this.resolveProfileReplay(replay, requestHash, input.actorId);
 
     const patient = await this.get(input.patientId);
     if (!patient) throw new PatientNotFoundError();
@@ -543,17 +594,20 @@ export class D1PatientRegistryRepository {
   }
 
   async archiveProfile(input: ArchivePatientProfileInput) {
+    await this.assertCurrentProfileWriter(input.actorId);
     const changeReason = normalizeText(input.changeReason);
     const requestHash = await sha256(
       JSON.stringify({
         operation: 'patient.archive',
+        accessAssignmentId: this.scope.accessAssignmentId,
+        actorId: input.actorId,
         patientId: input.patientId,
         expectedVersion: input.expectedVersion,
         changeReason,
       }),
     );
     const replay = await this.findIdempotency('patient.archive', input.idempotencyKey);
-    if (replay) return this.resolveProfileReplay(replay, requestHash);
+    if (replay) return this.resolveProfileReplay(replay, requestHash, input.actorId);
 
     const patient = await this.get(input.patientId);
     if (!patient) throw new PatientNotFoundError();
@@ -584,12 +638,15 @@ export class D1PatientRegistryRepository {
     if (this.scope.role !== 'clinician') {
       throw new PatientEncounterRoleRequiredError();
     }
+    await this.assertCurrentEncounterCreator(input.actorId);
     const patient = await this.get(input.patientId);
     if (!patient || patient.status !== 'active') throw new PatientNotFoundError();
     const reasonForVisit = normalizeNullable(input.reasonForVisit);
     const requestHash = await sha256(
       JSON.stringify({
         operation: 'encounter.create_for_patient',
+        accessAssignmentId: this.scope.accessAssignmentId,
+        actorId: input.actorId,
         patientId: input.patientId,
         reasonForVisit,
       }),
@@ -606,6 +663,7 @@ export class D1PatientRegistryRepository {
       try {
         return await this.commitEncounterCreate(input, reasonForVisit, requestHash, auditHead);
       } catch (error) {
+        await this.assertCurrentEncounterCreator(input.actorId);
         const racedReplay = await this.findIdempotency(
           'encounter.create_for_patient',
           input.idempotencyKey,
@@ -615,6 +673,14 @@ export class D1PatientRegistryRepository {
       }
     }
     throw new PatientRegistryConflictError('Encounter creation retry exhausted');
+  }
+
+  private async assertCurrentEncounterCreator(actorId: string) {
+    await assertEncounterCreationAccess(this.database, {
+      organizationId: this.scope.organizationId, facilityId: this.scope.facilityId,
+      reviewerMembershipId: this.scope.membershipId,
+      accessAssignmentId: this.scope.accessAssignmentId, accessPermission: 'encounter.manage',
+    }, actorId);
   }
 
   async getPhoto(patientId: string): Promise<PatientPhotoMetadata | null> {
@@ -845,6 +911,7 @@ export class D1PatientRegistryRepository {
     requestHash: string;
   }) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      await this.assertCurrentProfileWriter(input.input.actorId);
       const auditHead = await this.getAuditHead();
       if (!auditHead) {
         throw new PatientRegistryConflictError('Audit stream unavailable');
@@ -852,6 +919,7 @@ export class D1PatientRegistryRepository {
       try {
         await this.commitProfileMutation(input, auditHead);
         const patient = await this.get(input.input.patientId);
+        await this.assertCurrentProfileWriter(input.input.actorId);
         if (!patient) {
           throw new PatientRegistryConflictError(
             'Patient was not readable after profile mutation',
@@ -859,12 +927,14 @@ export class D1PatientRegistryRepository {
         }
         return patient;
       } catch (error) {
+        if (error instanceof AccessPermissionRequiredError) throw error;
+        await this.assertCurrentProfileWriter(input.input.actorId);
         const racedReplay = await this.findIdempotency(
           input.operation,
           input.input.idempotencyKey,
         );
         if (racedReplay) {
-          return this.resolveProfileReplay(racedReplay, input.requestHash);
+          return this.resolveProfileReplay(racedReplay, input.requestHash, input.input.actorId);
         }
         const latest = await this.getCurrentProfile(input.input.patientId);
         if (latest && latest.lockVersion !== input.input.expectedVersion) {
@@ -930,6 +1000,11 @@ export class D1PatientRegistryRepository {
       return input.current[key] !== input.next[key];
     });
     const metadataJson = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
+      actorId: input.input.actorId,
+      profileVersionId,
+      commandId,
+      requestHash: input.requestHash,
       previousVersion: input.input.expectedVersion,
       resultingVersion: nextVersion,
       changedFields,
@@ -954,6 +1029,8 @@ export class D1PatientRegistryRepository {
       occurredAt: now,
     });
     const responseJson = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
+      actorId: input.input.actorId,
       patientId: input.input.patientId,
       profileVersionId,
       previousVersion: input.input.expectedVersion,
@@ -961,6 +1038,7 @@ export class D1PatientRegistryRepository {
       status: input.next.status,
     });
     const results = await this.database.batch([
+      this.profileWriterGuard(input.input.actorId),
       this.database
         .prepare(`
           insert into patient_profile_versions (
@@ -1025,8 +1103,8 @@ export class D1PatientRegistryRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
-          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8)
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
+          ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'processing', ?8, ?9)
         `)
         .bind(
           commandId,
@@ -1037,6 +1115,7 @@ export class D1PatientRegistryRepository {
           input.input.idempotencyKey,
           input.requestHash,
           now,
+          this.scope.accessAssignmentId,
         ),
       this.database
         .prepare(`
@@ -1046,9 +1125,63 @@ export class D1PatientRegistryRepository {
           where id = ?4 and status = 'processing'
         `)
         .bind(input.input.patientId, responseJson, now, commandId),
+      // This assertion must run before D1 commits: checking meta.changes afterwards
+      // cannot roll back an ignored head/command/audit publication.
+      this.database.prepare(`
+        select case when exists (
+          select 1 from patient_profile_heads head
+          join patient_profile_versions profile on profile.id = head.current_version_id
+            and profile.organization_id = head.organization_id and profile.facility_id = head.facility_id
+            and profile.patient_id = head.patient_id
+          join command_idempotency command on command.organization_id = head.organization_id
+            and command.facility_id = head.facility_id and command.result_resource_id = head.patient_id
+          join audit_events audit on audit.organization_id = head.organization_id and audit.facility_id = head.facility_id
+          join audit_stream_heads audit_head on audit_head.organization_id = audit.organization_id
+            and audit_head.facility_id = audit.facility_id
+          where head.organization_id = ?1 and head.facility_id = ?2 and head.patient_id = ?3
+            and head.current_version_id = ?4 and head.lock_version = ?5 and profile.version = ?5
+            and profile.created_by_membership_id = ?6
+            and command.id = ?7 and command.status = 'succeeded' and command.result_resource_type = 'patient'
+            and command.actor_membership_id = ?6 and command.access_assignment_id = ?8
+            and command.request_hash = ?9 and command.response_json = ?10
+            and audit.id = ?11 and audit.actor_id = ?12 and audit.actor_membership_id = ?6
+            and audit.entity_type = 'patient' and audit.entity_id = head.patient_id
+            and json_extract(audit.metadata_json, '$.accessAssignmentId') = ?8
+            and json_extract(audit.metadata_json, '$.profileVersionId') = ?4
+            and json_extract(audit.metadata_json, '$.commandId') = ?7
+            and json_extract(audit.metadata_json, '$.requestHash') = ?9
+            and audit.event_hash = ?13 and audit_head.last_event_hash = ?13
+            and audit_head.last_sequence = audit.sequence
+        ) then 1 else json('patient_profile_not_published') end as verified
+      `).bind(this.scope.organizationId, this.scope.facilityId, input.input.patientId,
+        profileVersionId, nextVersion, this.scope.membershipId, commandId,
+        this.scope.accessAssignmentId, input.requestHash, responseJson, auditEventId,
+        input.input.actorId, eventHash),
+      this.profileWriterGuard(input.input.actorId),
     ]);
-    if (results.some((result) => result.meta.changes !== 1)) {
+    if (results.slice(1, -2).some((result) => result.meta.changes !== 1)) {
       throw new PatientRegistryConflictError('Patient profile was not committed');
+    }
+  }
+
+  private profileWriterStatement(actorId: string, guard = false) {
+    const sql = guard
+      ? `select case when exists (${currentProfileWriterSql}) then 1 else json('patient_profile_access_denied') end as verified`
+      : currentProfileWriterSql;
+    return this.database.prepare(sql).bind(
+      this.scope.accessAssignmentId ?? null, this.scope.organizationId, this.scope.facilityId,
+      this.scope.membershipId, actorId, profileWriterRoles,
+    );
+  }
+
+  private profileWriterGuard(actorId: string) {
+    return this.profileWriterStatement(actorId, true);
+  }
+
+  private async assertCurrentProfileWriter(actorId: string) {
+    if (!this.scope.accessAssignmentId || actorId !== this.scope.userId ||
+      !await this.profileWriterStatement(actorId).first()) {
+      throw new AccessPermissionRequiredError('patient.profile.write');
     }
   }
 
@@ -1235,6 +1368,7 @@ export class D1PatientRegistryRepository {
       headId: `section-head-${crypto.randomUUID()}`,
     }));
     const metadataJson = JSON.stringify({
+      accessAssignmentId: this.scope.accessAssignmentId,
       encounterVersion: 1,
       initializedClinicalSectionCount: sections.length,
     });
@@ -1257,6 +1391,14 @@ export class D1PatientRegistryRepository {
       occurredAt: now,
     });
     const statements: D1PreparedStatement[] = [
+      // Evaluated inside the same D1 transaction as the writes, not only in HTTP preflight.
+      this.database.prepare(`select case when exists (
+        select 1 from current_encounter_creation_access
+        where assignment_id=?1 and organization_id=?2 and facility_id=?3
+          and membership_id=?4 and user_id=?5
+      ) then 1 else json('encounter_creator_access_denied') end as verified`)
+        .bind(this.scope.accessAssignmentId ?? null, this.scope.organizationId,
+          this.scope.facilityId, this.scope.membershipId, input.actorId),
       this.database
         .prepare(`
           insert into encounters (
@@ -1351,9 +1493,9 @@ export class D1PatientRegistryRepository {
         .prepare(`
           insert into command_idempotency (
             id, organization_id, facility_id, actor_membership_id,
-            operation, idempotency_key, request_hash, status, created_at
+            operation, idempotency_key, request_hash, status, created_at, access_assignment_id
           ) values (?1, ?2, ?3, ?4, 'encounter.create_for_patient', ?5, ?6,
-            'processing', ?7)
+            'processing', ?7, ?8)
         `)
         .bind(
           commandId,
@@ -1363,6 +1505,7 @@ export class D1PatientRegistryRepository {
           input.idempotencyKey,
           requestHash,
           now,
+          this.scope.accessAssignmentId ?? null,
         ),
       this.database
         .prepare(`
@@ -1373,8 +1516,17 @@ export class D1PatientRegistryRepository {
         `)
         .bind(encounterId, JSON.stringify({ encounterId }), now, commandId),
     );
+    statements.push(this.database.prepare(`select case when
+      (select count(*) from clinical_section_heads where encounter_id=?1)=8
+      and exists (select 1 from command_idempotency where id=?2 and status='succeeded'
+        and result_resource_id=?1 and access_assignment_id=?3)
+      and exists (select 1 from audit_stream_heads where organization_id=?4 and facility_id=?5
+        and last_event_hash=?6 and last_sequence=?7)
+      then 1 else json('patient_encounter_not_published') end as verified`)
+      .bind(encounterId, commandId, this.scope.accessAssignmentId ?? null,
+        this.scope.organizationId, this.scope.facilityId, eventHash, sequence));
     const results = await this.database.batch(statements);
-    if (results.some((result) => result.meta.changes !== 1)) {
+    if (results.slice(1, -1).some((result) => result.meta.changes !== 1)) {
       throw new PatientRegistryConflictError('Encounter was not committed');
     }
     return {
@@ -1452,6 +1604,7 @@ export class D1PatientRegistryRepository {
     return this.database
       .prepare(`
         select request_hash as requestHash, status,
+          access_assignment_id as accessAssignmentId,
           result_resource_id as resultResourceId,
           response_json as responseJson
         from command_idempotency
@@ -1486,9 +1639,12 @@ export class D1PatientRegistryRepository {
   private async resolveProfileReplay(
     replay: IdempotencyRow,
     requestHash: string,
+    actorId: string,
   ) {
+    await this.assertCurrentProfileWriter(actorId);
     if (
       replay.requestHash !== requestHash ||
+      replay.accessAssignmentId !== this.scope.accessAssignmentId ||
       replay.status !== 'succeeded' ||
       !replay.resultResourceId ||
       !replay.responseJson
@@ -1497,20 +1653,22 @@ export class D1PatientRegistryRepository {
         'Patient profile command conflicts with an earlier request',
       );
     }
-    let response: { patientId?: string };
+    let response: { patientId?: string; actorId?: string; accessAssignmentId?: string };
     try {
-      response = JSON.parse(replay.responseJson) as { patientId?: string };
+      response = JSON.parse(replay.responseJson) as typeof response;
     } catch {
       throw new PatientRegistryConflictError(
         'Patient profile replay response is invalid',
       );
     }
-    if (response.patientId !== replay.resultResourceId) {
+    if (response.patientId !== replay.resultResourceId || response.actorId !== actorId ||
+      response.accessAssignmentId !== this.scope.accessAssignmentId) {
       throw new PatientRegistryConflictError(
         'Patient profile replay scope is inconsistent',
       );
     }
     const patient = await this.get(replay.resultResourceId);
+    await this.assertCurrentProfileWriter(actorId);
     if (!patient) {
       throw new PatientRegistryConflictError(
         'Replayed patient profile no longer resolves',

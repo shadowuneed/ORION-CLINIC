@@ -1,6 +1,9 @@
 import { hashAuditEvent } from '@/lib/audit/event-hash';
 import type { WorkspaceScope } from '@/lib/auth/workspace-access';
 import { assertCurrentEncounterWriteAccess } from '@/lib/auth/encounter-write-access';
+import { assertCurrentEncounterReadAccess } from '@/lib/auth/encounter-read-access';
+import { signedProtocolContentSchema } from '@/lib/documents/protocol-artifacts';
+import type { ProtocolPreview } from '@/lib/domain/protocol-preview';
 import {
   getProtocolReadiness,
   type ClinicalSectionCode,
@@ -334,6 +337,37 @@ export class D1ProtocolReviewRepository {
         this.scope.encounterId,
       )
       .first<ProtocolVersionSummary>();
+  }
+
+  async getCurrentPreview(actorId: string): Promise<ProtocolPreview | null> {
+    await assertCurrentEncounterReadAccess(this.database, this.scope, actorId);
+    const row = await this.database.prepare(`
+      select version.id, version.version, version.status,
+        version.source_hash as sourceHash, version.content_json as contentJson
+      from protocol_heads head join protocol_versions version
+        on version.id = head.current_protocol_version_id
+        and version.organization_id = head.organization_id
+        and version.facility_id = head.facility_id
+        and version.encounter_id = head.encounter_id
+      where head.organization_id = ?1 and head.facility_id = ?2
+        and head.encounter_id = ?3
+    `).bind(this.scope.organizationId, this.scope.facilityId, this.scope.encounterId)
+      .first<{ id: string; version: number; status: 'draft' | 'signed'; sourceHash: string; contentJson: string }>();
+    if (!row) return null;
+    const content = signedProtocolContentSchema.parse(JSON.parse(row.contentJson));
+    if (content.encounter.id !== this.scope.encounterId || await sha256(row.contentJson) !== row.sourceHash) {
+      throw new Error('Protocol source integrity check failed');
+    }
+    await assertCurrentEncounterReadAccess(this.database, this.scope, actorId);
+    // Do not leak transcript text or its evidence through this projection when
+    // transcript consent has since been withdrawn. The workspace read is audited.
+    return {
+      id: row.id, version: row.version, status: row.status, sourceHash: row.sourceHash,
+      patient: { displayName: content.patient.displayName, medicalRecordNumber: content.patient.medicalRecordNumber },
+      sections: content.sections.map(({ code, content, reviewState }) => ({ code, content, reviewState })),
+      recommendations: content.recommendations.map(({ effective }) => ({ title: effective.title, content: effective.content })),
+      amendments: content.amendments.map(({ id, text, reason }) => ({ id, text, reason })),
+    };
   }
 
   async beginReview(input: BeginProtocolReviewCommand) {

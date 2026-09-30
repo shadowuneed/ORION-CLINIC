@@ -1,0 +1,14 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--canvas);
+}
+
+.screen > div {
+  width: min(100%, 360px);
+}

@@ -1,0 +1,24 @@
+.mark { display: inline-block; flex: 0 0 auto; vertical-align: middle; overflow: visible; }
+.satellite { transform: translate(105.7758586536px, 52.1984054572px); }
+.animated .satellite {
+  transform: none;
+  offset-path: path('M105.7758586536 52.1984054572 A60 13 -28 1 1 22.2241413464 75.8015945428 A60 13 -28 1 1 105.7758586536 52.1984054572');
+  offset-rotate: 0deg;
+  offset-distance: 0%;
+  animation: orion-orbit 3.6s linear infinite;
+}
+@keyframes orion-orbit { to { offset-distance: 100%; } }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--brand, #125f56); }
+.brand .animated .satellite { animation-duration: 14s; }
+.wordmark { display: inline-flex; flex-direction: column; gap: 2px; color: var(--ink, #17211f); text-align: left; }
+.wordmark strong { display: block; font-family: var(--font-sans, Arial, sans-serif); font-size: 17px; font-weight: 800; line-height: 1.1; letter-spacing: .105em; }
+.wordmark small { display: block; font-family: var(--font-sans, Arial, sans-serif); font-size: 12px; line-height: 1.2; font-weight: 450; letter-spacing: .025em; color: var(--ink-soft, #4f5d59); }
+.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 180px; padding: 28px; color: var(--ink-soft, #4f5d59); text-align: center; font-size: 15px; line-height: 1.5; }
+.loading > .mark { color: var(--brand, #125f56); }
+.compact { display: inline-flex; flex-direction: row; justify-content: flex-start; min-height: 0; padding: 0; gap: 9px; font-size: inherit; text-align: left; }
+@media (prefers-reduced-motion: reduce) {
+  .animated .satellite { animation: none; offset-path: none; transform: translate(105.7758586536px, 52.1984054572px); }
+}
+@supports not (offset-path: path('M0 0 L1 1')) {
+  .animated .satellite { animation: none; transform: translate(105.7758586536px, 52.1984054572px); }
+}

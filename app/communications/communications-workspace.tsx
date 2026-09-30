@@ -1,5 +1,6 @@
 'use client';
 
+import { OrionMark } from '@/app/brand/orion-brand';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -12,7 +13,6 @@ import {
   Clock3,
   Headphones,
   Languages,
-  LoaderCircle,
   MessageCircleMore,
   MessageSquareText,
   PhoneCall,
@@ -743,13 +743,13 @@ export function CommunicationsWorkspace() {
       loading: ['Загружаем очередь', 'Читаем согласия, источники и ручные задачи из D1.'],
       assignment: ['Выберите рабочее назначение', 'Права разных отделений не объединяются. Выберите назначение для этой работы.'],
       unauthenticated: ['Нужен вход', 'Откройте ORION Clinic через авторизованный контур.'],
-      forbidden: ['Нет доступа', 'Назначение недоступно. Откройте «Связь с пациентом» в меню для выбора действующего назначения.'],
+      forbidden: ['Нет доступа', 'Назначение недоступно. Нажмите «Сменить рабочий доступ» в шапке, чтобы проверить другие доступные назначения.'],
       error: ['Контур недоступен', data.error?.message ?? 'Не удалось прочитать данные D1.'],
       ready: ['', ''],
     }[state];
     return (
       <main className={styles.statePanel}>
-        {state === 'loading' ? <LoaderCircle className={styles.spin} size={36} /> : <CircleAlert size={36} />}
+        {state === 'loading' ? <OrionMark animated size={48} /> : <CircleAlert size={36} />}
         <small>Связь с пациентом</small>
         <h1>{panel[0]}</h1>
         <p>{panel[1]}</p>
@@ -775,7 +775,7 @@ export function CommunicationsWorkspace() {
         </div>
         <div className={styles.boundaryBadge}>
           <ShieldCheck aria-hidden="true" size={20} />
-          <span><strong>Провайдеры не подключены</strong><small>Отправка не выполняется · только синтетические данные</small></span>
+          <span><strong>Провайдеры не подключены</strong><small>Сообщения пока не отправляются пациентам</small></span>
         </div>
       </header>
 
@@ -803,12 +803,12 @@ export function CommunicationsWorkspace() {
           {patients.length ? patients.map((patient) => {
             const granted = consents.filter((consent) => consent.patientId === patient.id && consent.decision === 'granted').length;
             return <button aria-pressed={patient.id === selectedPatientId} className={`${styles.patientCard} ${patient.id === selectedPatientId ? styles.patientCardActive : ''}`} key={patient.id} onClick={() => choosePatient(patient.id)} type="button"><span className={styles.patientAvatar}>{patient.displayName.slice(0, 1)}</span><span><strong>{patient.displayName}</strong><small>{patient.medicalRecordNumber}</small><em>{granted} из 4 каналов разрешено</em></span><ChevronRight size={16} /></button>;
-          }) : <div className={styles.emptyList}><UserRound size={24} /><strong>Нет пациентов</strong><p>Сначала добавьте синтетическую карточку в реестре.</p></div>}
+          }) : <div className={styles.emptyList}><UserRound size={24} /><strong>Нет пациентов</strong><p>Сначала добавьте карточку в реестре.</p></div>}
         </aside>
 
         <div className={styles.detail}>
           {selectedPatient ? <>
-            <header className={styles.detailHeader}><div><span className={styles.eyebrow}>Карта коммуникаций</span><h2>{selectedPatient.displayName}</h2><p>{selectedPatient.medicalRecordNumber} · внутренние тестовые идентификаторы</p></div><div className={styles.dataBoundary}><ShieldCheck size={17} /><span><strong>Синтетические данные</strong><small>Назначения хранятся как системные test:-алиасы</small></span></div></header>
+            <header className={styles.detailHeader}><div><span className={styles.eyebrow}>Карта коммуникаций</span><h2>{selectedPatient.displayName}</h2><p>{selectedPatient.medicalRecordNumber}</p></div><div className={styles.dataBoundary}><ShieldCheck size={17} /><span><strong>Внутренние адреса</strong><small>Внешняя доставка не настроена</small></span></div></header>
 
             <section className={styles.sectionCard}>
               <header><div><span className={styles.eyebrow}>01 · Право на канал</span><h3>Согласия пациента</h3></div><small>Каждый канал независим</small></header>
@@ -838,7 +838,7 @@ export function CommunicationsWorkspace() {
         </div>
       </section>
 
-      {consentTarget ? <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) closeActiveDialog(); }}><form aria-labelledby="consent-title" aria-modal="true" className={styles.dialog} onSubmit={submitConsent} ref={dialogRef} role="dialog" tabIndex={-1}><header><div><span className={styles.eyebrow}>Канал пациента</span><h2 id="consent-title">{channelLabels[consentTarget.channel]}</h2></div><button aria-label="Закрыть" onClick={closeActiveDialog} type="button"><X size={18} /></button></header><div className={styles.formGrid}><label><span>Решение</span><select value={consentDecision} onChange={(event) => { const value = event.target.value as ChannelConsentDecision; setConsentDecision(value); setConsentVerified(false); }}><option value="granted">Разрешил</option><option value="denied">Отказал</option>{findChannelConsent(consents, consentTarget.patient.id, consentTarget.channel) ? <option value="withdrawn">Отозвал разрешение</option> : null}</select></label><label><span>Предпочитаемый язык</span><select value={consentLanguage} onChange={(event) => setConsentLanguage(event.target.value as CommunicationLanguage)}><option value="ru">Русский</option><option value="kk">Қазақша</option></select></label>{consentDecision === 'granted' ? <><div className={`${styles.fixedDestination} ${styles.full}`}><span>Системное тестовое назначение</span><strong>{syntheticDestinationHint(consentTarget.channel)}</strong><small>Поле не редактируется: реальный номер или адрес в этот контур не попадёт.</small></div><label className={`${styles.confirmCheck} ${styles.full}`}><input checked={consentVerified} onChange={(event) => setConsentVerified(event.target.checked)} type="checkbox" /><span><strong>Сотрудник повторно подтвердил решение пациента</strong><small>Это не проверка реального мессенджера или номера.</small></span></label></> : null}<label className={styles.full}><span>Основание</span><textarea minLength={3} onChange={(event) => setConsentReason(event.target.value)} required rows={3} value={consentReason} /></label></div><footer><button className={styles.secondaryButton} onClick={closeActiveDialog} type="button">Закрыть</button><button className={styles.primaryButton} disabled={busy !== null || (consentDecision === 'granted' && !consentVerified)} type="submit">{busy?.startsWith('consent:') ? <LoaderCircle className={styles.spin} size={16} /> : null} Сохранить в D1</button></footer></form></div> : null}
+      {consentTarget ? <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) closeActiveDialog(); }}><form aria-labelledby="consent-title" aria-modal="true" className={styles.dialog} onSubmit={submitConsent} ref={dialogRef} role="dialog" tabIndex={-1}><header><div><span className={styles.eyebrow}>Канал пациента</span><h2 id="consent-title">{channelLabels[consentTarget.channel]}</h2></div><button aria-label="Закрыть" onClick={closeActiveDialog} type="button"><X size={18} /></button></header><div className={styles.formGrid}><label><span>Решение</span><select value={consentDecision} onChange={(event) => { const value = event.target.value as ChannelConsentDecision; setConsentDecision(value); setConsentVerified(false); }}><option value="granted">Разрешил</option><option value="denied">Отказал</option>{findChannelConsent(consents, consentTarget.patient.id, consentTarget.channel) ? <option value="withdrawn">Отозвал разрешение</option> : null}</select></label><label><span>Предпочитаемый язык</span><select value={consentLanguage} onChange={(event) => setConsentLanguage(event.target.value as CommunicationLanguage)}><option value="ru">Русский</option><option value="kk">Қазақша</option></select></label>{consentDecision === 'granted' ? <><div className={`${styles.fixedDestination} ${styles.full}`}><span>Системное тестовое назначение</span><strong>{syntheticDestinationHint(consentTarget.channel)}</strong><small>Поле не редактируется: реальный номер или адрес в этот контур не попадёт.</small></div><label className={`${styles.confirmCheck} ${styles.full}`}><input checked={consentVerified} onChange={(event) => setConsentVerified(event.target.checked)} type="checkbox" /><span><strong>Сотрудник повторно подтвердил решение пациента</strong><small>Это не проверка реального мессенджера или номера.</small></span></label></> : null}<label className={styles.full}><span>Основание</span><textarea minLength={3} onChange={(event) => setConsentReason(event.target.value)} required rows={3} value={consentReason} /></label></div><footer><button className={styles.secondaryButton} onClick={closeActiveDialog} type="button">Закрыть</button><button className={styles.primaryButton} disabled={busy !== null || (consentDecision === 'granted' && !consentVerified)} type="submit">{busy?.startsWith('consent:') ? <OrionMark animated size={20} /> : null} Сохранить в D1</button></footer></form></div> : null}
 
       {scheduleTarget ? <div className={styles.overlay} onMouseDown={(event) => { if (event.target === event.currentTarget) closeActiveDialog(); }}><form aria-labelledby="schedule-title" aria-modal="true" className={styles.dialog} onSubmit={submitSchedule} ref={dialogRef} role="dialog" tabIndex={-1}><header><div><span className={styles.eyebrow}>Намерение, а не отправка</span><h2 id="schedule-title">Поставить в очередь</h2></div><button aria-label="Закрыть" onClick={closeActiveDialog} type="button"><X size={18} /></button></header><div className={styles.dialogNotice}><CircleAlert size={18} /><span><strong>Внешней отправки не будет</strong><small>Провайдеры не подключены. D1 запишет очередь и честный сбой.</small></span></div><div className={styles.formGrid}><label className={styles.full}><span>Источник</span><input disabled value={`${scheduleTarget.title} · ${scheduleTarget.versionId}`} /></label><label><span>Канал с текущим согласием</span><select value={scheduleChannel} onChange={(event) => setScheduleChannel(event.target.value as CommunicationChannel)}>{selectedPatientConsents.filter((consent) => consent.decision === 'granted').map((consent) => <option key={consent.channel} value={consent.channel}>{channelLabels[consent.channel]} · {consent.preferredLanguage.toUpperCase()}</option>)}</select></label><label><span>Плановое время · {facilityTimeZone}</span><input onChange={(event) => setScheduleAt(event.target.value)} required type="datetime-local" value={scheduleAt} /></label><label className={styles.full}><span>Основание</span><textarea minLength={3} onChange={(event) => setScheduleReason(event.target.value)} required rows={3} value={scheduleReason} /></label></div><footer><button className={styles.secondaryButton} onClick={closeActiveDialog} type="button">Закрыть</button><button className={styles.primaryButton} disabled={busy !== null || !selectedPatientConsents.some((consent) => consent.decision === 'granted')} type="submit">Сохранить намерение</button></footer></form></div> : null}
 

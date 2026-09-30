@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { PatientObservationRecord } from '@/lib/repositories/patient-observations';
 import {
   buildObservationAccessQuery,
   buildObservationOperationKey,
   calculateBmi,
+  CareObservationTaskNotice,
   canCorrectObservation,
   unknownObservationOutcomeMessage,
 } from './observation-workspace';
@@ -54,6 +57,25 @@ function observation(
 }
 
 describe('observation workspace decisions', () => {
+  it('returns to the exact task and distinguishes a measurement from completion', () => {
+    const html = renderToStaticMarkup(createElement(CareObservationTaskNotice, {
+      context: { facilityId: 'fac-a', accessAssignmentId: 'assignment-a', patientId: 'patient-a', careTaskId: 'task-a' },
+      task: { id: 'task-a', enrollmentId: 'enrollment-a', sourcePlanVersionId: 'plan-a', title: 'Проверить давление', patient: { id: 'patient-a' }, current: { status: 'in_progress' } },
+      disabled: false,
+    }));
+    expect(html).toContain('/care?facilityId=fac-a&amp;accessAssignmentId=assignment-a&amp;patientId=patient-a&amp;careTaskId=task-a');
+    expect(html).toContain('Вернуться к задаче');
+    expect(html).toContain('Статус задачи изменяется только отдельным действием');
+  });
+  it('does not navigate away from an open or submitting measurement form', () => {
+    const html = renderToStaticMarkup(createElement(CareObservationTaskNotice, {
+      context: { facilityId: 'fac-a', accessAssignmentId: 'assignment-a', patientId: 'patient-a', careTaskId: 'task-a' },
+      task: { id: 'task-a', enrollmentId: 'enrollment-a', sourcePlanVersionId: 'plan-a', title: 'Проверить давление', patient: { id: 'patient-a' }, current: { status: 'in_progress' } },
+      disabled: true,
+    }));
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain('href=');
+  });
   it('previews the same rounded BMI used by the server', () => {
     expect(calculateBmi('170', '68.2')).toBe(23.6);
     expect(calculateBmi('', '68.2')).toBeNull();

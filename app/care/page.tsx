@@ -3,6 +3,7 @@ import {
   getAuthenticatedClinicContext,
 } from '../authenticated-clinic-page';
 import { ChronicCareWorkspace } from './care-workspace';
+import { careObservationPageUrl } from '@/lib/care-observation-navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,22 +13,12 @@ export default async function ChronicCarePage({
   searchParams: Promise<{
     facilityId?: string | string[];
     accessAssignmentId?: string | string[];
+    patientId?: string | string[];
+    careTaskId?: string | string[];
   }>;
 }) {
   const query = await searchParams;
-  const facilityId =
-    typeof query.facilityId === 'string' ? query.facilityId : undefined;
-  const accessAssignmentId =
-    typeof query.accessAssignmentId === 'string'
-      ? query.accessAssignmentId
-      : undefined;
-  const returnToParams = new URLSearchParams();
-  if (facilityId) returnToParams.set('facilityId', facilityId);
-  if (accessAssignmentId) {
-    returnToParams.set('accessAssignmentId', accessAssignmentId);
-  }
-  const returnToQuery = returnToParams.toString();
-  const returnTo = returnToQuery ? `/care?${returnToQuery}` : '/care';
+  const returnTo = careObservationPageUrl('care', query);
   const context = await getAuthenticatedClinicContext(returnTo);
 
   return (
