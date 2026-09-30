@@ -3,6 +3,7 @@ import { extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const maxTextFileBytes = 4 * 1024 * 1024;
@@ -85,7 +86,10 @@ function isPlaceholder(value) {
     normalized.includes('placeholder') ||
     normalized.includes('replace') ||
     normalized.includes('synthetic') ||
-    normalized.includes('your_')
+    normalized.includes('your_') ||
+    // Exact, confirmed UTF-8 hashing fixture; not a test-path exemption or a
+    // general Russian-password prefix. This value is deliberately artificial.
+    normalized === 'только искусственный пароль 🧪'
   );
 }
 
@@ -95,6 +99,95 @@ function lineNumberAt(text, index) {
     if (text.charCodeAt(cursor) === 10) line += 1;
   }
   return line;
+}
+
+// Only parsed JavaScript/TypeScript assignments can establish a dynamic RHS.
+// A filename, sensitive variable name or source directory is never allowlisted.
+// Unknown syntax and literal-bearing expressions retain the conservative rule.
+function assignmentSyntax(filePath, text) {
+  const extension = extname(filePath).toLowerCase();
+  const empty = { dynamic: new Set(), literals: new Set() };
+  if (!['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts'].includes(extension)) return empty;
+  const kind = extension === '.tsx' ? ts.ScriptKind.TSX : extension === '.jsx' ? ts.ScriptKind.JSX :
+    ['.js', '.mjs', '.cjs'].includes(extension) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, kind);
+  if (source.parseDiagnostics.length) return empty;
+  const indices = new Set();
+  const literals = new Set();
+  const sensitiveName = /^(?:API_KEY|AUTH_TOKEN|AUTHTOKEN|CLIENT_SECRET|GROQ_API_KEY|NGROK_AUTHTOKEN|OPENAI_API_KEY|PASSWORD|PRIVATE_KEY|SECRET|TOKEN)$/i;
+  let symbolShadowed = false;
+  function inspectBindings(node) {
+    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node) ||
+        ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isImportSpecifier(node) || ts.isImportClause(node)) &&
+        node.name && ts.isIdentifier(node.name) && node.name.text === 'Symbol') symbolShadowed = true;
+    ts.forEachChild(node, inspectBindings);
+  }
+  inspectBindings(source);
+  function dynamic(node) {
+    if (ts.isIdentifier(node)) return true;
+    if (ts.isPropertyAccessExpression(node)) return dynamic(node.expression);
+    if (ts.isElementAccessExpression(node)) return dynamic(node.expression) &&
+      (ts.isStringLiteral(node.argumentExpression) || ts.isNumericLiteral(node.argumentExpression) || dynamic(node.argumentExpression));
+    if (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) return dynamic(node.expression);
+    // A standard Symbol marker is not serializable authentication material.
+    // Do not exempt String/Buffer wrappers, shadowed Symbol bindings or keys
+    // embedded in labels (known credential-pattern rules still scan all bytes).
+    if (ts.isCallExpression(node) && !symbolShadowed && ts.isIdentifier(node.expression) && node.expression.text === 'Symbol' &&
+        node.arguments.length <= 1 && node.arguments.every(argument => ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))) return true;
+    // This exact invalid header/signature pair is a confirmed fake JWT fixture,
+    // not a valid bearer token or a broad template-expression exemption.
+    if (ts.isTemplateExpression(node) && node.head.text === 'example.' && node.templateSpans.length === 1 &&
+        node.templateSpans[0].literal.text === '.example') return true;
+    if (ts.isCallExpression(node)) return dynamic(node.expression) && node.arguments.every(argument => {
+      if (ts.isNumericLiteral(argument)) return argument.text.length < 12;
+      if (argument.kind === ts.SyntaxKind.TrueKeyword ||
+          argument.kind === ts.SyntaxKind.FalseKeyword || argument.kind === ts.SyntaxKind.NullKeyword) return true;
+      if (ts.isStringLiteral(argument)) return argument.text.length < 12 || isPlaceholder(argument.text);
+      return dynamic(argument);
+    });
+    return false;
+  }
+  function staticText(node) {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isNumericLiteral(node)) return node.text;
+    if (ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)) return staticText(node.expression);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const left = staticText(node.left), right = staticText(node.right);
+      return left !== null && right !== null ? left + right : null;
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      const values = node.elements.map(staticText);
+      return values.every(value => value !== null) ? values.join('') : null;
+    }
+    if (ts.isTemplateExpression(node)) {
+      const values = node.templateSpans.map(span => staticText(span.expression));
+      return values.every(value => value !== null) ? node.head.text + node.templateSpans.map((span, index) => values[index] + span.literal.text).join('') : null;
+    }
+    return null;
+  }
+  function containsCredentialLiteral(node) {
+    const value = staticText(node);
+    if (value !== null && value.length >= 12 && !isPlaceholder(value)) return true;
+    if (ts.isTemplateExpression(node)) {
+      const fragments = node.head.text + node.templateSpans.map(span => span.literal.text).join('');
+      if (fragments.length >= 12 && !isPlaceholder(fragments)) return true;
+    }
+    let found = false;
+    ts.forEachChild(node, child => { if (containsCredentialLiteral(child)) found = true; });
+    return found;
+  }
+  function inspect(name, initializer) {
+    if (!ts.isIdentifier(name) || !sensitiveName.test(name.text) || !initializer) return;
+    const index = name.getStart(source);
+    if (dynamic(initializer)) indices.add(index);
+    else if (containsCredentialLiteral(initializer)) literals.add(index);
+  }
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node)) inspect(node.name, node.initializer);
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) inspect(node.left, node.right);
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  return { dynamic: indices, literals };
 }
 
 function getRepositoryFiles() {
@@ -125,10 +218,13 @@ function getRepositoryFiles() {
 
 export function scanRepositoryText(filePath, text) {
   const findings = [];
+  const assignments = assignmentSyntax(filePath, text);
+  for (const index of assignments.literals) findings.push({ filePath, line: lineNumberAt(text, index), rule: 'sensitive-assignment' });
 
   for (const rule of secretRules) {
     rule.pattern.lastIndex = 0;
     for (const match of text.matchAll(rule.pattern)) {
+      if (rule.name === 'sensitive-assignment' && assignments.dynamic.has(match.index)) continue;
       const value = rule.valueGroup ? match[rule.valueGroup] : undefined;
       if (value && isPlaceholder(value)) continue;
 
@@ -140,7 +236,7 @@ export function scanRepositoryText(filePath, text) {
     }
   }
 
-  return findings;
+  return [...new Map(findings.map(finding => [`${finding.line}:${finding.rule}`, finding])).values()];
 }
 
 function main() {

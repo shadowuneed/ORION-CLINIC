@@ -16,6 +16,36 @@ const credentialPatterns = [
   ['private-key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
 ];
 
+function artifactContext(root, profile) {
+  if (!['strict', 'next', 'vercel'].includes(profile)) throw new Error('Unknown artifact inspection profile');
+  const generatedRouteDirectories = new Set();
+  if (profile === 'next') {
+    const nextRoot = basename(root) === '.next' ? root : dirname(root);
+    if (basename(nextRoot) !== '.next' || (root !== nextRoot && !['server', 'static'].includes(basename(root)))) {
+      throw new Error('Next profile requires .next, .next/server or .next/static');
+    }
+    // These exact directories were verified in the native Next build. "exports"
+    // here names our three generated API routes, not a clinical export store.
+    // Only the directory-name conflict is resolved: every descendant still
+    // receives all file, credential, container and link checks below.
+    for (const route of ['server/app/api/workspace/exports', 'static/chunks/app/api/workspace/exports', 'types/app/api/workspace/exports']) {
+      generatedRouteDirectories.add(resolve(nextRoot, route));
+    }
+  }
+  if (profile === 'vercel') {
+    if (basename(root) !== 'output' || basename(dirname(root)) !== '.vercel') {
+      throw new Error('Vercel profile requires the exact .vercel/output directory');
+    }
+    // Exact paths verified from Vercel's actual standalone Build Output.
+    // Dependencies' exports directories and every file inside these routes are
+    // NOT allowlisted; links, credentials and private containers remain blocked.
+    for (const route of ['functions/api/workspace/exports', 'static/_next/static/chunks/app/api/workspace/exports']) {
+      generatedRouteDirectories.add(resolve(root, route));
+    }
+  }
+  return { generatedRouteDirectories };
+}
+
 function hasPrefix(bytes, prefix) {
   return bytes.subarray(0, prefix.length).equals(Buffer.from(prefix));
 }
@@ -69,10 +99,16 @@ async function assertUnlinkedDirectoryPath(root) {
   }
 }
 
-/** Read-only packaging check. Never prints matched values or silently removes files. */
-export async function checkDeploymentArtifact(directory) {
+/**
+ * Read-only packaging check. Never prints matched values or silently removes files.
+ * @param {string} directory
+ * @param {{profile?: 'strict' | 'next' | 'vercel'}} [options]
+ */
+export async function checkDeploymentArtifact(directory, options = {}) {
   if (typeof directory !== 'string' || !directory.trim()) throw new Error('An explicit build directory is required');
+  if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('Artifact options must be an object');
   const root = resolve(directory);
+  const context = artifactContext(root, options.profile ?? 'strict');
   const findings = [];
   let files = 0;
   const report = (path, rule) => findings.push({ path: relative(root, path).replaceAll('\\', '/') || '.', rule });
@@ -81,7 +117,7 @@ export async function checkDeploymentArtifact(directory) {
     const name = basename(path).toLowerCase();
     if (stat.isSymbolicLink()) { report(path, 'unresolved-link'); return; }
     if (stat.isDirectory()) {
-      if (privateDirectories.has(name)) { report(path, 'private-directory'); return; }
+      if (privateDirectories.has(name) && !context.generatedRouteDirectories.has(path)) { report(path, 'private-directory'); return; }
       for (const entry of (await readdir(path)).sort()) await visit(join(path, entry));
       return;
     }
@@ -113,12 +149,12 @@ export async function checkDeploymentArtifact(directory) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const args = process.argv.slice(2);
-  if (args.length !== 2 || args[0] !== '--dir' || !args[1]) {
-    console.error('Usage: node scripts/check-deployment-artifact.mjs --dir <build-directory>');
+  if (![2, 4].includes(args.length) || args[0] !== '--dir' || !args[1] || (args.length === 4 && (args[2] !== '--profile' || !['strict', 'next', 'vercel'].includes(args[3])))) {
+    console.error('Usage: node scripts/check-deployment-artifact.mjs --dir <build-directory> [--profile strict|next|vercel]');
     process.exitCode = 2;
   } else {
     try {
-      const result = await checkDeploymentArtifact(args[1]);
+      const result = await checkDeploymentArtifact(args[1], { profile: args[3] ?? 'strict' });
       console.log(`Inspected ${result.files} artifact files. No file content or credential values are printed.`);
       for (const finding of result.findings) console.error(`${finding.path}: ${finding.rule}`);
       console.log(result.safe ? 'Artifact file policy passed. This does not establish runtime, authentication or clinical readiness.' : 'BLOCKED: do not upload this artifact. Source .gitignore alone does not protect generated bundles.');

@@ -1,10 +1,9 @@
-import { env } from 'cloudflare:workers';
 import type { ReactNode } from 'react';
 import { resolveEncounterAssignmentAccess, EncounterAccessSelectionRequiredError } from '@/lib/auth/encounter-assignment-access';
 import { AccessAssignmentNotFoundError, AccessMembershipRequiredError, AccessPermissionRequiredError } from '@/lib/auth/access-governance';
 import { toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
 import { workspaceRequestSelection, InvalidWorkspaceAccessSelectionError } from '@/lib/auth/workspace-request-access';
-import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
+import { cloudAccessRepositoryForPage } from '@/lib/cloud/access-repository.server';
 import { WorkspaceAccessProvider } from '@/lib/workspace-access-context';
 import type { ChatGPTUser } from './chatgpt-auth';
 import styles from './authenticated-clinic-page.module.css';
@@ -18,7 +17,7 @@ export async function WorkspaceAssignmentBoundary({ user, returnTo, children }: 
   try {
     const selection = workspaceRequestSelection(new Request(`https://orion.invalid${returnTo}`));
     selected = await resolveEncounterAssignmentAccess(
-      new D1AccessGovernanceRepository(env.DB),
+      await cloudAccessRepositoryForPage(),
       toSiteIdentityPrincipal({ id: user.userId, email: user.email, issuer: user.issuer }),
       'encounter.read', selection,
     );

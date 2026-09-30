@@ -965,6 +965,59 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-09-30 owner-requested cloud stopping checkpoint (source/DB setup, NOT deployed):
+
+- Supersedes the earlier unmounted-Auth/closed-all-APIs foundation below. Cloud
+  Auth/login/CSRF/refresh/logout/session and patient list/detail/create/update/
+  archive are mounted in native Next source. JWT + live session + current
+  assignment checks, immutable history, atomic mutation/audit/idempotency and
+  A-to-B/A-to-null document unload fences remain mandatory. Shared local browser
+  material archives are disabled. No D1 emulator/raw-SQL gateway/fake DB.
+- After explicit owner approval, applied exact reviewed0002 to dedicated
+  Supabase `bctyswbqjgpmtsanrfhp`. Actual catalog proof:18 private tables;
+  all RLS=true; anon/authenticated table grants0; authenticated schema USAGE=false;
+  six RPCs; anon EXECUTE0, authenticated6, service_role0. Auth session `not_after`
+  column exists. No local patient records or credentials imported.
+- Owner manually created an Auth user, then separately approved exact-account
+  doctor+administrator access. Applied reviewed0003 once; proof:
+  `org-orion-cloud / fac-orion-cloud / access-assignment-owner-general-medicine`,
+  version1, roles doctor+administrator, audit_sequence1. Password never read.
+  Committed0003 remains an uninstantiated operator template. DO NOT rerun0002/0003.
+- Quota review: removed duplicate no-args access overview within one SSR request
+  (/access2RPCs->1), without cross-request authority cache. Session checks are
+  single-flight/focus-deduplicated; hidden network timer stops and pending check
+  aborts. Visible cadence remains10s/up to360Auth checks/hour, not a claimed
+  decrease in that baseline. Existing visibility guard already avoided new
+  hidden calls. Local300ms cookie check remains. Estimated request counts and
+  open detail-pagination/index/audit-growth issues are recorded in the checkpoint.
+- Read-only pre-bootstrap size measurement: database12,151,955bytes;
+  ORION private table/index allocation589,824bytes. No egress/MAU/load-test
+  measurement or future-cost guarantee. No Chrome trace tools available, so
+  LCP/INP/CLS were not measured. No paid upgrade/Realtime/storage activation.
+- `pnpm.cmd exec vitest run lib/cloud cloud/runtime/build-boundary.test.ts
+  cloud/sql/0002_access_patient_registry.test.ts app/sign-in/page.test.ts
+  app/chatgpt-auth.test.ts lib/config/deployment-artifact.test.ts
+  lib/config/secret-scanner.test.ts lib/config/vercel-function-links.test.ts
+  --project unit --no-file-parallelism --maxWorkers=1`: PASS14files/359tests,26.78s.
+  Full cloud lint/typecheck/diff check PASS. Dependencies: no known vulnerabilities.
+- Fresh `pnpm.cmd build:deploy-check`: PASS314Next server +132static files.
+  Fresh `pnpm.cmd dlx vercel@59.25.4 build --prod --standalone --yes --scope
+  shadowocc`: PASS after final application edits. Exact dedicated project link
+  rechecked. Materializer dry-run confirmed3known internal aliases, apply copied
+  only those; final `.vercel/output --profile vercel` guard PASS525files.
+  `.next/server --profile next`314 and `.next/static --profile next`132 PASS again.
+  Final full source/secret scan PASS755files including documentation receipt;
+  `git diff --check` PASS before commit. No universal absence-of-secrets claim.
+- Dedicated Vercel production has five server ORION config names (project ref,
+  URL, non-elevated publishable key, synthetic-only flag, public origin); no DB
+  password/service-role/secret key. No artifact upload or deployment URL.
+  `/`, pathway, encounter/protocol, orders/care/observations/scheduling/
+  communications/private storage remain closed503 until their real port.
+- Original `../ORION-CLINIC/main` reverified at `fe5d1c6d`, only owner's unrelated
+  MASTER_PLAN edit. No local3200/3101/STT process or DB changed. Owner asks to stop
+  at this checkpoint; do not start a new module or call a partial release complete.
+  See `docs/operations/cloud-checkpoint-2026-09-30.md` for exact resume order.
+
 2026-09-30 separate Supabase/Vercel cloud foundation (NOT deployed):
 
 - Cloud source commit `eecc79dba87c7788d0be189e0911fa35b062b34a` was pushed to
@@ -2202,19 +2255,24 @@ control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
 
-### Latest — two isolated versions, Supabase infrastructure ready, 2026-09-30
+### Latest — owner-requested cloud checkpoint and stop, 2026-09-30
 
 Owner chose Supabase instead of Cloudflare for the online test version. Use ONLY
 the new cloud worktree/branch and dedicated Supabase/Vercel projects listed in
 §13; original main, data, staff passwords and STT stay local and unchanged.
-The native Next build succeeds behind a hard-closed clinical proxy. Supabase
-has only a closed private schema; its server Auth verifier is not mounted.
-There is NO working online deployment yet. Do not publish a503 placeholder as
-the finished platform or unlock old Sites-header APIs with an environment flag.
-Next checkpoint: PostgreSQL staff/access and patient read vertical slice, secure
-project-specific credential injection, then session/material account isolation.
-Port atomic writes and storage before broader activation; exact deployment
-artifact review and two-account browser acceptance remain required.
+Native Next source now mounts verified Auth/internal access and real PostgreSQL
+patient list/detail/create/update/archive. 0002 and separately approved owner0003
+are APPLIED in Supabase; six authenticated-only RPCs and18private RLS tables were
+verified. Do NOT rerun migrations or owner bootstrap on resume. Source tests,
+scans, native build and exact525file Vercel artifact pass. There is still NO online
+deployment or real cloud browser login/CRUD/two-account acceptance proof.
+The owner asked to finish this bounded point and continue later. Save it in the
+cloud branch, leave original local version untouched, and stop module expansion.
+Next: live Auth/patient acceptance, cursor/history and query-plan quota work,
+then measured dashboard and remaining clinical workflows/private storage. Their
+routes (including `/` and pathway) remain closed503; never unlock old Sites-header
+APIs or represent this partial slice as a finished platform. STT remains deferred.
+The concise continuation checklist is `docs/operations/cloud-checkpoint-2026-09-30.md`.
 
 ### Latest operational checkpoint — Cloudflare ready, empty auth D1, 2026-09-30
 
@@ -3683,31 +3741,32 @@ Do not touch:
 
 ## 16. Last handoff
 
-**LATEST RESUME — 2026-09-30, isolated Vercel/Supabase preparation.**
+**LATEST RESUME — 2026-09-30, verified cloud source/DB checkpoint; owner asked to stop.**
 
 Work in `../ORION-CLINIC-CLOUD`, branch `codex/cloud-vercel-supabase`, not original
 `../ORION-CLINIC/main`. Owner's separate-version request supersedes Cloudflare
 online deployment. Do not delete or mutate the historical empty auth D1.
-Dedicated Supabase ref `bctyswbqjgpmtsanrfhp` is Healthy; signup is closed and
-private schema grants were verified absent. Dedicated Vercel project is
-`shadowocc/orion-clinic-cloud`; created/linked/configured but NOT deployed.
-Cloud source checkpoint `eecc79d` is verified on the existing GitHub cloud branch;
-the subsequent documentation receipt does not change application behavior.
-Native Next production build/typecheck and134focused tests pass. The closed
-proxy returns503 for all unported pages/APIs, even forged identities; only
-liveness returns200 without readiness. No runtime adapter or fake DB exists.
-Next: port PostgreSQL staff/access/patients/latest measurements/dashboard reads;
-mount server-verified Supabase sessions only with internal assignment resolution.
-Never request raw passwords/secret keys in chat; obtain secure project-specific
-server configuration through the owner's credential-entry flow. Do not copy the
-six local account passwords, clinical SQLite data or original env files.
-The current53SQLite migrations/97table declarations/27D1repository files require
-real transaction, trigger, idempotency, audit/revocation and timestamp parity.
-Material isolation, private Storage, clinical writes, exact Vercel artifact scan
-and browser reload/two-account acceptance remain open. Keep clinical ingress
-closed until those mounted routes have their own authorization/persistence proof.
-Local STT has no public exposure; persistent remote compute remains a later
-separate choice. Full evidence/limits are in §13 and the cloud-port document.
+Dedicated Supabase ref `bctyswbqjgpmtsanrfhp`:0001+0002+0003 applied;18private RLS
+tables/six narrow RPCs and exact owner doctor+administrator assignment verified.
+Never rerun0002/0003 or infer grants from first signup. Dedicated Vercel project
+`shadowocc/orion-clinic-cloud` is linked/configured but NOT deployed. No final URL.
+Cloud source now has verified Auth and PostgreSQL patient create/update/archive,
+with atomic audit/idempotency/history and generation/account-unload boundaries.
+359focused tests, full lint/typecheck/dependency/source scans, native314+132file
+guards and final525file Vercel artifact pass. These do not prove live cloud browser
+Auth/CRUD/revocation/two-account/reload, load or clinical production acceptance.
+Quota fixes: SSR-only overview Promise dedupe and focus/single-flight/visibility
+scheduler;10s foreground session cadence and live server rights checks remain.
+Initial DB~12MB/private table+indexes~0.6MB was measured before owner bootstrap,
+not egress/MAU. Detail history is still unbounded at SQL vs parser1000/1MiB; address
+with reviewed forward pagination contract before growth, not silent truncation.
+Next bounded task: actual Auth/patient browser acceptance using owner-entered
+password, then pagination/query plans and dashboard/measurements port. Remaining
+encounter/protocol/orders/care/observations/scheduling/communications/storage and
+`/`/pathway stay503. Do not publish this as the completed platform or add fake DB.
+Never request passwords/secret keys in chat or copy six local accounts/clinical
+data/env. Original main/3200/3101/STT untouched. No paid plan, real data or external
+audio/AI. Full exact resume steps: `docs/operations/cloud-checkpoint-2026-09-30.md`.
 
 **LATEST RESUME — 2026-09-30, restart and Cloudflare access verified.**
 

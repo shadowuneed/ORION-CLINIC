@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import type { ReactNode } from 'react';
 import {
   isAccessAssignmentCurrentlyActive,
@@ -7,7 +6,7 @@ import {
 import {
   toSiteIdentityPrincipal,
 } from '@/lib/auth/site-identity';
-import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
+import { cloudAccessRepositoryForPage } from '@/lib/cloud/access-repository.server';
 import { staffProfileFromAssignments } from '@/lib/auth/staff-profile-summary';
 import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
@@ -53,9 +52,7 @@ export async function getAuthenticatedClinicContext(
   let accessCheck: AuthenticatedClinicContext['accessCheck'] = 'ready';
 
   try {
-    accessAssignments = await new D1AccessGovernanceRepository(
-      env.DB,
-    ).listPrincipalAssignments(
+    accessAssignments = await (await cloudAccessRepositoryForPage()).listPrincipalAssignments(
       toSiteIdentityPrincipal({ id: user.userId, email: user.email, issuer: user.issuer }),
     );
   } catch {
@@ -154,7 +151,7 @@ export function AuthenticatedClinicPage({
       {context.accessCheck === 'unavailable' ? (
         <AccessState
           title="Проверка доступа недоступна"
-          text="ORION не смог подтвердить роль в D1. Клинические данные и инструменты не открыты. Повторите после восстановления локальной базы."
+          text="ORION не смог подтвердить рабочее назначение в облачной базе. Данные не открыты. Повторите загрузку после восстановления соединения."
         />
       ) : allowed ? (
         children

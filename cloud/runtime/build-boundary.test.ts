@@ -25,8 +25,7 @@ describe('cloud build boundary', () => {
   });
 
   it.each([
-    '/', '/sign-in', '/sign-out', '/access', '/patients', '/patients/patient-a',
-    '/pathway?view=overview', '/scheduling', '/workspace', '/api/patients',
+    '/', '/sign-out', '/pathway?view=overview', '/scheduling', '/workspace',
     '/api/orders', '/api/access', '/api/health/ready', '/api/auth/local/login',
     '/api/auth/local/logout', '/api/dashboard/briefing', '/api/speech/transcribe',
     '/_next/data/build-id/patients.json',
@@ -39,7 +38,7 @@ describe('cloud build boundary', () => {
   it.each(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])(
     'cannot enable clinical access with forged identities via %s',
     (method) => {
-      const response = cloudIngressResponse(request('/api/patients', method, {
+      const response = cloudIngressResponse(request('/api/orders', method, {
         'oai-authenticated-user-id': 'staff-admin',
         'oai-authenticated-user-email': 'admin@example.com',
         'x-orion-local-generation': 'a'.repeat(32),
@@ -48,6 +47,21 @@ describe('cloud build boundary', () => {
         Cookie: 'orion-local-session=forged',
       }));
       expect(response?.status).toBe(503);
+    },
+  );
+
+  it.each([
+    ['/sign-in', 'GET'], ['/access', 'HEAD'], ['/patients', 'GET'], ['/patients/patient-a', 'GET'],
+    ['/api/auth/cloud/csrf', 'GET'], ['/api/auth/cloud/session', 'GET'], ['/api/auth/cloud/login', 'POST'],
+    ['/api/auth/cloud/logout', 'POST'], ['/api/auth/cloud/refresh', 'POST'], ['/api/patients', 'GET'],
+    ['/api/patients', 'POST'], ['/api/patients/patient-a', 'PATCH'], ['/api/patients/patient-a/archive', 'POST'],
+  ])('forwards only implemented %s %s to independent auth checks', (path, method) => {
+    expect(cloudIngressResponse(request(path, method))).toBeNull();
+  });
+
+  it.each([['/api/auth/cloud/logout', 'GET'], ['/api/patients/patient-a', 'DELETE'], ['/access', 'POST']])(
+    'rejects unimplemented method %s %s', (path, method) => {
+      expect(cloudIngressResponse(request(path, method))?.status).toBe(405);
     },
   );
 
@@ -74,14 +88,14 @@ describe('cloud build boundary', () => {
     expect(cloudIngressResponse(request('/_next/static/chunks/app.js', 'POST'))?.status).toBe(503);
     expect(cloudIngressResponse(request('/_next/static/%2f..%2fapi/patients'))?.status).toBe(503);
     expect(cloudIngressResponse(request('/_next/image?url=http://127.0.0.1/'))?.status).toBe(503);
-    expect(cloudIngressResponse(request('/_next/static/../../api/patients'))?.status).toBe(503);
+    expect(cloudIngressResponse(request('/_next/static/../../api/orders'))?.status).toBe(503);
   });
 
   it('cannot be unlocked by an environment-ready flag', () => {
     const previous = process.env.ORION_CLOUD_READY;
     process.env.ORION_CLOUD_READY = 'true';
     try {
-      expect(cloudIngressResponse(request('/patients'))?.status).toBe(503);
+      expect(cloudIngressResponse(request('/api/orders'))?.status).toBe(503);
     } finally {
       if (previous === undefined) delete process.env.ORION_CLOUD_READY;
       else process.env.ORION_CLOUD_READY = previous;

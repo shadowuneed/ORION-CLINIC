@@ -9,6 +9,9 @@ export type SiteIdentity = {
 export const SITE_IDENTITY_ISSUER = 'openai:sites';
 
 export function getSiteIdentity(request: Request): SiteIdentity | null {
+  // Vercel routes must use the async, provider-verified cloud boundary instead.
+  // Incoming gateway headers are never a cloud login.
+  if (!localAccountModeEnabled()) return null;
   const id = request.headers.get('oai-authenticated-user-id')?.trim();
   const local = localAccountModeEnabled();
   const issuer = request.headers.get('x-orion-local-issuer')?.trim();
@@ -26,7 +29,7 @@ export function getSiteIdentity(request: Request): SiteIdentity | null {
 
 export function toSiteIdentityPrincipal(identity: SiteIdentity) {
   return {
-    issuer: localAccountModeEnabled() ? identity.issuer ?? '' : SITE_IDENTITY_ISSUER,
+    issuer: identity.issuer ?? '',
     subject: identity.id,
     email: identity.email,
   } as const;

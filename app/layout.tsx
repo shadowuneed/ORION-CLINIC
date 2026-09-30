@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { ClientNavigationRecovery } from './client-navigation-recovery';
 import { PathwayTransitionLayer } from './pathway-transition-layer';
-import { LocalAccountBoundary } from './local-account-boundary';
+import { CloudAccountBoundary } from './cloud-account-boundary';
+import { cloudDatabaseForPage } from '@/lib/cloud/database-context.server';
 import '@fontsource-variable/golos-text';
 import './globals.css';
 
@@ -21,10 +22,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const theme = (await cookies()).get('orion-theme')?.value === 'dark' ? 'dark' : 'light';
-  const generation = (await headers()).get('x-orion-local-generation');
+  const generation = await cloudDatabaseForPage().then(context => context.sessionId.replaceAll('-', '')).catch(() => null);
   return (
     <html lang="ru" data-theme={theme} style={{ colorScheme: theme }} suppressHydrationWarning>
-      <body><LocalAccountBoundary generation={generation}>{children}<PathwayTransitionLayer /><ClientNavigationRecovery /></LocalAccountBoundary></body>
+      <body><CloudAccountBoundary generation={generation}>{children}<PathwayTransitionLayer /><ClientNavigationRecovery /></CloudAccountBoundary></body>
     </html>
   );
 }

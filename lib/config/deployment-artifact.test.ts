@@ -2,6 +2,8 @@ import { mkdtemp, mkdir, writeFile, symlink, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkDeploymentArtifact } from '../../scripts/check-deployment-artifact.mjs';
 import { scanRepositoryText } from '../../scripts/scan-secrets.mjs';
@@ -18,6 +20,115 @@ async function fixture(files: Record<string, string | Buffer>) {
 }
 
 describe('deployment artifact safety boundary', () => {
+  it.each(['server/app/api/workspace/exports', 'static/chunks/app/api/workspace/exports', 'types/app/api/workspace/exports'])('resolves only the confirmed Next route directory conflict: %s', async (route) => {
+    const parent = await fixture({ [`.next/${route}/download/route.js`]: 'export const generated = true;' });
+    const root = join(parent, '.next');
+    expect((await checkDeploymentArtifact(root)).findings).toContainEqual({ path: route, rule: 'private-directory' });
+    expect(await checkDeploymentArtifact(root, { profile: 'next' })).toEqual({ files: 1, findings: [], safe: true });
+    if (!route.startsWith('types/')) {
+      const surface = route.startsWith('server/') ? 'server' : 'static';
+      expect(await checkDeploymentArtifact(join(root, surface), { profile: 'next' })).toEqual({ files: 1, findings: [], safe: true });
+    }
+  });
+  it.each(['.env.local', '.dev.vars', 'state.sqlite', 'patient.pdf', 'backup.zip', 'state.db-wal', 'auth.json'])('still blocks private %s inside a confirmed Next API route', async (name) => {
+    const path = `server/app/api/workspace/exports/download/${name}`;
+    const parent = await fixture({ [`.next/${path}`]: 'artificial fixture' });
+    const result = await checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' });
+    expect(result.findings).toContainEqual({ path, rule: 'private-file' });
+    expect(result.safe).toBe(false);
+  });
+  it('still inspects credential bytes and renamed containers inside a confirmed Next API route', async () => {
+    const artificial = 'sb_secret_' + 'x'.repeat(30);
+    const parent = await fixture({
+      '.next/server/app/api/workspace/exports/download/route.js': `export const secret = '${artificial}';`,
+      '.next/server/app/api/workspace/exports/generate/route.js': gzipSync('artificial fixture'),
+    });
+    const result = await checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' });
+    expect(result.findings).toContainEqual({ path: 'server/app/api/workspace/exports/download/route.js', rule: 'supabase-secret-key' });
+    expect(result.findings).toContainEqual({ path: 'server/app/api/workspace/exports/generate/route.js', rule: 'uninspected-container' });
+    expect(JSON.stringify(result)).not.toContain(artificial);
+  });
+  it.each([
+    'exports', 'server/exports', 'server/app/api/other/exports', 'static/exports',
+    'server/app/api/workspace/exports/download/exports',
+    'server/app/api/workspace/exports/download/backups',
+    'server/app/api/workspace/exports/download/.wrangler',
+  ])('does not globally allow private directory %s with the Next profile', async (path) => {
+    const parent = await fixture({ [`.next/${path}/app.js`]: 'export const ready = true;' });
+    const result = await checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' });
+    expect(result.findings).toContainEqual({ path, rule: 'private-directory' });
+  });
+  it('does not let a Next route exception bypass symlink checks', async () => {
+    const target = await fixture({ 'route.js': 'export const ready = true;' });
+    const parent = await fixture({ '.next/server/app/api/workspace/placeholder.js': 'export const ready = true;' });
+    const link = join(parent, '.next/server/app/api/workspace/exports');
+    await symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    const result = await checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' });
+    expect(result.findings).toContainEqual({ path: 'server/app/api/workspace/exports', rule: 'unresolved-link' });
+  });
+  it('keeps full Next cache containers blocked instead of treating surfaces as a complete artifact', async () => {
+    const parent = await fixture({ '.next/cache/webpack/app.pack': gzipSync('artificial fixture') });
+    expect((await checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' })).findings)
+      .toContainEqual({ path: 'cache/webpack/app.pack', rule: 'uninspected-container' });
+  });
+  it.each(['backup.zip', 'state.sqlite', '.env.local'])('does not allow node_modules package %s in a Vercel artifact', async (name) => {
+    const path = `functions/app.func/node_modules/package/${name}`;
+    const parent = await fixture({ [`.vercel/output/${path}`]: 'artificial fixture' });
+    expect((await checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' })).findings)
+      .toContainEqual({ path, rule: 'private-file' });
+  });
+  it.each(['functions/api/workspace/exports', 'static/_next/static/chunks/app/api/workspace/exports'])('resolves only the confirmed Vercel route directory conflict: %s', async (route) => {
+    const parent = await fixture({ [`.vercel/output/${route}/download.func/index.js`]: 'export const ready = true;' });
+    const root = join(parent, '.vercel/output');
+    expect((await checkDeploymentArtifact(root)).findings).toContainEqual({ path: route, rule: 'private-directory' });
+    expect(await checkDeploymentArtifact(root, { profile: 'vercel' })).toEqual({ files: 1, findings: [], safe: true });
+  });
+  it('does not guess unrelated Vercel exports paths or borrow profiles for another output', async () => {
+    const parent = await fixture({ '.vercel/output/functions/other/exports/download.func/index.js': 'export const ready = true;' });
+    expect((await checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' })).findings)
+      .toContainEqual({ path: 'functions/other/exports', rule: 'private-directory' });
+    await expect(checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'next' })).rejects.toThrow('Next profile');
+    await expect(checkDeploymentArtifact(parent, { profile: 'vercel' })).rejects.toThrow('Vercel profile');
+    await expect(checkDeploymentArtifact(parent, { profile: 'next' })).rejects.toThrow('Next profile');
+  });
+  it.each(['.env.local', '.dev.vars', 'state.sqlite', 'backup.zip'])('fully inspects private %s below the exact Vercel route', async (name) => {
+    const path = `functions/api/workspace/exports/download.func/node_modules/package/${name}`;
+    const parent = await fixture({ [`.vercel/output/${path}`]: 'artificial fixture' });
+    const result = await checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' });
+    expect(result.findings).toContainEqual({ path, rule: 'private-file' });
+  });
+  it('fully inspects credential and binary bytes below confirmed Vercel routes', async () => {
+    const artificial = 'sb_secret_' + 'v'.repeat(30);
+    const parent = await fixture({
+      '.vercel/output/functions/api/workspace/exports/download.func/launcher.cjs': `const secret = '${artificial}';`,
+      '.vercel/output/static/_next/static/chunks/app/api/workspace/exports/generate/route.js': gzipSync('artificial fixture'),
+      '.vercel/output/functions/api/workspace/exports/reconcile.func/launcher.cjs': Buffer.from([0, 1, 2, 3]),
+    });
+    const result = await checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' });
+    expect(result.findings).toContainEqual({ path: 'functions/api/workspace/exports/download.func/launcher.cjs', rule: 'supabase-secret-key' });
+    expect(result.findings).toContainEqual({ path: 'static/_next/static/chunks/app/api/workspace/exports/generate/route.js', rule: 'uninspected-container' });
+    expect(result.findings).toContainEqual({ path: 'functions/api/workspace/exports/reconcile.func/launcher.cjs', rule: 'uninspected-binary' });
+    expect(JSON.stringify(result)).not.toContain(artificial);
+    expect(result.safe).toBe(false);
+  });
+  it('retains nested Vercel package exports and link denials inside a confirmed route', async () => {
+    const path = 'functions/api/workspace/exports/download.func/node_modules/package/exports';
+    const parent = await fixture({ [`.vercel/output/${path}/index.js`]: 'export const ready = true;' });
+    const target = await fixture({ 'index.js': 'export const ready = true;' });
+    const linkedPath = 'functions/api/workspace/exports/reconcile.func';
+    await symlink(target, join(parent, '.vercel/output', linkedPath), process.platform === 'win32' ? 'junction' : 'dir');
+    const result = await checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' });
+    expect(result.findings).toContainEqual({ path, rule: 'private-directory' });
+    expect(result.findings).toContainEqual({ path: linkedPath, rule: 'unresolved-link' });
+  });
+  it('rejects linked Next and Vercel profile roots before inspecting their targets', async () => {
+    const target = await fixture({ 'app.js': 'export const ready = true;' });
+    const parent = await fixture({ '.vercel/placeholder.js': 'export const ready = true;' });
+    await symlink(target, join(parent, '.next'), process.platform === 'win32' ? 'junction' : 'dir');
+    await symlink(target, join(parent, '.vercel/output'), process.platform === 'win32' ? 'junction' : 'dir');
+    await expect(checkDeploymentArtifact(join(parent, '.next'), { profile: 'next' })).rejects.toThrow('unlinked');
+    await expect(checkDeploymentArtifact(join(parent, '.vercel/output'), { profile: 'vercel' })).rejects.toThrow('unlinked');
+  });
   it.each([
     ['supabase-secret-key', 'sb_secret_' + 'a'.repeat(30)],
     ['supabase-management-token', 'sbp_' + 'b'.repeat(40)],
@@ -142,10 +253,32 @@ describe('deployment artifact safety boundary', () => {
     await expect(checkDeploymentArtifact('')).rejects.toThrow('explicit');
     await expect(checkDeploymentArtifact(' ')).rejects.toThrow('explicit');
   });
+  it('keeps strict CLI compatibility and requires an explicit Vercel profile', async () => {
+    const parent = await fixture({ '.vercel/output/functions/api/workspace/exports/download.func/launcher.cjs': 'exports.ready = true;' });
+    const root = join(parent, '.vercel/output');
+    const script = fileURLToPath(new URL('../../scripts/check-deployment-artifact.mjs', import.meta.url));
+    const strict = spawnSync(process.execPath, [script, '--dir', root], { encoding: 'utf8' });
+    expect(strict.status).toBe(1);
+    expect(strict.stderr).toContain('functions/api/workspace/exports: private-directory');
+    const contextual = spawnSync(process.execPath, [script, '--dir', root, '--profile', 'vercel'], { encoding: 'utf8' });
+    expect(contextual.status).toBe(0);
+    expect(contextual.stdout).toContain('Inspected 1 artifact files.');
+    expect(contextual.stderr).toBe('');
+  });
+  it.each([
+    ['--dir', 'missing', '--profile', 'unknown'],
+    ['--profile', 'vercel', '--dir', 'missing'],
+    ['--dir', 'missing', '--profile', 'vercel', '--unexpected'],
+  ])('fails closed for malformed profile CLI arguments: %s', (...args) => {
+    const script = fileURLToPath(new URL('../../scripts/check-deployment-artifact.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('Usage:');
+  });
   it('offers separate explicit artifact gates for cloud and retained local builds', async () => {
     const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
     expect(pkg.scripts['security:artifact']).toBe('node scripts/check-deployment-artifact.mjs');
-    expect(pkg.scripts['build:deploy-check']).toBe('pnpm build && node scripts/check-deployment-artifact.mjs --dir .next');
+    expect(pkg.scripts['build:deploy-check']).toBe('pnpm build && node scripts/check-deployment-artifact.mjs --dir .next/server --profile next && node scripts/check-deployment-artifact.mjs --dir .next/static --profile next');
     expect(pkg.scripts.build).toBe('next build --webpack');
     expect(pkg.scripts['build:local']).toBe('node scripts/build-user-handbook.mjs && vinext build');
     expect(pkg.scripts['build:deploy-check:local']).toBe('pnpm build:local && node scripts/check-deployment-artifact.mjs --dir dist');

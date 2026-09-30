@@ -1,7 +1,6 @@
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
-import { localAccountModeEnabled } from '@/lib/local-account-mode';
+import { cloudDatabaseForPage } from '@/lib/cloud/database-context.server';
 
 export {
   chatGPTSignInPath,
@@ -16,35 +15,16 @@ export type ChatGPTUser = {
   issuer?: string;
 };
 
-const USER_ID_HEADER = 'oai-authenticated-user-id';
-const USER_EMAIL_HEADER = 'oai-authenticated-user-email';
-const USER_FULL_NAME_HEADER = 'oai-authenticated-user-full-name';
-const USER_FULL_NAME_ENCODING_HEADER =
-  'oai-authenticated-user-full-name-encoding';
-const PERCENT_ENCODED_UTF8 = 'percent-encoded-utf-8';
-
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get(USER_ID_HEADER)?.trim();
-  const email = requestHeaders.get(USER_EMAIL_HEADER)?.trim() || null;
-  if (!userId) return null;
-  if (localAccountModeEnabled() && (!requestHeaders.get('x-orion-local-issuer')?.trim() ||
-    !/^[a-f0-9]{32}$/.test(requestHeaders.get('x-orion-local-generation') ?? ''))) return null;
-
-  const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
-      ? safeDecodeURIComponent(encodedFullName)
-      : null;
-
-  return {
-    userId,
-    displayName: fullName ?? email ?? `Пользователь ${userId.slice(-6)}`,
-    email,
-    fullName,
-    ...(localAccountModeEnabled() ? { issuer: requestHeaders.get('x-orion-local-issuer') ?? '' } : {}),
-  };
+  // Cloud-only adapter: legacy gateway headers and profile metadata never verify
+  // identity. This still grants no membership, role or clinical permission.
+  try {
+    // Reuse the request-scoped context used by layout and clinical repositories;
+    // verification is never cached across requests or accounts.
+    const session = await cloudDatabaseForPage();
+    return { userId: session.principal.subject, displayName: session.principal.email ?? 'Сотрудник',
+      email: session.principal.email, fullName: null, issuer: session.principal.issuer };
+  } catch { return null; }
 }
 
 export async function requireChatGPTUser(
@@ -54,12 +34,4 @@ export async function requireChatGPTUser(
   if (user) return user;
 
   redirect(chatGPTSignInPath(returnTo));
-}
-
-function safeDecodeURIComponent(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
 }

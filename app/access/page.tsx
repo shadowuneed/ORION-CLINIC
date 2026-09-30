@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import {
   AccessAssignmentNotFoundError,
   AccessMembershipRequiredError,
@@ -7,7 +6,7 @@ import {
   resolveAccessOverview,
 } from '@/lib/auth/access-governance';
 import { toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
-import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
+import { cloudAccessRepositoryForPage } from '@/lib/cloud/access-repository.server';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -41,12 +40,18 @@ export default async function AccessPage({
     | { kind: 'missing' }
     | { kind: 'unavailable' };
   try {
-    const overview = await resolveAccessOverview(
-      new D1AccessGovernanceRepository(env.DB),
-      principal,
-      assignmentId,
-    );
-    view = { kind: 'resolved', overview };
+    if (context.accessCheck === 'unavailable') {
+      // The shell already failed its request-scoped access check. Do not repeat
+      // the RPC or accidentally render a second, conflicting authority result.
+      view = { kind: 'unavailable' };
+    } else {
+      const overview = await resolveAccessOverview(
+        await cloudAccessRepositoryForPage(),
+        principal,
+        assignmentId,
+      );
+      view = { kind: 'resolved', overview };
+    }
   } catch (error) {
     if (error instanceof MultipleAccessSelectionRequiredError) {
       view = { kind: 'selection', assignments: error.assignments };
@@ -83,7 +88,7 @@ export default async function AccessPage({
     ) : (
       <AccessWorkspaceState
         title="Проверка доступа недоступна"
-        text="ORION не выдаёт полномочия без подтверждения текущей версии назначения в D1. Повторите после восстановления базы."
+        text="ORION не выдаёт полномочия без подтверждения текущей версии назначения в облачной базе. Повторите после восстановления соединения."
       />
     );
 

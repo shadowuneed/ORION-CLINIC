@@ -12,7 +12,13 @@ export function proxy(request: NextRequest) {
       headers.delete(name);
     }
   }
-  return NextResponse.next({ request: { headers } });
+  const forwarded = NextResponse.next({ request: { headers } });
+  if (!new URL(request.url).pathname.startsWith('/_next/static/')) {
+    forwarded.headers.set('Cache-Control', 'private, no-store, max-age=0');
+    forwarded.headers.set('X-Content-Type-Options', 'nosniff');
+    forwarded.headers.set('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  }
+  return forwarded;
 }
 
 export const config = { matcher: '/:path*' };

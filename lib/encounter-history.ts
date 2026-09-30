@@ -3,7 +3,6 @@ import type {
   ClinicalSuggestion,
   ClinicalSuggestionCategory,
 } from './clinical-contract';
-import { localAccountModeEnabled } from './local-account-mode';
 
 export type SuggestionDecisionStatus = 'pending' | 'accepted' | 'discarded';
 
@@ -58,50 +57,12 @@ export type OrionEncounterRecord = {
   audioError: string | null;
 };
 
-const DATABASE_NAME = 'orion-local-history';
-const DATABASE_VERSION = 1;
 const ENCOUNTERS_STORE = 'encounters';
 
-let databasePromise: Promise<IDBDatabase> | null = null;
-
 function openHistoryDatabase() {
-  if (localAccountModeEnabled()) {
-    return Promise.reject(new Error('Локальный архив прежнего общего профиля изолирован. Используйте сохранённые серверные приёмы.'));
-  }
-  if (typeof window === 'undefined' || !window.indexedDB) {
-    return Promise.reject(
-      new Error('Локальная история недоступна в этом браузере.'),
-    );
-  }
-
-  if (databasePromise) return databasePromise;
-
-  databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = window.indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onerror = () => {
-      databasePromise = null;
-      reject(request.error ?? new Error('Не удалось открыть локальную историю.'));
-    };
-    request.onblocked = () => {
-      databasePromise = null;
-      reject(new Error('Локальная история занята другой вкладкой ORION.'));
-    };
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (database.objectStoreNames.contains(ENCOUNTERS_STORE)) return;
-      const store = database.createObjectStore(ENCOUNTERS_STORE, {
-        keyPath: 'id',
-      });
-      store.createIndex('startedAt', 'startedAt');
-      store.createIndex('status', 'status');
-    };
-    request.onsuccess = () => {
-      request.result.onversionchange = () => request.result.close();
-      resolve(request.result);
-    };
-  });
-
-  return databasePromise;
+  // The legacy archive has no owner/session partition. It must never be opened
+  // in cloud mode, even after a successful login or with a forged UI flag.
+  return Promise.reject<IDBDatabase>(new Error('Общий браузерный архив изолирован и отключён. Используйте сохранённые серверные приёмы.'));
 }
 
 function runRequest<T>(

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev --webpack --hostname 127.0.0.1 --port 3215",
     "build": "next build --webpack",
-    "build:deploy-check": "pnpm build && node scripts/check-deployment-artifact.mjs --dir .next",
+    "build:deploy-check": "pnpm build && node scripts/check-deployment-artifact.mjs --dir .next/server --profile next && node scripts/check-deployment-artifact.mjs --dir .next/static --profile next",
     "start": "next start --hostname 127.0.0.1 --port 3215",
     "dev:local": "vinext dev",
     "build:local": "node scripts/build-user-handbook.mjs && vinext build",
@@ -52,6 +52,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.54.1",
     "@cloudflare/workers-types": "5.20260828.1",
+    "@electric-sql/pglite": "^0.5.8",
     "@openai/sites-vite-plugin": "0.2.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "24.13.3",

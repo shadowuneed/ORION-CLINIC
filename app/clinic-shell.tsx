@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { workspaceNavigationUrl } from '@/lib/workspace-access-url';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { chatGPTSignOutPath } from '@/lib/auth/chatgpt-navigation';
 import { localAccountModeEnabled } from '@/lib/local-account-mode';
 import {
   CalendarClock,
@@ -201,7 +200,7 @@ export function ClinicShell({
                 <a href="/account/password"><KeyRound aria-hidden="true" size={18} />Сменить пароль</a>
                 <a href="/sign-in"><Users aria-hidden="true" size={18} />Другой аккаунт</a>
               </>}
-              <a className={styles.profileSignOut} href={chatGPTSignOutPath()} target="_top"><LogOut aria-hidden="true" size={18} />Выйти</a>
+              <a className={styles.profileSignOut} href="/sign-in" target="_top"><LogOut aria-hidden="true" size={18} />Выйти и сменить аккаунт</a>
             </div>}
           </div>
         </div>

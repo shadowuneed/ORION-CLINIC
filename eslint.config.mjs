@@ -7,6 +7,7 @@ const eslintConfig = defineConfig([
   ...nextTs,
   globalIgnores([
     '.next/**',
+    '.vercel/**',
     '.vinext/**',
     '.wrangler/**',
     '.orion-runtime/**',
