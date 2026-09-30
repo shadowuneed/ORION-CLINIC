@@ -965,6 +965,57 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-09-30 separate Supabase/Vercel cloud foundation (NOT deployed):
+
+- Owner explicitly superseded the Cloudflare deployment direction with two
+  isolated versions. Original `../ORION-CLINIC` remains `main` at
+  `fe5d1c6dfa6edbfddd842c19b020630b31deec38`, with only the owner's pre-existing
+  plan edit. Cloud worktree `../ORION-CLINIC-CLOUD` uses
+  `codex/cloud-vercel-supabase` in the existing ORION repository. No copied local
+  DB, passwords, audio, env files or runtime state; no DIR ECHOES inspection.
+- Dedicated Supabase project `orion-clinic-cloud`, ref `bctyswbqjgpmtsanrfhp`,
+  was created by the owner in Frankfurt; dashboard reports Healthy. Public
+  signups, anonymous sign-ins and manual linking are disabled; email confirmation
+  remains on. Owner entered the new DB password; no credential was read/copied.
+- Applied ONLY `cloud/sql/0001_private_schema_boundary.sql` in that project's
+  SQL Editor. Proof row: `orion_private | false | false | false` for schema USAGE
+  by anon/authenticated/service_role. No patient/staff tables or rows imported.
+- Created/linked ONLY `shadowocc/orion-clinic-cloud` in Vercel, Node24. No
+  deployment upload. Set production ORION_SUPABASE_PROJECT_REF,
+  ORION_SUPABASE_URL and ORION_SYNTHETIC_DATA_ONLY; no DB credential, elevated
+  key or publishable key configured. Ignored Vercel-generated OIDC env was not read.
+- `pnpm.cmd build` PASS: native Next webpack, TypeScript, static generation and
+  tracing. `pnpm.cmd typecheck` PASS. Cloud-only preview at 127.0.0.1:3215 tested
+  all 80 route paths, six forged identity/header probes and four POST probes:
+  clinical ingress stays503. Liveness200 explicitly reports clinicalReady:false.
+  Preview was stopped; original3200/3101 were not touched.
+- `pnpm.cmd exec vitest run cloud/runtime/build-boundary.test.ts
+  app/api/access/route.test.ts lib/cloud/supabase-principal.test.ts
+  lib/config/deployment-artifact.test.ts lib/config/vite-runtime.test.ts
+  --project unit --no-file-parallelism --maxWorkers=1`: PASS5files/134tests.
+  Supabase principal verification is an UNMOUNTED server foundation, not login,
+  assignment authorization or a working PostgreSQL clinical backend.
+- `pnpm.cmd security:dependencies`: PASS, zero reported vulnerabilities after
+  cloud-only narrow toolchain overrides; original lockfile unchanged. Source scan
+  PASS722files; scoped ESLint and diff check PASS. Known-format history scan
+  inspected51commits/972424added lines without matches; this is not universal
+  proof that no secret could ever exist.
+- Final fresh native `pnpm.cmd typecheck` and full `pnpm.cmd lint`: PASS after
+  the packaging regression build; no ignored type errors or lint bypasses.
+- Native artifact surfaces are NOT cleared: `.next/server` guard inspected289
+  files then blocked `app/api/workspace/exports` as private-directory;
+  `.next/static` inspected125 then blocked `chunks/app/api/workspace/exports`.
+  These are legitimate route names but uninspected subtrees. Do not weaken the
+  guard or claim a full `.vercel/output` scan; exact packaging review remains open.
+- `pnpm.cmd build:deploy-check:local`: PASS,522Vinext dist files; generated
+  env/dev.vars names0. This verifies the former build-secret packaging defect is
+  fixed in the CLOUD checkout only. Vinext rewrites generated `.next` route types;
+  a final fresh `pnpm.cmd build` restored native Next types and passed. Do not
+  mix both runtimes concurrently or confuse Vinext packaging with Vercel output.
+- Preserve existing local STT and six local accounts. No external audio, AI call,
+  public bucket, staff invitation, clinical activation or paid plan was performed.
+  See `docs/operations/cloud-supabase-port.md` for remaining migration gates.
+
 2026-09-30 post-restart Cloudflare access and dedicated auth database:
 
 - Cloudflare Bindings/Docs/Builds/Observability tools are now callable. A narrowly
@@ -2146,6 +2197,20 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — two isolated versions, Supabase infrastructure ready, 2026-09-30
+
+Owner chose Supabase instead of Cloudflare for the online test version. Use ONLY
+the new cloud worktree/branch and dedicated Supabase/Vercel projects listed in
+§13; original main, data, staff passwords and STT stay local and unchanged.
+The native Next build succeeds behind a hard-closed clinical proxy. Supabase
+has only a closed private schema; its server Auth verifier is not mounted.
+There is NO working online deployment yet. Do not publish a503 placeholder as
+the finished platform or unlock old Sites-header APIs with an environment flag.
+Next checkpoint: PostgreSQL staff/access and patient read vertical slice, secure
+project-specific credential injection, then session/material account isolation.
+Port atomic writes and storage before broader activation; exact deployment
+artifact review and two-account browser acceptance remain required.
 
 ### Latest operational checkpoint — Cloudflare ready, empty auth D1, 2026-09-30
 
@@ -3613,6 +3678,30 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-09-30, isolated Vercel/Supabase preparation.**
+
+Work in `../ORION-CLINIC-CLOUD`, branch `codex/cloud-vercel-supabase`, not original
+`../ORION-CLINIC/main`. Owner's separate-version request supersedes Cloudflare
+online deployment. Do not delete or mutate the historical empty auth D1.
+Dedicated Supabase ref `bctyswbqjgpmtsanrfhp` is Healthy; signup is closed and
+private schema grants were verified absent. Dedicated Vercel project is
+`shadowocc/orion-clinic-cloud`; created/linked/configured but NOT deployed.
+Native Next production build/typecheck and134focused tests pass. The closed
+proxy returns503 for all unported pages/APIs, even forged identities; only
+liveness returns200 without readiness. No runtime adapter or fake DB exists.
+Next: port PostgreSQL staff/access/patients/latest measurements/dashboard reads;
+mount server-verified Supabase sessions only with internal assignment resolution.
+Never request raw passwords/secret keys in chat; obtain secure project-specific
+server configuration through the owner's credential-entry flow. Do not copy the
+six local account passwords, clinical SQLite data or original env files.
+The current53SQLite migrations/97table declarations/27D1repository files require
+real transaction, trigger, idempotency, audit/revocation and timestamp parity.
+Material isolation, private Storage, clinical writes, exact Vercel artifact scan
+and browser reload/two-account acceptance remain open. Keep clinical ingress
+closed until those mounted routes have their own authorization/persistence proof.
+Local STT has no public exposure; persistent remote compute remains a later
+separate choice. Full evidence/limits are in §13 and the cloud-port document.
 
 **LATEST RESUME — 2026-09-30, restart and Cloudflare access verified.**
 

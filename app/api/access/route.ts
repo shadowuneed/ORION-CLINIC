@@ -6,8 +6,8 @@ import {
   InteractiveServiceAccessForbiddenError,
   MultipleAccessSelectionRequiredError,
   resolveAccessOverview,
-  type AccessAssignmentSummary,
 } from '@/lib/auth/access-governance';
+import { toSelfAccessResponse } from '@/lib/access/self-access-response';
 import {
   getSiteIdentity,
   toSiteIdentityPrincipal,
@@ -24,37 +24,6 @@ export const dynamic = 'force-dynamic';
 const querySchema = z.object({
   assignmentId: z.string().trim().min(1).max(160).optional(),
 });
-
-/**
- * Public self-access contract. Internal user, membership and version-row IDs,
- * legacy roles and raw allow/deny inputs stay on the server.
- */
-export function toSelfAccessResponse(assignment: AccessAssignmentSummary) {
-  return {
-    assignmentId: assignment.assignmentId,
-    assignmentVersion: assignment.assignmentVersion,
-    status: assignment.status,
-    source: assignment.source,
-    effectiveFrom: assignment.effectiveFrom,
-    effectiveUntil: assignment.effectiveUntil,
-    organization: {
-      id: assignment.organization.id,
-      name: assignment.organization.name,
-    },
-    facility: {
-      id: assignment.facility.id,
-      name: assignment.facility.name,
-    },
-    department: {
-      id: assignment.department.id,
-      code: assignment.department.code,
-      name: assignment.department.name,
-      kind: assignment.department.kind,
-    },
-    roles: assignment.roles,
-    effectivePermissions: assignment.effectivePermissions,
-  };
-}
 
 export async function GET(request: Request) {
   const context = createApiRequestContext(request, '/api/access');

@@ -5,8 +5,8 @@
 .pageHeader h1, .panelHeader h2, .assignmentHeader h2, .dialog h2, .state h1 { margin: 0; color: var(--ink); letter-spacing: -.035em; }
 .pageHeader h1 { margin-top: 7px; font-size: clamp(2.15rem, 4vw, 3.35rem); line-height: 1; }
 .pageHeader p { margin: 11px 0 0; color: var(--ink-soft); font-size: 1rem; }
-button, input, select, textarea { font: inherit; }
-button { color: inherit; }
+.main button, .main input, .main select, .main textarea, .dialog button, .dialog input, .dialog select, .dialog textarea { font: inherit; }
+.main button, .dialog button { color: inherit; }
 .primaryButton, .secondaryButton, .dangerButton { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; border-radius: 9px; font-size: .875rem; font-weight: 730; cursor: pointer; }
 .primaryButton { border: 1px solid var(--brand); color: #fff; background: var(--brand); }
 .primaryButton:hover { background: var(--brand-strong); }

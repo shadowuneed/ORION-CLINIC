@@ -6,6 +6,9 @@ const privateDirectories = new Set(['.git', '.wrangler', '.orion-runtime', '.ssh
 const privateExtensions = new Set(['.db', '.sqlite', '.sqlite3', '.pem', '.key', '.p12', '.pfx', '.dcm', '.wav', '.webm', '.mp3', '.m4a', '.flac', '.ogg', '.pdf', '.docx', '.zip', '.gz', '.br', '.tar', '.tgz', '.7z', '.rar', '.bz2', '.xz']);
 const privateNames = new Set(['auth.json', '.npmrc', '.yarnrc', '.yarnrc.yml', '.netrc', 'credentials', 'credentials.json', 'service-account.json', 'id_rsa', 'id_ed25519']);
 const credentialPatterns = [
+  ['supabase-secret-key', /\bsb_secret_[A-Za-z0-9_-]{20,}\b/],
+  ['supabase-management-token', /\bsbp_[A-Za-z0-9]{20,}\b/],
+  ['postgresql-credentials', /\bpostgres(?:ql)?:\/\/[^\s"'<>/\\:@]+:[^\s"'<>@]+@/i],
   ['groq-key', /\bgsk_[A-Za-z0-9]{20,}\b/],
   ['openai-key', /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/],
   ['github-token', /\bgh[pousr]_[A-Za-z0-9]{20,}\b/],

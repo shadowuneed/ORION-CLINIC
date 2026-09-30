@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('cloudflare:workers', () => ({ env: {} }));
 
 import type { AccessAssignmentSummary } from '@/lib/auth/access-governance';
-import { GET, toSelfAccessResponse } from './route';
+import { toSelfAccessResponse } from '@/lib/access/self-access-response';
+import { GET } from './route';
 
 function assignment(): AccessAssignmentSummary {
   return {

@@ -7,10 +7,14 @@
     "node": ">=24.19.0 <25"
   },
   "scripts": {
-    "dev": "vinext dev",
-    "build": "node scripts/build-user-handbook.mjs && vinext build",
-    "build:deploy-check": "pnpm build && node scripts/check-deployment-artifact.mjs --dir dist",
-    "start": "vinext start",
+    "dev": "next dev --webpack --hostname 127.0.0.1 --port 3215",
+    "build": "next build --webpack",
+    "build:deploy-check": "pnpm build && node scripts/check-deployment-artifact.mjs --dir .next",
+    "start": "next start --hostname 127.0.0.1 --port 3215",
+    "dev:local": "vinext dev",
+    "build:local": "node scripts/build-user-handbook.mjs && vinext build",
+    "build:deploy-check:local": "pnpm build:local && node scripts/check-deployment-artifact.mjs --dir dist",
+    "start:local": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --no-file-parallelism --maxWorkers=1",

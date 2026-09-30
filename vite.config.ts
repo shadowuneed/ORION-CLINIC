@@ -117,7 +117,13 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
       ...(localCredentials ? [] : [sites()]),
       cloudflare({
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
-        config: localBindingConfig,
+        config: {
+          ...localBindingConfig,
+          // Production bundles never inherit local preview credentials. Keep
+          // normal local serving unchanged; runtime secrets are provisioned
+          // separately by the chosen deployment host, never packaged here.
+          ...(command === 'build' ? { secrets: { required: [] } } : {}),
+        },
       }),
     ],
   };

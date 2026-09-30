@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { checkDeploymentArtifact } from '../../scripts/check-deployment-artifact.mjs';
+import { scanRepositoryText } from '../../scripts/scan-secrets.mjs';
 
 // All fixture material is generated and artificial; no local secrets are opened.
 async function fixture(files: Record<string, string | Buffer>) {
@@ -17,6 +18,32 @@ async function fixture(files: Record<string, string | Buffer>) {
 }
 
 describe('deployment artifact safety boundary', () => {
+  it.each([
+    ['supabase-secret-key', 'sb_secret_' + 'a'.repeat(30)],
+    ['supabase-management-token', 'sbp_' + 'b'.repeat(40)],
+    ['postgresql-credentials', 'postgresql://orion:' + 'c'.repeat(20) + '@db.invalid/orion'],
+    ['postgresql-credentials', 'postgres://orion:' + 'p%40ss%3Aword' + '@db.invalid/orion'],
+  ])('redacts and rejects %s in source and artifacts', async (rule, artificial) => {
+    const content = `export const connection = '${artificial}';`;
+    const source = scanRepositoryText('lib/fixture.ts', content);
+    expect(source).toContainEqual({ filePath: 'lib/fixture.ts', line: 1, rule });
+    const result = await checkDeploymentArtifact(await fixture({ 'server/app.js': content }));
+    expect(result.findings).toContainEqual({ path: 'server/app.js', rule });
+    expect(result.safe).toBe(false);
+    expect(JSON.stringify([source, result])).not.toContain(artificial);
+  });
+  it('does not classify public Supabase keys or passwordless database URLs as private credentials', async () => {
+    const publicValues = ['sb_publishable_' + 'a'.repeat(30), 'postgresql://orion@db.invalid/orion', 'postgresql://db.invalid/orion'];
+    const content = JSON.stringify(publicValues);
+    expect(scanRepositoryText('lib/fixture.ts', content)).toEqual([]);
+    expect((await checkDeploymentArtifact(await fixture({ 'assets/app.js': content }))).safe).toBe(true);
+  });
+  it('allows an explicitly placeholder database password in source, but not in a deployment artifact', async () => {
+    const content = 'postgresql://orion:your_password@db.invalid/orion';
+    expect(scanRepositoryText('.env.example', content)).toEqual([]);
+    const result = await checkDeploymentArtifact(await fixture({ 'server/app.js': content }));
+    expect(result.findings).toContainEqual({ path: 'server/app.js', rule: 'postgresql-credentials' });
+  });
   it('accepts ordinary generated web assets', async () => {
     expect(await checkDeploymentArtifact(await fixture({ 'index.html': '<main>ORION</main>', 'assets/app.js': 'export const ready = true;' })))
       .toEqual({ files: 2, findings: [], safe: true });
@@ -115,10 +142,12 @@ describe('deployment artifact safety boundary', () => {
     await expect(checkDeploymentArtifact('')).rejects.toThrow('explicit');
     await expect(checkDeploymentArtifact(' ')).rejects.toThrow('explicit');
   });
-  it('offers an explicit post-build artifact gate without changing the local build', async () => {
+  it('offers separate explicit artifact gates for cloud and retained local builds', async () => {
     const pkg = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
     expect(pkg.scripts['security:artifact']).toBe('node scripts/check-deployment-artifact.mjs');
-    expect(pkg.scripts['build:deploy-check']).toBe('pnpm build && node scripts/check-deployment-artifact.mjs --dir dist');
-    expect(pkg.scripts.build).toBe('node scripts/build-user-handbook.mjs && vinext build');
+    expect(pkg.scripts['build:deploy-check']).toBe('pnpm build && node scripts/check-deployment-artifact.mjs --dir .next');
+    expect(pkg.scripts.build).toBe('next build --webpack');
+    expect(pkg.scripts['build:local']).toBe('node scripts/build-user-handbook.mjs && vinext build');
+    expect(pkg.scripts['build:deploy-check:local']).toBe('pnpm build:local && node scripts/check-deployment-artifact.mjs --dir dist');
   });
 });

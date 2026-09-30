@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { ESLint } from 'eslint';
 import type { ConfigEnv, UserConfig } from 'vite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +13,10 @@ vi.mock('vite', () => ({ defineConfig: <T>(config: T) => config }));
 vi.mock('vinext', () => ({ default: () => ({ name: 'vinext-test' }) }));
 vi.mock('@openai/sites-vite-plugin', () => ({ sites: () => ({ name: 'sites-test' }) }));
 vi.mock('@tailwindcss/postcss', () => ({ default: () => ({ postcssPlugin: 'tailwind-test' }) }));
-vi.mock('@cloudflare/vite-plugin', () => ({ cloudflare: () => ({ name: 'cloudflare-test' }) }));
+const { cloudflareMock } = vi.hoisted(() => ({
+  cloudflareMock: vi.fn((options: unknown) => ({ name: 'cloudflare-test', options })),
+}));
+vi.mock('@cloudflare/vite-plugin', () => ({ cloudflare: cloudflareMock }));
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 type ConfigFactory = (environment: ConfigEnv) => Promise<UserConfig>;
@@ -27,6 +32,7 @@ async function personaConfig(command: ConfigEnv['command'] = 'serve', mode = 'te
 }
 
 beforeEach(() => {
+  cloudflareMock.mockClear();
   for (const name of ['WRANGLER_WRITE_LOGS', 'WRANGLER_LOG_PATH', 'MINIFLARE_REGISTRY_PATH']) {
     vi.stubEnv(name, process.env[name]);
   }
@@ -38,6 +44,33 @@ afterEach(() => {
 });
 
 describe('Vite runtime cache isolation', () => {
+  it.each(['production', 'development', 'test'])('excludes local preview secrets from every build mode: %s', async (mode) => {
+    await mainConfig('build', mode);
+    expect(cloudflareMock).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({ secrets: { required: [] } }),
+    }));
+  });
+
+  it.each([['development', false], ['test', false], ['development', true]] as const)('does not change local serving secret resolution: %s preview=%s', async (mode, isPreview) => {
+    await mainConfig('serve', mode, isPreview);
+    const options = cloudflareMock.mock.calls[0]?.[0] as { config: { secrets?: unknown } } | undefined;
+    expect(options).toBeDefined();
+    expect(options?.config).not.toHaveProperty('secrets');
+  });
+
+  it('uses the installed Wrangler allowlist to omit an artificial local secret from build preview variables', async () => {
+    // Only this disposable fixture is read, never the checkout's local credentials.
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'orion-build-secret-filter-'));
+    const fixtureConfig = join(fixtureRoot, 'wrangler.jsonc');
+    const artificial = 'fixture-' + 'x'.repeat(30);
+    await writeFile(fixtureConfig, '{}');
+    await writeFile(join(fixtureRoot, '.dev.vars'), `ORION_BUILD_FILTER_KEY=${artificial}\n`);
+    const { unstable_getVarsForDev } = await import('wrangler');
+    expect(unstable_getVarsForDev(fixtureConfig, undefined, {}, undefined, true, { required: [] })).toEqual({});
+    expect(unstable_getVarsForDev(fixtureConfig, undefined, {}, undefined, true, { required: ['ORION_BUILD_FILTER_KEY'] }))
+      .toEqual({ ORION_BUILD_FILTER_KEY: { type: 'secret_text', value: artificial } });
+  }, 30_000);
+
   it('separates serve, build and preview even when mode and NODE_ENV are identical', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     const dev = await mainConfig('serve', 'development');

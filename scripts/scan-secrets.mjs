@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const maxTextFileBytes = 4 * 1024 * 1024;
@@ -29,6 +29,19 @@ const forbiddenArtifactExtensions = new Set([
 ]);
 
 const secretRules = [
+  {
+    name: 'supabase-secret-key',
+    pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/g,
+  },
+  {
+    name: 'supabase-management-token',
+    pattern: /\bsbp_[A-Za-z0-9]{20,}\b/g,
+  },
+  {
+    name: 'postgresql-credentials',
+    pattern: /\bpostgres(?:ql)?:\/\/[^\s"'<>/\\:@]+:([^\s"'<>@]+)@/gi,
+    valueGroup: 1,
+  },
   {
     name: 'groq-api-key',
     pattern: /\bgsk_[A-Za-z0-9]{20,}\b/g,
@@ -110,7 +123,7 @@ function getRepositoryFiles() {
     .sort();
 }
 
-function scanText(filePath, text) {
+export function scanRepositoryText(filePath, text) {
   const findings = [];
 
   for (const rule of secretRules) {
@@ -146,7 +159,7 @@ function main() {
 
     const buffer = readFileSync(resolve(projectRoot, filePath));
     if (buffer.length > maxTextFileBytes || buffer.includes(0)) continue;
-    findings.push(...scanText(filePath, buffer.toString('utf8')));
+    findings.push(...scanRepositoryText(filePath, buffer.toString('utf8')));
   }
 
   if (findings.length > 0) {
@@ -164,4 +177,4 @@ function main() {
   );
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();

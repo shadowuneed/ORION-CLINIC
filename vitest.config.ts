@@ -15,7 +15,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'unit',
-          include: ['lib/**/*.test.ts', 'app/**/*.test.ts'],
+          include: ['lib/**/*.test.ts', 'app/**/*.test.ts', 'cloud/**/*.test.ts'],
           exclude: ['lib/repositories/**/*.test.ts'],
           testTimeout: 5000,
         },

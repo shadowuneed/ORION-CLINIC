@@ -1,0 +1,108 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import {
+  cloudIngressResponse,
+  CloudRuntimeUnavailableError,
+  env,
+} from './workers-compat';
+
+const request = (pathname: string, method = 'GET', headers?: HeadersInit) =>
+  new Request(`https://orion.example${pathname}`, { method, headers });
+
+describe('cloud build boundary', () => {
+  it.each(['DB', 'FILES', 'GROQ_API_KEY', 'DATABASE_URL', 'LOCAL_SPEECH_URL'])(
+    'does not expose the legacy %s binding',
+    (binding) => {
+      expect(() => env[binding]).toThrow(CloudRuntimeUnavailableError);
+    },
+  );
+
+  it('does not enumerate or modify runtime bindings', () => {
+    expect(() => Object.keys(env)).toThrow(CloudRuntimeUnavailableError);
+    expect(() => Reflect.set(env, 'DB', {})).toThrow(CloudRuntimeUnavailableError);
+    expect(() => 'DB' in env).toThrow(CloudRuntimeUnavailableError);
+  });
+
+  it.each([
+    '/', '/sign-in', '/sign-out', '/access', '/patients', '/patients/patient-a',
+    '/pathway?view=overview', '/scheduling', '/workspace', '/api/patients',
+    '/api/orders', '/api/access', '/api/health/ready', '/api/auth/local/login',
+    '/api/auth/local/logout', '/api/dashboard/briefing', '/api/speech/transcribe',
+    '/_next/data/build-id/patients.json',
+  ])('rejects unported route %s', async (pathname) => {
+    const response = cloudIngressResponse(request(pathname));
+    expect(response?.status).toBe(503);
+    expect(response?.headers.get('Cache-Control')).toContain('no-store');
+  });
+
+  it.each(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])(
+    'cannot enable clinical access with forged identities via %s',
+    (method) => {
+      const response = cloudIngressResponse(request('/api/patients', method, {
+        'oai-authenticated-user-id': 'staff-admin',
+        'oai-authenticated-user-email': 'admin@example.com',
+        'x-orion-local-generation': 'a'.repeat(32),
+        'x-middleware-subrequest': 'proxy:proxy:proxy:proxy:proxy',
+        Authorization: 'Bearer forged',
+        Cookie: 'orion-local-session=forged',
+      }));
+      expect(response?.status).toBe(503);
+    },
+  );
+
+  it('exposes liveness without claiming database or clinical readiness', async () => {
+    const response = cloudIngressResponse(request('/api/health/live'));
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toEqual({
+      status: 'live', runtime: 'node', clinicalReady: false,
+    });
+    const head = cloudIngressResponse(request('/api/health/live', 'HEAD'));
+    expect(head?.status).toBe(200);
+    expect(await head?.text()).toBe('');
+  });
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])(
+    'does not allow writes through liveness via %s',
+    (method) => {
+      expect(cloudIngressResponse(request('/api/health/live', method))?.status).toBe(503);
+    },
+  );
+
+  it('permits only static build assets, not arbitrary framework routes', () => {
+    expect(cloudIngressResponse(request('/_next/static/chunks/app.js'))).toBeNull();
+    expect(cloudIngressResponse(request('/_next/static/chunks/app.js', 'POST'))?.status).toBe(503);
+    expect(cloudIngressResponse(request('/_next/static/%2f..%2fapi/patients'))?.status).toBe(503);
+    expect(cloudIngressResponse(request('/_next/image?url=http://127.0.0.1/'))?.status).toBe(503);
+    expect(cloudIngressResponse(request('/_next/static/../../api/patients'))?.status).toBe(503);
+  });
+
+  it('cannot be unlocked by an environment-ready flag', () => {
+    const previous = process.env.ORION_CLOUD_READY;
+    process.env.ORION_CLOUD_READY = 'true';
+    try {
+      expect(cloudIngressResponse(request('/patients'))?.status).toBe(503);
+    } finally {
+      if (previous === undefined) delete process.env.ORION_CLOUD_READY;
+      else process.env.ORION_CLOUD_READY = previous;
+    }
+  });
+
+  it('uses native Next scripts without changing the retained local scripts', () => {
+    const manifest = JSON.parse(readFileSync(
+      fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8',
+    ));
+    expect(manifest.scripts.build).toBe('next build --webpack');
+    expect(manifest.scripts.dev).toContain('--hostname 127.0.0.1 --port 3215');
+    expect(manifest.scripts['dev:local']).toBe('vinext dev');
+    expect(manifest.scripts['build:local']).toContain('vinext build');
+    const source = readFileSync(
+      fileURLToPath(new URL('../../next.config.ts', import.meta.url)), 'utf8',
+    );
+    expect(source).toContain("'cloudflare:workers'");
+    expect(source).toContain('NormalModuleReplacementPlugin');
+    expect(source).toContain('dataUrlCondition: () => true');
+    expect(source).toContain("__ORION_LOCAL_CREDENTIALS__: 'false'");
+    expect(source).not.toContain('ignoreBuildErrors');
+  });
+});
