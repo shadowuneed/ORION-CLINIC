@@ -17,6 +17,10 @@ not clinical production approval, patient-data residency or recording consent.
   are mounted. A native build is preparation, not a working clinical deployment.
 - Local STT is not exposed online. No laptop proxy, external audio or AI call.
 
+Source checkpoint `eecc79dba87c7788d0be189e0911fa35b062b34a` was pushed to the
+existing GitHub remote's `codex/cloud-vercel-supabase` branch; remote HEAD was
+verified equal. This is source publication only; original main remains untouched.
+
 ## Supabase setup
 
 The owner-facing new-project form was prepared for `orion-clinic-cloud`, Free

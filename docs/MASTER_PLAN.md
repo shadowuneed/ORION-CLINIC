@@ -967,6 +967,10 @@ rendering, authorization, backup, or external integration behavior.
 
 2026-09-30 separate Supabase/Vercel cloud foundation (NOT deployed):
 
+- Cloud source commit `eecc79dba87c7788d0be189e0911fa35b062b34a` was pushed to
+  existing origin `https://github.com/shadowuneed/ORION-CLINIC.git`, branch
+  `codex/cloud-vercel-supabase`. Exact `git ls-remote --heads` matched local HEAD.
+  Original main remains `fe5d1c6d`; this source publication is NOT deployment.
 - Owner explicitly superseded the Cloudflare deployment direction with two
   isolated versions. Original `../ORION-CLINIC` remains `main` at
   `fe5d1c6dfa6edbfddd842c19b020630b31deec38`, with only the owner's pre-existing
@@ -3687,6 +3691,8 @@ online deployment. Do not delete or mutate the historical empty auth D1.
 Dedicated Supabase ref `bctyswbqjgpmtsanrfhp` is Healthy; signup is closed and
 private schema grants were verified absent. Dedicated Vercel project is
 `shadowocc/orion-clinic-cloud`; created/linked/configured but NOT deployed.
+Cloud source checkpoint `eecc79d` is verified on the existing GitHub cloud branch;
+the subsequent documentation receipt does not change application behavior.
 Native Next production build/typecheck and134focused tests pass. The closed
 proxy returns503 for all unported pages/APIs, even forged identities; only
 liveness returns200 without readiness. No runtime adapter or fake DB exists.
