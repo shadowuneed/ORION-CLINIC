@@ -11,6 +11,14 @@ and `git ls-remote origin refs/heads/codex/cloud-vercel-supabase` matched; cloud
 status was clean. This supersedes `bc17cdb775832ccdb84339bf5ef9eff48f23ce8f`.
 The later documentation receipt does not change application code.
 
+## End of day continuation
+
+Owner requested a saved checkpoint for tomorrow after confirming successful login.
+The concise current-state and next-task handoff is
+[cloud-resume-2026-10-01.md](cloud-resume-2026-10-01.md).
+It supersedes earlier next-step summaries where login was still pending. No new
+feature development or deployment is required for this documentation checkpoint.
+
 ## Login compatibility repair — 2026-10-01
 
 Owner reported that their manually created Supabase credentials failed on the

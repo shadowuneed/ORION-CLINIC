@@ -965,6 +965,19 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-10-01 owner-requested end-of-day checkpoint:
+
+- No feature development, migration, deployment, credential or data mutation.
+  Saved concise Russian continuation in cloud-resume-2026-10-01.md, referencing
+  deployed5db36ec / READYdpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ and owner-confirmed login.
+- First next task: real synthetic patient CRUD/history/reload/archive/logout
+  acceptance; two-account/revocation checks remain distinct. Main dashboard and
+  clinical modules remain503; STT deferred. Independent read-only handoff review.
+- Cloud starting HEAD3938af6 matched remote; original mainfe5d1c6 and its sole
+  owner plan change were reverified. Documentation-only checkpoint is saved with
+  tag checkpoint/orion-cloud-2026-10-01. Owner explicitly requested finishing
+  without further checks; no additional verification or feature work is started.
+
 2026-10-01 cloud login refresh-token compatibility repair:
 
 - Owner reported failed manual login on the canonical deployed sign-in. Scoped
@@ -2347,6 +2360,16 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — end of day continuation saved, 2026-10-01
+
+Owner requested a checkpoint for tomorrow. Stop new implementation here; resume
+only on the next owner request. Start with the concise Russian handoff:
+`docs/operations/cloud-resume-2026-10-01.md`. Cloud login is owner-confirmed;
+actual patient CRUD/history/reload/archive/logout acceptance is next. Preserve
+original local version, applied migrations, credentials and all resource boundaries.
+No new automation or unattended task was started. Deployed source remains5db36ec;
+this checkpoint changes documentation only.
 
 ### Latest — cloud login compatibility repair, 2026-10-01
 
@@ -3878,6 +3901,19 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, owner-requested tomorrow checkpoint.**
+
+Read `docs/operations/cloud-resume-2026-10-01.md`, AGENTS and full MASTER_PLAN.
+Cloud branch codex/cloud-vercel-supabase; deployed source5db36ec and owner-confirmed
+login are retained. Start with one synthetic patient create/reload/update/history/
+archive/logout acceptance scenario, not a new module. Two-account/revocation
+proof remains open; no password in chat and no new access grants inferred.
+Then port measured dashboard/observations. Remaining clinical modules503; STT
+deferred. Never replay applied0001–0004, use Windows-prebuilt publication, touch
+original local data/owner plan/3200/3101/STT or any unrelated resources. This
+documentation-only checkpoint is the end of today's requested work, not completion
+of the entire platform or a scheduled automatic continuation.
 
 **LATEST RESUME — 2026-10-01, cloud login token-format repair.**
 
