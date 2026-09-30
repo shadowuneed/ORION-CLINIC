@@ -11,7 +11,7 @@ const subject = '11111111-1111-4111-8111-111111111111';
 const token = `example.${Buffer.from(JSON.stringify({ iss: `${source.ORION_SUPABASE_URL}/auth/v1`, sub: subject,
   session_id: '22222222-2222-4222-8222-222222222222', role: 'authenticated', is_anonymous: false,
   exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.example`;
-const pair = { access_token: token, refresh_token: 'r'.repeat(32), expires_in: 3600, token_type: 'bearer' };
+const pair = { access_token: token, refresh_token: 'r'.repeat(12), expires_in: 3600, token_type: 'bearer' };
 const user = { id: subject, email: 'staff@example.invalid', role: 'authenticated', is_anonymous: false };
 const body = { csrfToken: nonce, email: user.email, password: 'example-password' };
 function request(operation: string, payload: unknown = body, overrides: Record<string, string> = {}, method = 'POST') {
@@ -68,13 +68,14 @@ describe('cloud authentication HTTP boundary', () => {
     expect((await handleCloudAuth('login', request('login', body, { 'Content-Type': 'application/x-www-form-urlencoded' }), source)).status).toBe(415);
     expect((await handleCloudAuth('login', request('login', { ...body, password: 'x'.repeat(13_000) }), source)).status).toBe(400);
   });
-  it('puts tokens only in protected host cookies, never the response JSON', async () => {
+  it('puts a legacy 12-character refresh token only in protected host cookies, never the response JSON', async () => {
     const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(pair)).mockResolvedValueOnce(Response.json(user));
     const response = await handleCloudAuth('login', request('login'), source, { fetch: send });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ authenticated: true });
     const cookies = response.headers.getSetCookie();
     expect(cookies).toHaveLength(4);
+    expect(cookies.find(value => value.startsWith(`${cloudAuthCookies.refresh}=`))).toContain(`${cloudAuthCookies.refresh}=${pair.refresh_token};`);
     for (const value of cookies) {
       expect(value).toContain('Path=/'); expect(value).toContain('Secure');
       if (!value.startsWith(`${cloudAuthCookies.generation}=`)) expect(value).toContain('HttpOnly');

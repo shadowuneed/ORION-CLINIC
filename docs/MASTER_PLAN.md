@@ -965,6 +965,22 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-10-01 cloud login refresh-token compatibility repair:
+
+- Owner reported failed manual login on the canonical deployed sign-in. Scoped
+  ORION Vercel request metadata showed login503 and401, without request bodies,
+  passwords or tokens. Source audit found a minimum16 refresh-token validator;
+  official Supabase Auth source issues legacy12-character tokens. A successful
+  password grant could therefore be rejected before session cookies were set.
+- Fixed all shared password/refresh/logout transport checks to accept bounded
+  cookie-safe opaque tokens of length12–2048. Explicit character rejection also
+  rejects final LF; provider identity verification and authorization are unchanged.
+- Four focused files /104 tests PASS, scoped ESLint and TypeScript PASS; source
+  secret scanner766 files PASS before documentation. Independent read-only review
+  found no blocking regression. Deployment/retry evidence follows in the operation
+  receipt; successful owner login is not yet claimed. No password reset/read or
+  local account import. Original local resources and unrelated resources untouched.
+
 2026-10-01 owner-approved cloud publication (incomplete slice, actual READY):
 
 - Owner expressly requested publication after the Auth/patient-only scope was
@@ -2327,6 +2343,16 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — cloud login compatibility repair, 2026-10-01
+
+Owner manual login failed after publication. Shared refresh transport validation
+now accepts the provider's legacy12-character token format, retaining size/character
+bounds, upstream verification, exact-origin/CSRF and SecureHttpOnly cookies. Focused
+104 tests PASS. Publish the patched clean Git source only to dedicated ORION Vercel,
+then ask owner to retry manually on the canonical origin. Do not read/reset their
+password. Authenticated acceptance and remaining unported modules stay open.
+Full repair/publication receipt: `docs/operations/cloud-checkpoint-2026-10-01.md`.
 
 ### Latest — published Auth/patient cloud slice, 2026-10-01
 
@@ -3846,6 +3872,18 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, cloud login token-format repair.**
+
+Source bug found after owner login failures: minimum16 rejects legacy Supabase12.
+Patched bounded cookie-safe opaque refresh validation for login/refresh/logout;
+provider remains authority. Four focused files104 tests and scoped lint PASS;
+TypeScript and source secret scan766 files PASS after final validation hardening;
+provider Linux build is the publication gate. Publish exact pushed clean source to existing dedicated
+ORION project/canonical alias; never retry Windows-prebuilt output. Owner manually
+retries with their existing Supabase credentials; no password read/reset or local
+credential import. Follow the operation receipt for actual deployment status.
+Do not replay0001–0004 or touch original DB/env/accounts/audio/3200/3101/STT.
 
 **LATEST RESUME — 2026-10-01, cloud deployed; real authenticated acceptance next.**
 

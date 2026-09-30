@@ -11,6 +11,43 @@ and `git ls-remote origin refs/heads/codex/cloud-vercel-supabase` matched; cloud
 status was clean. This supersedes `bc17cdb775832ccdb84339bf5ef9eff48f23ce8f`.
 The later documentation receipt does not change application code.
 
+## Login compatibility repair — 2026-10-01
+
+Owner reported that their manually created Supabase credentials failed on the
+published canonical form. Read-only dedicated Vercel login request metadata showed
+503 responses and one401; no password, request body, cookies or tokens were read.
+Two parallel source audits found no universal client/CSRF navigation blocker.
+
+Confirmed source defect: ORION required refresh tokens of at least16 characters,
+but official Supabase Auth creates legacy12-character refresh tokens:
+https://github.com/supabase/auth/blob/master/internal/models/refresh_token.go
+and recognizes them in
+https://github.com/supabase/auth/blob/master/internal/api/token_refresh.go .
+That makes a valid password response fail locally before cookie publication. This
+is a reproduced provider-format incompatibility, not proof that every observed401
+was caused by it or that the owner's actual password/token was inspected.
+
+The shared validator now accepts length12–2048 and rejects every character outside
+the existing cookie-safe alphabet, including lone LF/CRLF/delimiters. It performs
+transport validation only; Supabase still validates tokens and ORION still verifies
+identity/session claims and internal assignments. No origin, CSRF or cookie guard
+was relaxed. Default mocks now use12 characters;32-character compatibility remains
+tested, with negative short/overlong/injection cases and refresh-only logout.
+
+```powershell
+pnpm.cmd test lib/cloud/auth-session.test.ts lib/cloud/auth-handlers.test.ts lib/cloud/supabase-principal.test.ts app/sign-in/page.test.ts
+pnpm.cmd exec eslint lib/cloud/auth-session.server.ts lib/cloud/auth-session.test.ts lib/cloud/auth-handlers.test.ts
+pnpm.cmd typecheck
+pnpm.cmd security:secrets
+```
+
+Four files /104 tests PASS; scoped ESLint and final TypeScript PASS. Source secret
+scan766 files PASS after this receipt; native provider build is the publication
+gate. Independent read-only diff
+review found no material regression. Updated deployment and owner retry remain
+pending at this source checkpoint. Owner password is unchanged and never read;
+local resources/data and all unrelated resources remain untouched.
+
 ## Exact preservation boundary
 
 - Cloud checkout only: `ORION-CLINIC-CLOUD`, `codex/cloud-vercel-supabase`.

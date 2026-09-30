@@ -13,7 +13,7 @@ const claims = { iss: config.supabase.issuer, sub: subject, session_id: sessionI
   exp: Math.floor(Date.now() / 1000) + 3600 };
 const jwt = (values = claims) => `example.${Buffer.from(JSON.stringify(values)).toString('base64url')}.example`;
 const token = jwt();
-const pair = { access_token: token, refresh_token: 'r'.repeat(32), expires_in: 3600, token_type: 'bearer',
+const pair = { access_token: token, refresh_token: 'r'.repeat(12), expires_in: 3600, token_type: 'bearer',
   user: { id: subject, app_metadata: { roles: ['administrator'] } } };
 const user = { id: subject, role: 'authenticated', is_anonymous: false, email: 'staff@example.invalid', user_metadata: { role: 'administrator' } };
 const cookie = (value = token) => new Headers({ cookie: `${cloudAuthCookies.access}=${value}` });
@@ -56,10 +56,11 @@ describe('verified cloud identity and password protocol', () => {
     const send = vi.fn<typeof fetch>().mockResolvedValue(Response.json(user));
     await expect(readCloudAuthSession(cookie(jwt(invalid)), source, { fetch: send })).rejects.toThrow('temporarily unavailable');
   });
-  it('uses the password grant then user verification, without profile authority', async () => {
-    const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(pair)).mockResolvedValueOnce(Response.json(user));
+  it.each(['r'.repeat(12), 'r'.repeat(32)])('accepts provider refresh-token formats after password grant and user verification', async (refresh) => {
+    const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ ...pair, refresh_token: refresh })).mockResolvedValueOnce(Response.json(user));
     const result = await exchangeCloudTokens(config, { email: user.email, password: 'example password' }, send);
     expect(result.session.principal.subject).toBe(subject);
+    expect(result.refresh).toBe(refresh);
     expect(send.mock.calls[0][0]).toBe(`${config.supabase.origin}/auth/v1/token?grant_type=password`);
     expect(send.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'error', cache: 'no-store',
       body: JSON.stringify({ email: user.email, password: 'example password' }) }));
@@ -68,8 +69,20 @@ describe('verified cloud identity and password protocol', () => {
   });
   it('rotates the refresh token through the real refresh grant', async () => {
     const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(pair)).mockResolvedValueOnce(Response.json(user));
-    await exchangeCloudTokens(config, { refresh_token: 'r'.repeat(32) }, send);
+    await exchangeCloudTokens(config, { refresh_token: pair.refresh_token }, send);
     expect(send.mock.calls[0][0]).toBe(`${config.supabase.origin}/auth/v1/token?grant_type=refresh_token`);
+    expect(send.mock.calls[0][1]?.body).toBe(JSON.stringify({ refresh_token: pair.refresh_token }));
+  });
+  it.each(['r'.repeat(11), 'r'.repeat(2049), `${'r'.repeat(12)};injected=value`, `${'r'.repeat(12)}\r\n`, `${'r'.repeat(12)}\n`,
+    `${'r'.repeat(12)} space`, `${'r'.repeat(12)}%2e`])('rejects unsafe refresh transport before provider access', async (refresh) => {
+    const send = vi.fn<typeof fetch>();
+    await expect(exchangeCloudTokens(config, { refresh_token: refresh }, send)).rejects.toThrow('authentication was rejected');
+    expect(send).not.toHaveBeenCalled();
+  });
+  it.each(['r'.repeat(11), 'r'.repeat(2049), `${'r'.repeat(12)};injected=value`, `${'r'.repeat(12)}\r\n`, `${'r'.repeat(12)}\n`])('rejects unsafe refresh transport in a provider response', async (refresh) => {
+    const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ ...pair, refresh_token: refresh }));
+    await expect(exchangeCloudTokens(config, { email: user.email, password: 'example password' }, send)).rejects.toThrow('temporarily unavailable');
+    expect(send).toHaveBeenCalledTimes(1);
   });
   it.each([400, 401, 403, 422, 429])('sanitizes upstream denial %s', async (status) => {
     const send = vi.fn<typeof fetch>().mockResolvedValue(new Response('example-password', { status }));
@@ -93,6 +106,14 @@ describe('verified cloud identity and password protocol', () => {
     const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
     expect(await revokeCloudSession(config, cookie(), send)).toBe(true);
     expect(send.mock.calls[0][0]).toBe(`${config.supabase.origin}/auth/v1/logout?scope=local`);
+  });
+  it('can revoke a refresh-only legacy session after provider verification', async () => {
+    const send = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(pair)).mockResolvedValueOnce(Response.json(user))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    expect(await revokeCloudSession(config, new Headers({ cookie: `${cloudAuthCookies.refresh}=${pair.refresh_token}` }), send)).toBe(true);
+    expect(send.mock.calls[0][0]).toBe(`${config.supabase.origin}/auth/v1/token?grant_type=refresh_token`);
+    expect(send.mock.calls[1][0]).toBe(`${config.supabase.origin}/auth/v1/user`);
+    expect(send.mock.calls[2][0]).toBe(`${config.supabase.origin}/auth/v1/logout?scope=local`);
   });
   it('does not claim provider logout on an upstream outage', async () => {
     const send = vi.fn<typeof fetch>().mockRejectedValue(new Error('example provider failure'));

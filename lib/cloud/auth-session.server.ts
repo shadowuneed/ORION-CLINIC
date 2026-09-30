@@ -9,7 +9,11 @@ export const cloudAuthCookies = Object.freeze({
   generation: '__Host-orion-cloud-generation',
 });
 const JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-const REFRESH = /^[A-Za-z0-9_-]{16,2048}$/;
+// Supabase also issues 12-character legacy refresh tokens. This only bounds
+// opaque, cookie-safe transport; authenticity is checked by the provider.
+function validRefreshToken(value: string): boolean {
+  return value.length >= 12 && value.length <= 2048 && !/[^A-Za-z0-9_-]/.test(value);
+}
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export type CloudAuthSession = Readonly<{ principal: IdentityPrincipal; sessionId: string }>;
 export type CloudTokenPair = Readonly<{ access: string; refresh: string; expiresIn: number; session: CloudAuthSession }>;
@@ -101,7 +105,7 @@ export async function readCloudAuthJson(response: Response, limit = 65_536): Pro
 export async function exchangeCloudTokens(config: CloudAuthConfig,
   grant: { email: string; password: string } | { refresh_token: string }, send: typeof fetch = fetch): Promise<CloudTokenPair> {
   config = validateConfig(config);
-  if ('refresh_token' in grant && !REFRESH.test(grant.refresh_token)) throw new CloudAuthRejectedError();
+  if ('refresh_token' in grant && !validRefreshToken(grant.refresh_token)) throw new CloudAuthRejectedError();
   const url = `${config.supabase.origin}/auth/v1/token?grant_type=${'email' in grant ? 'password' : 'refresh_token'}`;
   let response: Response;
   try {
@@ -116,7 +120,7 @@ export async function exchangeCloudTokens(config: CloudAuthConfig,
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CloudIdentityUnavailableError();
   const pair = body as Record<string, unknown>;
   if (typeof pair.access_token !== 'string' || pair.access_token.length > 3800 || !JWT.test(pair.access_token) ||
-    typeof pair.refresh_token !== 'string' || !REFRESH.test(pair.refresh_token) || pair.token_type !== 'bearer' ||
+    typeof pair.refresh_token !== 'string' || !validRefreshToken(pair.refresh_token) || pair.token_type !== 'bearer' ||
     typeof pair.expires_in !== 'number' || !Number.isSafeInteger(pair.expires_in) || pair.expires_in < 1 || pair.expires_in > 86_400) {
     throw new CloudIdentityUnavailableError();
   }
@@ -130,7 +134,7 @@ export async function revokeCloudSession(config: CloudAuthConfig, headers: Heade
   let token = readCloudAccessToken(headers);
   const refresh = cloudCookie(headers, cloudAuthCookies.refresh);
   if ((hasCookie(headers, cloudAuthCookies.access) && !token) ||
-    (hasCookie(headers, cloudAuthCookies.refresh) && (!refresh || !REFRESH.test(refresh)))) throw new CloudIdentityUnavailableError();
+    (hasCookie(headers, cloudAuthCookies.refresh) && (!refresh || !validRefreshToken(refresh)))) throw new CloudIdentityUnavailableError();
   if (!token && !refresh) return true;
   if (!token && refresh) token = (await exchangeCloudTokens(config, { refresh_token: refresh }, send)).access;
   const url = `${config.supabase.origin}/auth/v1/logout?scope=local`;
