@@ -967,6 +967,11 @@ rendering, authorization, backup, or external integration behavior.
 
 2026-09-30 owner-requested cloud stopping checkpoint (source/DB setup, NOT deployed):
 
+- Application checkpoint `cfdbea10219d8af1f79e62911f21187db7304a07` committed
+  and pushed to existing origin's `codex/cloud-vercel-supabase`; exact local
+  HEAD and `git ls-remote --heads origin codex/cloud-vercel-supabase` matched.
+  Cloud worktree was clean after push. Subsequent documentation receipt changes
+  no application code. This does not establish Vercel deployment.
 - Supersedes the earlier unmounted-Auth/closed-all-APIs foundation below. Cloud
   Auth/login/CSRF/refresh/logout/session and patient list/detail/create/update/
   archive are mounted in native Next source. JWT + live session + current
@@ -3746,6 +3751,9 @@ Do not touch:
 Work in `../ORION-CLINIC-CLOUD`, branch `codex/cloud-vercel-supabase`, not original
 `../ORION-CLINIC/main`. Owner's separate-version request supersedes Cloudflare
 online deployment. Do not delete or mutate the historical empty auth D1.
+Application checkpoint `cfdbea10219d8af1f79e62911f21187db7304a07` was pushed;
+exact remote/local SHA equality and clean cloud status verified. Later receipt
+commit is documentation-only. Do not equate source push with deployment.
 Dedicated Supabase ref `bctyswbqjgpmtsanrfhp`:0001+0002+0003 applied;18private RLS
 tables/six narrow RPCs and exact owner doctor+administrator assignment verified.
 Never rerun0002/0003 or infer grants from first signup. Dedicated Vercel project

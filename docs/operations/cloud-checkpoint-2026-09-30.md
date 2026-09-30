@@ -4,6 +4,11 @@ Owner requested a bounded stopping point, not a partial deployment represented
 as the finished platform. This checkpoint is **source + applied database setup**.
 There is **no published Vercel deployment or verified project URL** yet.
 
+Application source checkpoint:
+`cfdbea10219d8af1f79e62911f21187db7304a07`. Pushed to the existing ORION remote's
+`codex/cloud-vercel-supabase`; exact local/remote SHA equality and clean cloud
+status verified. Later documentation receipt does not change application code.
+
 ## Preserve these boundaries
 
 - Work only in `ORION-CLINIC-CLOUD`, branch `codex/cloud-vercel-supabase`.
