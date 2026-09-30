@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-30
+- Last updated: 2026-10-01
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -964,6 +964,49 @@ Build success does not prove microphone, STT, role separation, real Word/PDF
 rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
+
+2026-10-01 resumed cloud pagination/security checkpoint (0004 APPLIED, NOT deployed):
+
+- Worked only in separate `ORION-CLINIC-CLOUD/codex/cloud-vercel-supabase`.
+  Original main remains `fe5d1c6dfa6edbfddd842c19b020630b31deec38` with only
+  the owner's pre-existing plan edit; local DB/accounts/env/audio/3200/3101/STT
+  and all DIR ECHOES resources untouched.
+- Added bounded directory/detail/history SQL, strict scoped cursor transport and
+  history API; UI first25/load-more/refresh/deduplication and stale account/scope
+  fences. Unported cloud photo/vitals/encounter actions are disabled explicitly.
+  No silently hidden historical data or invented measurements.
+- Reviewed SQL 0004 SHA256
+  `283FD54B4775E3D0549E3784D4489ABCB26BAD647F6DF09D2C8CF8E9E1B9BB19`.
+  Owner explicitly approved this migration at action time. Entire copied-back
+  editor selection matched reviewed source after newline normalization. Applied
+  once in dedicated Supabase `bctyswbqjgpmtsanrfhp`; SQL Editor SUCCESS.
+- Fresh remote read-only catalog:18private tables/allRLS=true/direct API table
+  grants0/authenticated schemaUSAGE=false;7public RPCs/authenticatedEXEC7/
+  anon+serviceEXEC0/private-helper APIEXEC0;3new indexes/1list signature;
+  assignments1/patients0. 0002/0003 were not replayed. **Do not replay 0004.**
+- Mutation response byte/scalar/generated-cursor validation now finishes inside
+  the committing transaction, preserving audit/idempotency rollback. Existing
+  private patient-command body unchanged. Current SQL assignment version is
+  response authority; stale application preflight cannot cause false post-commit
+  failure. Live keysets are documented as not frozen snapshots.
+- Fresh dependency audit found critical GHSA-vcvr-r3jv-pc5j/CVE-2026-94545;
+  cloud Next/eslint-config-next16.3.3→16.3.6. Post-update audit PASS/no known
+  vulnerabilities; no scoped next/og usage or exploitation claim.
+- Post-update focused suite19files/438tests PASS47.25s, full lint/typecheck PASS.
+  Final source secret scanner766files PASS; diff whitespace check PASS.
+  Native build/server317+static133 guards PASS. Exact Vercel standalone build
+  PASS; dry-run3confirmed internal aliases, materialized only those; final530file
+  artifact guard PASS. No upload/deployment or finished project URL.
+- Agent focused SQL11/11PASS19.75s and UI18/18PASS; independent final read-only
+  pagination/security review found no new blocker. SQL disposable fixtures include
+  1005profile versions/1101encounters, actual DTO integration and forced output/
+  cursor/audit/head/idempotency rollback; no remote synthetic fixtures imported.
+- Live HTTPS Auth/CRUD/reload/revocation/two-account acceptance remains open.
+  Canonical secure origin/cookies cannot be tested honestly on HTTP loopback.
+  Pending owner decision: publish the explicitly incomplete Auth/patient slice
+  for HTTPS acceptance, not present it as the completed platform. Remaining `/`,
+  pathway and clinical/storage routes stay503. No measured quota/CWV claim.
+  Exact continuation: `docs/operations/cloud-checkpoint-2026-10-01.md`.
 
 2026-09-30 owner-requested cloud stopping checkpoint (source/DB setup, NOT deployed):
 
@@ -2259,6 +2302,24 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — resumed cloud bounded pagination, 2026-10-01
+
+Owner resumed the cloud branch. Bounded patient paging, scoped continuation API,
+stale-request UI fences and atomic response validation are implemented and tested.
+Owner-approved forward0004 is APPLIED once in Supabase;18privateRLS tables and
+7authenticated-only RPCs verified. Never rerun0002/0003/0004. Cloud Next16.3.6
+security update,438focused tests, lint/typecheck/audit/native build and exact530file
+Vercel artifact pass. No deployment or genuine browser Auth/CRUD proof yet.
+The previous unbounded-history risk is superseded by this reviewed contract.
+Original main/local data/accounts/env/3200/3101/STT and unrelated projects are
+preserved. Source/index work does not establish live performance/quota savings.
+Next SINGLE bounded task: explicit owner decision on incomplete Auth/patient
+HTTPS acceptance publication; then dedicated canonical-origin browser login,
+create/update/archive/reload/logout/revocation/two-account verification. No
+credential entry by agent; no origin/cookie weakening or blocked-launch workaround.
+The rest of the platform still stays503 and STT remains deferred. Exact handoff:
+`docs/operations/cloud-checkpoint-2026-10-01.md`.
 
 ### Latest — owner-requested cloud checkpoint and stop, 2026-09-30
 
@@ -3745,6 +3806,28 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, patient pagination applied; HTTPS acceptance remains.**
+
+Continue ONLY in separate `../ORION-CLINIC-CLOUD`, existing cloud branch/origin
+and dedicated projects. Source0004 applied once after explicit owner approval;
+remote catalog18RLS tables/7authenticated-onlyRPCs/0directgrants/0privatehelper
+APIexecute/3indexes/1listsignature, ownerassignment1/patients0. Do NOT replay
+0002/0003/0004 or import original records/accounts. Cloud Next16.3.6 and paired
+bounded DTO/API/UI are ready for the exact new contract; old0002 adapters are not.
+Current checks:438tests, full lint/typecheck/dependency audit, native317+133 and
+Vercel530file artifact guard pass; no upload/deployment/finished URL. Final source
+and Git receipts belong in the new operation checkpoint before ending work.
+Next needs owner's incomplete-slice publication decision and manual password
+entry on configured canonical HTTPS. Test real Auth/CRUD/reload/logout/current
+SQL revocation and two accounts; do not confuse mock/PGlite tests with provider
+acceptance. Prior tool-policy-blocked launch/SQL transport must not be bypassed.
+Directory/encounter paging is live, refreshable, not a frozen snapshot. Real
+Supabase plans/egress/MAU/load/CWV not measured. Session display does not prove
+provider-revocation eviction timing. Remaining root/pathway/clinical/storage
+routes503; port them later as real slices. Local3200/3101/STT unchanged/deferred;
+originalmain still has only owner's plan edit. No DIR ECHOES reads or paid plan.
+Full receipt: `docs/operations/cloud-checkpoint-2026-10-01.md`.
 
 **LATEST RESUME — 2026-09-30, verified cloud source/DB checkpoint; owner asked to stop.**
 

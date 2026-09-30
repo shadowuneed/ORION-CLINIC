@@ -22,10 +22,12 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { EncounterSummary, PatientDetail } from '@/lib/repositories/patient-registry';
+import type { EncounterSummary, PatientContinuationPage, PatientDetail, PatientProfileHistoryEntry } from '@/lib/repositories/patient-registry';
 import type { LatestPatientVitals } from '@/lib/repositories/patient-observations';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
 import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
+import { readCloudGenerationCookie } from '@/lib/cloud/account-fence';
+import { appendPatientRows, createPatientRequestFence, isPatientContinuationPage } from '../pagination-client';
 import styles from '../patients.module.css';
 import { PatientVitalsPanel, type PatientVitalsState } from './patient-vitals-panel';
 
@@ -45,6 +47,16 @@ type DetailResponse = {
     requestId?: string;
     details?: { currentVersion?: number; currentStatus?: string };
   };
+};
+
+type HistoryKind = 'profile' | 'encounters';
+type HistoryResponse = {
+  items?: PatientProfileHistoryEntry[] | EncounterSummary[];
+  page?: PatientContinuationPage;
+  historyKind?: HistoryKind;
+  patientId?: string;
+  profileVersion?: number;
+  error?: DetailResponse['error'];
 };
 
 const encounterStatus: Record<EncounterSummary['status'], string> = {
@@ -97,14 +109,21 @@ export function PatientDetailView({
   patientId,
   facilityId,
   accessAssignmentId,
+  photoAvailable = true,
+  vitalsAvailable = true,
+  encounterWorkspaceAvailable = true,
 }: {
   patientId: string;
   facilityId?: string;
   accessAssignmentId?: string;
+  photoAvailable?: boolean;
+  vitalsAvailable?: boolean;
+  encounterWorkspaceAvailable?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [data, setData] = useState<DetailResponse>({});
+  const [loadedScope, setLoadedScope] = useState('');
   const encounterUrl = (id: string) => scopedWorkspaceUrl(`/?encounterId=${encodeURIComponent(id)}`, {
     accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '',
     facilityId: data.facility?.id ?? facilityId ?? '',
@@ -121,6 +140,10 @@ export function PatientDetailView({
   const encounterKey = useRef<string | null>(null);
   const updateKey = useRef<string | null>(null);
   const archiveKey = useRef<string | null>(null);
+  const requests = useRef(createPatientRequestFence(() => readCloudGenerationCookie(document.cookie)));
+  const [historyState, setHistoryState] = useState<Record<HistoryKind, { loading: boolean; error: string | null }>>({
+    profile: { loading: false, error: null }, encounters: { loading: false, error: null },
+  });
   const accessParams = new URLSearchParams();
   if (facilityId) accessParams.set('facilityId', facilityId);
   if (accessAssignmentId) {
@@ -129,28 +152,46 @@ export function PatientDetailView({
   const facilityQuery = accessParams.size ? `?${accessParams}` : '';
 
   const load = useCallback(async () => {
+    requests.current.retire();
+    const request = requests.current.begin('detail');
     setState('loading');
+    setData({});
+    setEncounterOpen(false);
+    setEditOpen(false);
+    setArchiveOpen(false);
+    setSaving(false);
+    setProfileSaving(false);
+    setPhotoSaving(false);
+    setProfileError(undefined);
+    setMessage(null);
+    setHistoryState({ profile: { loading: false, error: null }, encounters: { loading: false, error: null } });
     try {
       const response = await fetch(`/api/patients/${encodeURIComponent(patientId)}${facilityQuery}`, {
         cache: 'no-store',
         credentials: 'same-origin',
+        signal: request.signal,
       });
       const payload = (await response.json()) as DetailResponse;
+      if (!request.current()) return;
       setData(payload);
+      setLoadedScope(`${patientId}${facilityQuery}`);
       setState(response.ok && payload.patient ? 'ready' : 'error');
     } catch {
-      setState('error');
+      if (request.current()) setState('error');
+    } finally {
+      request.finish();
     }
   }, [facilityQuery, patientId]);
 
   useEffect(() => {
+    const fence = requests.current;
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); fence.retire(); };
   }, [load]);
 
   useEffect(() => {
-    if (state !== 'ready' || !data.patient) return;
-    const controller = new AbortController();
+    if (!vitalsAvailable || state !== 'ready' || loadedScope !== `${patientId}${facilityQuery}` || !data.patient) return;
+    const request = requests.current.begin('vitals');
     const params = new URLSearchParams({ patientId: data.patient.id });
     const exactFacility = data.facility?.id ?? facilityId;
     const exactAssignment = data.accessAssignment?.assignmentId ?? accessAssignmentId;
@@ -159,20 +200,103 @@ export function PatientDetailView({
     const scopeKey = `${data.patient.id}:${exactFacility ?? ''}:${exactAssignment ?? ''}`;
     const timer = window.setTimeout(() => setMeasurement({ state: 'loading', value: null, scopeKey }), 0);
     void fetch(`/api/observations/latest-vitals?${params}`, {
-      cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
+      cache: 'no-store', credentials: 'same-origin', signal: request.signal,
     }).then(async (response) => {
       if (!response.ok) throw new Error('Measurement unavailable');
       const payload = await response.json() as { vitals: LatestPatientVitals };
-      if (!controller.signal.aborted) setMeasurement({ state: 'ready', value: payload.vitals, scopeKey });
+      if (request.current()) setMeasurement({ state: 'ready', value: payload.vitals, scopeKey });
     }).catch(() => {
-      if (!controller.signal.aborted) setMeasurement({ state: 'unavailable', value: null, scopeKey });
+      if (request.current()) setMeasurement({ state: 'unavailable', value: null, scopeKey });
     });
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [state, data.patient, data.facility?.id, data.accessAssignment?.assignmentId, facilityId, accessAssignmentId]);
+    return () => { window.clearTimeout(timer); request.cancel(); };
+  }, [state, data.patient, data.facility?.id, data.accessAssignment?.assignmentId, facilityId, accessAssignmentId, vitalsAvailable, loadedScope, patientId, facilityQuery]);
+
+  async function loadHistory(kind: HistoryKind) {
+    const patient = data.patient;
+    const page = kind === 'profile' ? patient?.profileHistoryPage : patient?.encountersPage;
+    if (!patient || state !== 'ready' || historyState[kind].loading || profileSaving || saving || photoSaving || !page?.hasMore || !page.nextCursor) return;
+    const request = requests.current.begin(`${kind}-history`);
+    const params = new URLSearchParams({
+      kind, limit: '25', cursor: page.nextCursor,
+      facilityId: data.facility?.id ?? facilityId ?? '',
+      accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '',
+    });
+    setHistoryState(current => ({ ...current, [kind]: { loading: true, error: null } }));
+    try {
+      const response = await fetch(`/api/patients/${encodeURIComponent(patient.id)}/history?${params}`, {
+        cache: 'no-store', credentials: 'same-origin', signal: request.signal,
+      });
+      const payload = await response.json() as HistoryResponse;
+      if (!request.current()) return;
+      if (response.status === 401 || response.status === 403) {
+        requests.current.retire();
+        setData({ error: payload.error });
+        setState('error');
+        return;
+      }
+      if (!response.ok || !Array.isArray(payload.items) || !isPatientContinuationPage(payload.page) ||
+          payload.patientId !== patient.id || payload.historyKind !== kind || payload.profileVersion !== patient.version) {
+        setHistoryState(current => ({ ...current, [kind]: { loading: false, error: payload.error?.message ?? 'История изменилась или не загрузилась. Показанные записи сохранены. Обновите карточку либо повторите загрузку.' } }));
+        return;
+      }
+      setData(current => {
+        if (!current.patient || current.patient.id !== patient.id || current.patient.version !== patient.version) return current;
+        return { ...current, patient: kind === 'profile' ? {
+          ...current.patient,
+          profileHistory: appendPatientRows(current.patient.profileHistory, payload.items as PatientProfileHistoryEntry[]),
+          profileHistoryPage: payload.page,
+        } : {
+          ...current.patient,
+          encounters: appendPatientRows(current.patient.encounters, payload.items as EncounterSummary[]),
+          encountersPage: payload.page,
+        } };
+      });
+    } catch {
+      if (request.current()) setHistoryState(current => ({ ...current, [kind]: { loading: false, error: 'Сервер не ответил. Показанная история сохранена; повторите загрузку.' } }));
+    } finally {
+      if (request.current()) setHistoryState(current => ({ ...current, [kind]: { ...current[kind], loading: false } }));
+      request.finish();
+    }
+  }
+
+  function beginMutation() {
+    requests.current.retire();
+    setHistoryState({ profile: { loading: false, error: null }, encounters: { loading: false, error: null } });
+    return requests.current.begin('mutation');
+  }
+
+  function clearDeniedMutation(status: number, error: DetailResponse['error']) {
+    if (status !== 401 && status !== 403) return false;
+    requests.current.retire();
+    setData({ error: error ?? { message: 'Сессия или право доступа изменились. Карточка закрыта.' } });
+    setState('error');
+    setEncounterOpen(false);
+    setEditOpen(false);
+    setArchiveOpen(false);
+    setProfileSaving(false);
+    setSaving(false);
+    setPhotoSaving(false);
+    return true;
+  }
+
+  function publishPatient(next: PatientDetail) {
+    setData(current => {
+      const previous = current.patient;
+      if (!previous || previous.id !== next.id) return { ...current, patient: next };
+      const profileIds = new Set(next.profileHistory.map(row => row.id));
+      const encounterIds = new Set(next.encounters.map(row => row.id));
+      return { ...current, patient: {
+        ...next,
+        profileHistory: [...next.profileHistory, ...previous.profileHistory.filter(row => !profileIds.has(row.id))],
+        encounters: [...next.encounters, ...previous.encounters.filter(row => !encounterIds.has(row.id))],
+      } };
+    });
+  }
 
   async function createEncounter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (saving || profileSaving || !encounterWorkspaceAvailable) return;
+    const request = beginMutation();
     const form = new FormData(event.currentTarget);
     const idempotencyKey = encounterKey.current ?? crypto.randomUUID();
     encounterKey.current = idempotencyKey;
@@ -182,6 +306,7 @@ export function PatientDetailView({
       const response = await fetch(`/api/patients/${encodeURIComponent(patientId)}/encounters`, {
         method: 'POST',
         credentials: 'same-origin',
+        signal: request.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reasonForVisit: String(form.get('reasonForVisit') ?? '') || null,
@@ -194,6 +319,8 @@ export function PatientDetailView({
         encounter?: EncounterSummary;
         error?: { message: string };
       };
+      if (!request.current()) return;
+      if (clearDeniedMutation(response.status, payload.error)) return;
       if (!response.ok || !payload.encounter) {
         if (response.status < 500) encounterKey.current = null;
         setMessage(payload.error?.message ?? 'Не удалось создать приём.');
@@ -202,39 +329,46 @@ export function PatientDetailView({
       encounterKey.current = null;
       router.push(encounterUrl(payload.encounter.id));
     } catch {
-      setMessage('Сервер не ответил. Обновите карточку перед повтором.');
+      if (request.current()) setMessage('Сервер не ответил. Обновите карточку перед повтором.');
     } finally {
-      setSaving(false);
+      if (request.current()) setSaving(false);
+      request.finish();
     }
   }
 
   async function replacePhoto(file: File | undefined) {
-    if (!file || photoSaving) return;
+    if (!photoAvailable || !file || photoSaving || profileSaving || saving) return;
+    const request = beginMutation();
     setPhotoSaving(true);
     setMessage(null);
     try {
       const response = await fetch(`/api/patients/${encodeURIComponent(patientId)}/photo${facilityQuery}`, {
         method: 'PUT',
         credentials: 'same-origin',
+        signal: request.signal,
         headers: { 'Content-Type': file.type },
         body: file,
       });
       const payload = (await response.json()) as { error?: { message: string } };
+      if (!request.current()) return;
+      if (clearDeniedMutation(response.status, payload.error)) return;
       if (!response.ok) {
         setMessage(payload.error?.message ?? 'Не удалось сохранить фотографию.');
         return;
       }
       await load();
     } catch {
-      setMessage('Не удалось отправить фотографию.');
+      if (request.current()) setMessage('Не удалось отправить фотографию.');
     } finally {
-      setPhotoSaving(false);
+      if (request.current()) setPhotoSaving(false);
+      request.finish();
     }
   }
 
   async function updateProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (profileSaving || !data.patient) return;
+    if (profileSaving || saving || photoSaving || !data.patient) return;
+    const request = beginMutation();
     const form = new FormData(event.currentTarget);
     const idempotencyKey = updateKey.current ?? crypto.randomUUID();
     updateKey.current = idempotencyKey;
@@ -247,6 +381,7 @@ export function PatientDetailView({
         {
           method: 'PATCH',
           credentials: 'same-origin',
+          signal: request.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId,
@@ -265,27 +400,31 @@ export function PatientDetailView({
         },
       );
       const payload = (await response.json()) as DetailResponse;
+      if (!request.current()) return;
+      if (clearDeniedMutation(response.status, payload.error)) return;
       if (!response.ok || !payload.patient) {
         if (response.status < 500) updateKey.current = null;
         setProfileError(payload.error ?? { message: 'Не удалось сохранить карточку.' });
         return;
       }
       updateKey.current = null;
-      setData((current) => ({ ...current, patient: payload.patient }));
+      publishPatient(payload.patient);
       setEditOpen(false);
       setMessage(`Карточка сохранена как версия ${payload.patient.version}. Предыдущая версия осталась в истории.`);
     } catch {
-      setProfileError({
+      if (request.current()) setProfileError({
         message: 'Сервер не ответил. Не отправляйте новую команду до повторной проверки карточки.',
       });
     } finally {
-      setProfileSaving(false);
+      if (request.current()) setProfileSaving(false);
+      request.finish();
     }
   }
 
   async function archiveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (profileSaving || !data.patient) return;
+    if (profileSaving || saving || photoSaving || !data.patient) return;
+    const request = beginMutation();
     const form = new FormData(event.currentTarget);
     const idempotencyKey = archiveKey.current ?? crypto.randomUUID();
     archiveKey.current = idempotencyKey;
@@ -298,6 +437,7 @@ export function PatientDetailView({
         {
           method: 'POST',
           credentials: 'same-origin',
+          signal: request.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             facilityId,
@@ -310,21 +450,24 @@ export function PatientDetailView({
         },
       );
       const payload = (await response.json()) as DetailResponse;
+      if (!request.current()) return;
+      if (clearDeniedMutation(response.status, payload.error)) return;
       if (!response.ok || !payload.patient) {
         if (response.status < 500) archiveKey.current = null;
         setProfileError(payload.error ?? { message: 'Не удалось архивировать карточку.' });
         return;
       }
       archiveKey.current = null;
-      setData((current) => ({ ...current, patient: payload.patient }));
+      publishPatient(payload.patient);
       setArchiveOpen(false);
       setMessage('Карточка перемещена в архив. Пациент, приёмы и история не удалены.');
     } catch {
-      setProfileError({
+      if (request.current()) setProfileError({
         message: 'Сервер не ответил. Обновите карточку перед повторной командой.',
       });
     } finally {
-      setProfileSaving(false);
+      if (request.current()) setProfileSaving(false);
+      request.finish();
     }
   }
 
@@ -337,7 +480,7 @@ export function PatientDetailView({
     await load();
   }
 
-  const patient = data.patient;
+  const patient = state === 'ready' && loadedScope === `${patientId}${facilityQuery}` ? data.patient : undefined;
   const measurementKey = `${patient?.id ?? ''}:${data.facility?.id ?? facilityId ?? ''}:${data.accessAssignment?.assignmentId ?? accessAssignmentId ?? ''}`;
 
   return (
@@ -352,6 +495,7 @@ export function PatientDetailView({
             {patient.status === 'active' && data.permissions?.canUpdate && (
               <button
                 className={styles.secondaryButton}
+                disabled={profileSaving || saving || photoSaving}
                 onClick={() => {
                   setProfileError(undefined);
                   setEditOpen(true);
@@ -365,6 +509,7 @@ export function PatientDetailView({
             {patient.status === 'active' && data.permissions?.canArchive && (
               <button
                 className={styles.dangerButton}
+                disabled={profileSaving || saving || photoSaving}
                 onClick={() => {
                   setProfileError(undefined);
                   setArchiveOpen(true);
@@ -375,8 +520,8 @@ export function PatientDetailView({
                 Архивировать
               </button>
             )}
-            {patient.status === 'active' && data.permissions?.canCreateEncounter && (
-              <button className={styles.primaryButton} onClick={() => setEncounterOpen(true)} type="button">
+            {patient.status === 'active' && encounterWorkspaceAvailable && data.permissions?.canCreateEncounter && (
+              <button className={styles.primaryButton} disabled={profileSaving || saving || photoSaving} onClick={() => setEncounterOpen(true)} type="button">
                 <CalendarPlus aria-hidden="true" size={19} />
                 Новый приём
               </button>
@@ -416,12 +561,12 @@ export function PatientDetailView({
                 <span>{initials(patient.displayName)}</span>
               )}
               {patient.status === 'active' && (
-                <label className={styles.photoAction}>
+                <label className={styles.photoAction} title={photoAvailable ? undefined : 'Фотографии пока недоступны в облачной версии'}>
                   <Camera aria-hidden="true" size={16} />
-                  {photoSaving ? 'Сохраняем…' : 'Фото'}
+                  {!photoAvailable ? 'Фото недоступно' : photoSaving ? 'Сохраняем…' : 'Фото'}
                   <input
                     accept="image/jpeg,image/png,image/webp"
-                    disabled={photoSaving}
+                    disabled={!photoAvailable || photoSaving || profileSaving || saving}
                     onChange={(event) => void replacePhoto(event.target.files?.[0])}
                     type="file"
                   />
@@ -451,12 +596,19 @@ export function PatientDetailView({
             </div>
           </section>
 
-          <PatientVitalsPanel key={measurementKey} measurement={measurement.scopeKey === measurementKey ? measurement : { state: 'loading', value: null }} patient={patient}
+          {!photoAvailable && <p className={styles.capabilityNotice}>Загрузка фотографий пока недоступна в облачной версии.</p>}
+
+          {vitalsAvailable ? <PatientVitalsPanel key={measurementKey} measurement={measurement.scopeKey === measurementKey ? measurement : { state: 'loading', value: null }} patient={patient}
             measurementsUrl={scopedWorkspaceUrl(`/pathway?view=observations&patientId=${encodeURIComponent(patient.id)}`, {
               accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '', facilityId: data.facility?.id ?? facilityId ?? '',
             })}
             encounterUrl={patient.latestEncounter ? encounterUrl(patient.latestEncounter.id) : null}
-            encounterStatus={patient.latestEncounter ? encounterStatus[patient.latestEncounter.status] : null} />
+            encounterStatus={patient.latestEncounter ? encounterStatus[patient.latestEncounter.status] : null} /> : (
+              <section className={styles.infoPanel}>
+                <header><h2>Измерения пациента</h2></header>
+                <p className={styles.capabilityNotice}>Измерения и клинический рабочий стол пока недоступны в облачной версии. Значения не подставляются автоматически.</p>
+              </section>
+            )}
 
           {message && <div className={styles.detailMessage}>{message}</div>}
 
@@ -485,13 +637,13 @@ export function PatientDetailView({
             <section className={`${styles.infoPanel} ${styles.timelinePanel}`}>
               <header>
                 <h2>История приёмов</h2>
-                <span>{patient.encounters.length}</span>
+                <span>Загружено {patient.encounters.length} из {patient.encounterCount}</span>
               </header>
               {patient.encounters.length === 0 ? (
                 <div className={styles.timelineEmpty}>
                   <Stethoscope aria-hidden="true" size={28} />
                   <strong>Приёмов ещё нет</strong>
-                  <p>Создайте первый приём из этой карточки.</p>
+                  <p>{encounterWorkspaceAvailable ? 'Создайте первый приём из этой карточки.' : 'Создание приёмов пока недоступно в облачной версии.'}</p>
                 </div>
               ) : (
                 <div className={styles.timeline}>
@@ -503,13 +655,21 @@ export function PatientDetailView({
                         <h3>{encounter.reasonForVisit ?? 'Причина обращения не указана'}</h3>
                         <p>{formatTimestamp(encounter.updatedAt)} · версия {encounter.version}</p>
                       </div>
-                      <Link className={styles.encounterOpen} href={encounterUrl(encounter.id)}>
+                      {encounterWorkspaceAvailable ? <Link className={styles.encounterOpen} href={encounterUrl(encounter.id)}>
                         <FileText aria-hidden="true" size={17} />
                         Открыть запись
                         <ArrowUpRight aria-hidden="true" size={16} />
-                      </Link>
+                      </Link> : <span className={styles.capabilityNotice}>Рабочий стол приёма пока недоступен</span>}
                     </article>
                   ))}
+                </div>
+              )}
+              {patient.encountersPage && (
+                <div className={styles.paginationControls}>
+                  <span>{patient.encountersPage.hasMore ? 'Есть более ранние приёмы.' : 'Продолжения текущей истории нет. Новые изменения появятся после обновления.'}</span>
+                  {patient.encountersPage.hasMore && <button className={styles.secondaryButton} disabled={historyState.encounters.loading || profileSaving || saving || photoSaving} onClick={() => void loadHistory('encounters')} type="button">{historyState.encounters.loading ? 'Загружаем…' : 'Загрузить более ранние приёмы'}</button>}
+                  {historyState.encounters.error && <div className={styles.paginationError} role="alert">{historyState.encounters.error}</div>}
+                  <button className={styles.secondaryButton} disabled={historyState.encounters.loading || historyState.profile.loading || profileSaving || saving || photoSaving} onClick={() => void load()} type="button">Обновить карточку с начала</button>
                 </div>
               )}
             </section>
@@ -518,7 +678,7 @@ export function PatientDetailView({
           <section className={`${styles.infoPanel} ${styles.profileHistoryPanel}`}>
             <header>
               <h2><History aria-hidden="true" size={18} /> История карточки</h2>
-              <span>{patient.profileHistory.length}</span>
+              <span>Загружено {patient.profileHistory.length}{patient.profileHistoryCount !== undefined ? ` из ${patient.profileHistoryCount}` : ''}</span>
             </header>
             {patient.profileHistory.length === 0 ? (
               <div className={styles.profileHistoryEmpty}>
@@ -537,6 +697,14 @@ export function PatientDetailView({
                   </li>
                 ))}
               </ol>
+            )}
+            {patient.profileHistoryPage && (
+              <div className={styles.paginationControls}>
+                <span>{patient.profileHistoryPage.hasMore ? 'Есть более ранние версии карточки.' : 'Продолжения текущей истории нет.'}</span>
+                {patient.profileHistoryPage.hasMore && <button className={styles.secondaryButton} disabled={historyState.profile.loading || profileSaving || saving || photoSaving} onClick={() => void loadHistory('profile')} type="button">{historyState.profile.loading ? 'Загружаем…' : 'Загрузить более ранние версии'}</button>}
+                {historyState.profile.error && <div className={styles.paginationError} role="alert">{historyState.profile.error}</div>}
+                <button className={styles.secondaryButton} disabled={historyState.encounters.loading || historyState.profile.loading || profileSaving || saving || photoSaving} onClick={() => void load()} type="button">Обновить карточку с начала</button>
+              </div>
             )}
           </section>
         </>
@@ -637,7 +805,7 @@ export function PatientDetailView({
             <form className={`${styles.patientForm} ${styles.archiveForm}`} onSubmit={archiveProfile}>
               <div className={`${styles.archiveExplanation} ${styles.fieldWide}`}>
                 <Archive aria-hidden="true" size={22} />
-                <p>Карточка исчезнет из активного списка, но пациент, история приёмов, документы и все предыдущие версии останутся в D1.</p>
+                <p>Карточка исчезнет из активного списка, но пациент, история приёмов, документы и все предыдущие версии останутся в базе.</p>
               </div>
               <label className={styles.fieldWide}>
                 <span>Причина архивирования *</span>
@@ -671,7 +839,7 @@ export function PatientDetailView({
           <section aria-labelledby="create-encounter-title" aria-modal="true" className={`${styles.modal} ${styles.modalCompact}`} role="dialog">
             <header className={styles.modalHeader}>
               <div>
-                <span className={styles.eyebrow}>Новая запись в D1</span>
+                <span className={styles.eyebrow}>Новая запись в базе</span>
                 <h2 id="create-encounter-title">Новый приём</h2>
                 <p>{patient.displayName}</p>
               </div>

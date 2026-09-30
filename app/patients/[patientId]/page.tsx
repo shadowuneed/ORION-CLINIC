@@ -37,9 +37,13 @@ export default async function PatientPage({
   return (
     <AuthenticatedClinicPage context={context} requiredCapability="patient-directory">
       <PatientDetailView
+        key={returnTo}
         accessAssignmentId={accessAssignmentId}
         facilityId={facilityId}
         patientId={patientId}
+        photoAvailable={false}
+        vitalsAvailable={false}
+        encounterWorkspaceAvailable={false}
       />
     </AuthenticatedClinicPage>
   );

@@ -31,7 +31,7 @@ export default async function PatientsPage({
 
   return (
     <AuthenticatedClinicPage context={context} requiredCapability="patient-directory">
-      <PatientDirectory />
+      <PatientDirectory key={returnTo} paginated photoAvailable={false} />
     </AuthenticatedClinicPage>
   );
 }

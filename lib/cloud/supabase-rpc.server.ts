@@ -5,11 +5,12 @@ if (typeof window !== 'undefined') throw new Error('Cloud RPC is server-only.');
 export const cloudRpcNames = [
   'orion_access_overview', 'orion_patients_list', 'orion_patient_detail',
   'orion_patient_create', 'orion_patient_update', 'orion_patient_archive',
+  'orion_patient_history_page',
 ] as const;
 export type CloudRpcName = typeof cloudRpcNames[number];
 
 export class CloudRpcError extends Error {
-  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'conflict' | 'unavailable') {
+  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'conflict' | 'invalid' | 'unavailable') {
     super('The cloud database request could not be completed.');
     this.name = 'CloudRpcError';
   }
@@ -86,6 +87,7 @@ export async function callCloudRpc(input: {
   if (response.status === 401) throw new CloudRpcError('unauthenticated');
   if (response.status === 403) throw new CloudRpcError('forbidden');
   if (response.status === 409) throw new CloudRpcError('conflict');
+  if (response.status === 400) throw new CloudRpcError('invalid');
   if (!response.ok) throw new CloudRpcError('unavailable');
   const result = await boundedJson(response);
   if (signal.aborted) throw new CloudRpcError('unavailable');

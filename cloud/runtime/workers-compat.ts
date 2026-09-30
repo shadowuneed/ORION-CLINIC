@@ -63,6 +63,7 @@ export function cloudIngressResponse(request: Request): Response | null {
   if (/^\/patients\/[a-zA-Z0-9_-]{1,160}$/.test(pathname)) allowed = ['GET', 'HEAD'];
   if (/^\/api\/patients\/[a-zA-Z0-9_-]{1,160}$/.test(pathname)) allowed = ['GET', 'PATCH'];
   if (/^\/api\/patients\/[a-zA-Z0-9_-]{1,160}\/archive$/.test(pathname)) allowed = ['POST'];
+  if (/^\/api\/patients\/[a-zA-Z0-9_-]{1,160}\/history$/.test(pathname)) allowed = ['GET'];
   if (allowed) {
     if (allowed.includes(request.method)) return null;
     return new Response(null, { status: 405, headers: { ...responseHeaders, Allow: allowed.join(', ') } });

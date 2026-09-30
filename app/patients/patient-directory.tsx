@@ -14,9 +14,11 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import type { PatientSummary } from '@/lib/repositories/patient-registry';
+import type { PatientContinuationPage, PatientSummary } from '@/lib/repositories/patient-registry';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
 import { chatGPTSignInPath } from '@/lib/auth/chatgpt-navigation';
+import { readCloudGenerationCookie } from '@/lib/cloud/account-fence';
+import { appendPatientRows, createPatientRequestFence, isPatientContinuationPage } from './pagination-client';
 import styles from './patients.module.css';
 
 type DirectoryResponse = {
@@ -26,6 +28,7 @@ type DirectoryResponse = {
   accessAssignment?: { assignmentId: string };
   assignments?: AssignmentOption[];
   patients?: PatientSummary[];
+  page?: PatientContinuationPage;
   error?: {
     code: string;
     message: string;
@@ -93,7 +96,10 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function PatientDirectory() {
+export function PatientDirectory({ paginated = false, photoAvailable = true }: {
+  paginated?: boolean;
+  photoAvailable?: boolean;
+}) {
   const router = useRouter();
   const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<DirectoryResponse>({});
@@ -104,6 +110,8 @@ export function PatientDirectory() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [assignmentOptions, setAssignmentOptions] = useState<AssignmentOption[]>([]);
   const [selectedFacilityId, setSelectedFacilityId] = useState('');
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('');
@@ -111,6 +119,7 @@ export function PatientDirectory() {
   const selectedAssignmentRef = useRef('');
   const statusFilterRef = useRef<PatientListStatus>('active');
   const createKey = useRef<string | null>(null);
+  const requests = useRef(createPatientRequestFence(() => readCloudGenerationCookie(document.cookie)));
 
   const load = useCallback(async (
     search = '',
@@ -118,17 +127,29 @@ export function PatientDirectory() {
     assignmentId = selectedAssignmentRef.current,
     status = statusFilterRef.current,
   ) => {
+    requests.current.retire();
+    const request = requests.current.begin('list');
     setState('loading');
+    setData({});
+    setPageLoading(false);
+    setPageError(null);
+    setCreateOpen(false);
+    setSaving(false);
+    setFormError(null);
+    setPhoto(null);
+    createKey.current = null;
     try {
-      const params = new URLSearchParams({ status, limit: '100' });
+      const params = new URLSearchParams({ status, limit: paginated ? '25' : '100' });
       if (search.trim()) params.set('query', search.trim());
       if (facilityId) params.set('facilityId', facilityId);
       if (assignmentId) params.set('accessAssignmentId', assignmentId);
       const response = await fetch(`/api/patients?${params.toString()}`, {
         cache: 'no-store',
         credentials: 'same-origin',
+        signal: request.signal,
       });
       const payload = (await response.json()) as DirectoryResponse;
+      if (!request.current()) return;
       setData(payload);
       if (response.status === 401) setState('unauthenticated');
       else if (
@@ -139,7 +160,7 @@ export function PatientDirectory() {
         setState('assignment');
       }
       else if (response.status === 403) setState('forbidden');
-      else if (!response.ok || !payload.patients) setState('error');
+      else if (!response.ok || !payload.patients || (paginated && !isPatientContinuationPage(payload.page))) setState('error');
       else {
         const resolvedFacilityId = payload.facility?.id ?? facilityId;
         const resolvedAssignmentId =
@@ -152,11 +173,14 @@ export function PatientDirectory() {
         setState('ready');
       }
     } catch {
-      setState('error');
+      if (request.current()) setState('error');
+    } finally {
+      request.finish();
     }
-  }, []);
+  }, [paginated]);
 
   useEffect(() => {
+    const fence = requests.current;
     const params = new URLSearchParams(window.location.search);
     const facilityId = params.get('facilityId') ?? '';
     const assignmentId = params.get('accessAssignmentId') ?? '';
@@ -174,10 +198,49 @@ export function PatientDirectory() {
       setStatusFilter(status);
       void load('', facilityId, assignmentId, status);
     }, 0);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); fence.retire(); };
   }, [load]);
 
+  async function loadMore() {
+    if (pageLoading || state !== 'ready' || !data.page?.hasMore || !data.page.nextCursor) return;
+    const request = requests.current.begin('list-page');
+    const params = new URLSearchParams({
+      status: statusFilterRef.current, limit: '25', cursor: data.page.nextCursor,
+      facilityId: selectedFacilityRef.current, accessAssignmentId: selectedAssignmentRef.current,
+    });
+    if (appliedQuery) params.set('query', appliedQuery);
+    setPageLoading(true);
+    setPageError(null);
+    try {
+      const response = await fetch(`/api/patients?${params}`, {
+        cache: 'no-store', credentials: 'same-origin', signal: request.signal,
+      });
+      const payload = await response.json() as DirectoryResponse;
+      if (!request.current()) return;
+      if (response.status === 401 || response.status === 403) {
+        requests.current.retire();
+        setData({ error: payload.error });
+        setPageLoading(false);
+        setState(response.status === 401 ? 'unauthenticated' : 'forbidden');
+        return;
+      }
+      if (!response.ok || !payload.patients || !isPatientContinuationPage(payload.page) ||
+          payload.facility?.id !== selectedFacilityRef.current ||
+          payload.accessAssignment?.assignmentId !== selectedAssignmentRef.current) {
+        setPageError(payload.error?.message ?? 'Не удалось загрузить следующую страницу. Уже показанные карточки сохранены; повторите или обновите список.');
+        return;
+      }
+      setData(current => ({ ...current, patients: appendPatientRows(current.patients ?? [], payload.patients!), page: payload.page }));
+    } catch {
+      if (request.current()) setPageError('Сервер не ответил. Уже показанные карточки сохранены; повторите загрузку.');
+    } finally {
+      if (request.current()) setPageLoading(false);
+      request.finish();
+    }
+  }
+
   function selectAssignment(assignment: AssignmentOption) {
+    if (saving || createOpen) return;
     selectedFacilityRef.current = assignment.facilityId;
     selectedAssignmentRef.current = assignment.assignmentId;
     setSelectedFacilityId(assignment.facilityId);
@@ -195,6 +258,7 @@ export function PatientDirectory() {
   }
 
   function selectStatus(status: PatientListStatus) {
+    if (saving || createOpen) return;
     statusFilterRef.current = status;
     setStatusFilter(status);
     const url = new URL(window.location.href);
@@ -211,6 +275,7 @@ export function PatientDirectory() {
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving || createOpen) return;
     const next = query.trim();
     setAppliedQuery(next);
     void load(next);
@@ -219,6 +284,7 @@ export function PatientDirectory() {
   async function createPatient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
+    const request = requests.current.begin('create');
     const form = new FormData(event.currentTarget);
     const idempotencyKey = createKey.current ?? crypto.randomUUID();
     createKey.current = idempotencyKey;
@@ -228,6 +294,7 @@ export function PatientDirectory() {
       const response = await fetch('/api/patients', {
         method: 'POST',
         credentials: 'same-origin',
+        signal: request.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           displayName: String(form.get('displayName') ?? ''),
@@ -247,22 +314,33 @@ export function PatientDirectory() {
         patient?: PatientSummary;
         error?: { message: string };
       };
+      if (!request.current()) return;
+      if (response.status === 401 || response.status === 403) {
+        requests.current.retire();
+        setData({});
+        setCreateOpen(false);
+        setSaving(false);
+        setState(response.status === 401 ? 'unauthenticated' : 'forbidden');
+        return;
+      }
       if (!response.ok || !payload.patient) {
         if (response.status < 500) createKey.current = null;
         setFormError(payload.error?.message ?? 'Не удалось сохранить пациента.');
         return;
       }
 
-      if (photo) {
+      if (photoAvailable && photo) {
         const facilityQuery = selectedFacilityRef.current
           ? `?facilityId=${encodeURIComponent(selectedFacilityRef.current)}&accessAssignmentId=${encodeURIComponent(selectedAssignmentRef.current)}`
           : '';
         const photoResponse = await fetch(`/api/patients/${encodeURIComponent(payload.patient.id)}/photo${facilityQuery}`, {
           method: 'PUT',
           credentials: 'same-origin',
+          signal: request.signal,
           headers: { 'Content-Type': photo.type },
           body: photo,
         });
+        if (!request.current()) return;
         if (!photoResponse.ok) {
           setFormError('Карточка создана, но фотография не сохранилась. Её можно добавить повторно из карточки.');
           createKey.current = null;
@@ -277,9 +355,10 @@ export function PatientDirectory() {
         : '';
       router.push(`/patients/${encodeURIComponent(payload.patient.id)}${facilityQuery}`);
     } catch {
-      setFormError('Сервер не ответил. Обновите список перед повтором.');
+      if (request.current()) setFormError('Сервер не ответил. Обновите список перед повтором.');
     } finally {
-      setSaving(false);
+      if (request.current()) setSaving(false);
+      request.finish();
     }
   }
 
@@ -291,9 +370,9 @@ export function PatientDirectory() {
         <div>
           <span className={styles.eyebrow}>Реестр клиники</span>
           <h1>Пациенты</h1>
-          <p>Карточки, идентификаторы и история приёмов хранятся в D1. Фотографии — в R2.</p>
+          <p>Карточки, идентификаторы и история приёмов загружаются из базы клиники.</p>
         </div>
-        <button className={styles.primaryButton} onClick={() => setCreateOpen(true)} type="button">
+        <button className={styles.primaryButton} disabled={state !== 'ready' || pageLoading} onClick={() => setCreateOpen(true)} type="button">
           <Plus aria-hidden="true" size={19} />
           Добавить пациента
         </button>
@@ -304,11 +383,12 @@ export function PatientDirectory() {
           <Search aria-hidden="true" size={19} />
           <input
             aria-label="Поиск пациентов"
+            disabled={createOpen || saving}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="ФИО, номер карты, тестовый ИИН или телефон"
             value={query}
           />
-          <button type="submit">Найти</button>
+          <button disabled={createOpen || saving} type="submit">Найти</button>
         </form>
         <div aria-label="Статус карточки" className={styles.statusFilter} role="group">
           {([
@@ -319,6 +399,7 @@ export function PatientDirectory() {
             <button
               aria-pressed={statusFilter === value}
               className={statusFilter === value ? styles.statusFilterActive : undefined}
+              disabled={createOpen || saving}
               key={value}
               onClick={() => selectStatus(value)}
               type="button"
@@ -332,6 +413,7 @@ export function PatientDirectory() {
             <span>Рабочий контур</span>
             <select
               aria-label="Рабочий контур реестра"
+              disabled={createOpen || saving}
               onChange={(event) => {
                 const assignment = assignmentOptions.find(
                   (candidate) => candidate.assignmentId === event.target.value,
@@ -350,7 +432,7 @@ export function PatientDirectory() {
         )}
         <div className={styles.storageStatus}>
           <ShieldCheck aria-hidden="true" size={17} />
-          <span>{state === 'ready' ? `${patients.length} в текущей выборке` : 'Проверка базы'}</span>
+          <span>{state === 'ready' ? `Загружено ${patients.length}${data.page?.hasMore ? ' · есть ещё' : ' в текущей выборке'}` : 'Проверка базы'}</span>
         </div>
       </section>
 
@@ -358,7 +440,7 @@ export function PatientDirectory() {
         <div className={styles.statePanel} role="status">
           <OrionMark animated size={48} />
           <h2>Загружаем реестр</h2>
-          <p>Читаем актуальные записи из D1.</p>
+          <p>Читаем актуальные записи из базы клиники.</p>
         </div>
       )}
 
@@ -471,6 +553,19 @@ export function PatientDirectory() {
         </section>
       )}
 
+      {state === 'ready' && data.page && (
+        <div className={styles.paginationControls}>
+          <span>Загружено карточек: {patients.length}. {data.page.hasMore ? 'Следующие записи ещё не загружены.' : 'Продолжения этой выборки нет. Обновите список, чтобы увидеть последние изменения.'}</span>
+          {data.page.hasMore && (
+            <button className={styles.secondaryButton} disabled={pageLoading || createOpen || saving} onClick={() => void loadMore()} type="button">
+              {pageLoading ? 'Загружаем…' : 'Загрузить ещё пациентов'}
+            </button>
+          )}
+          {pageError && <div className={styles.paginationError} role="alert">{pageError}</div>}
+          <button className={styles.secondaryButton} disabled={pageLoading || createOpen || saving} onClick={() => void load(appliedQuery)} type="button">Обновить список с начала</button>
+        </div>
+      )}
+
       {createOpen && (
         <div className={styles.modalBackdrop} role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !saving) setCreateOpen(false);
@@ -478,7 +573,7 @@ export function PatientDirectory() {
           <section aria-labelledby="create-patient-title" aria-modal="true" className={styles.modal} role="dialog">
             <header className={styles.modalHeader}>
               <div>
-                <span className={styles.eyebrow}>Новая запись в D1</span>
+                <span className={styles.eyebrow}>Новая запись в базе</span>
                 <h2 id="create-patient-title">Карточка пациента</h2>
               </div>
               <button aria-label="Закрыть" className={styles.closeButton} disabled={saving} onClick={() => setCreateOpen(false)} type="button">
@@ -523,9 +618,9 @@ export function PatientDirectory() {
                 <Camera aria-hidden="true" size={22} />
                 <span>
                   <strong>{photo ? photo.name : 'Добавить фотографию'}</strong>
-                  <small>JPEG, PNG или WebP · до 4 МБ · файл хранится в R2</small>
+                  <small>{photoAvailable ? 'JPEG, PNG или WebP · до 4 МБ' : 'Фотографии пока недоступны в облачной версии. Карточку можно создать без фото.'}</small>
                 </span>
-                <input accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} type="file" />
+                <input accept="image/jpeg,image/png,image/webp" disabled={!photoAvailable || saving} onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} type="file" />
               </label>
               {formError && <div className={`${styles.formError} ${styles.fieldWide}`}>{formError}</div>}
               <div className={`${styles.formActions} ${styles.fieldWide}`}>

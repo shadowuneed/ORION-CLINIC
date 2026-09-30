@@ -14,6 +14,10 @@ export async function cloudPatientAccess(request: Request, permission: PatientDi
   return { database, access };
 }
 
+export function cloudPatientCursorScope(access: Awaited<ReturnType<typeof cloudPatientAccess>>['access']) {
+  return { organizationId: access.organization.id, facilityId: access.facility.id };
+}
+
 export function cloudPatientFailure(context: ApiRequestContext, error: unknown) {
   if (error instanceof CloudSessionChangedError) return apiFailure(context, 409, 'SESSION_CHANGED', 'Аккаунт изменился. Выполните вход заново.');
   if (error instanceof MultiplePatientAccessSelectionRequiredError) {
@@ -26,6 +30,9 @@ export function cloudPatientFailure(context: ApiRequestContext, error: unknown) 
   }
   if (error instanceof CloudRpcError && error.kind === 'conflict') {
     return apiFailure(context, 409, 'PATIENT_COMMAND_CONFLICT', 'Состояние изменилось. Обновите карточку.');
+  }
+  if (error instanceof CloudRpcError && error.kind === 'invalid') {
+    return apiFailure(context, 400, 'INVALID_PATIENT_REQUEST', 'Проверьте данные запроса или обновите страницу.');
   }
   return apiFailure(context, 503, 'CLOUD_DATABASE_UNAVAILABLE', 'Не удалось подтвердить доступ или сохранить операцию в облачной базе.');
 }

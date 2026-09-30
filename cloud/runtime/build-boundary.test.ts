@@ -55,11 +55,13 @@ describe('cloud build boundary', () => {
     ['/api/auth/cloud/csrf', 'GET'], ['/api/auth/cloud/session', 'GET'], ['/api/auth/cloud/login', 'POST'],
     ['/api/auth/cloud/logout', 'POST'], ['/api/auth/cloud/refresh', 'POST'], ['/api/patients', 'GET'],
     ['/api/patients', 'POST'], ['/api/patients/patient-a', 'PATCH'], ['/api/patients/patient-a/archive', 'POST'],
+    ['/api/patients/patient-a/history', 'GET'],
   ])('forwards only implemented %s %s to independent auth checks', (path, method) => {
     expect(cloudIngressResponse(request(path, method))).toBeNull();
   });
 
-  it.each([['/api/auth/cloud/logout', 'GET'], ['/api/patients/patient-a', 'DELETE'], ['/access', 'POST']])(
+  it.each([['/api/auth/cloud/logout', 'GET'], ['/api/patients/patient-a', 'DELETE'], ['/access', 'POST'],
+    ['/api/patients/patient-a/history', 'POST']])(
     'rejects unimplemented method %s %s', (path, method) => {
       expect(cloudIngressResponse(request(path, method))?.status).toBe(405);
     },

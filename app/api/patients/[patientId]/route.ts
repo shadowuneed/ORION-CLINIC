@@ -1,6 +1,6 @@
 import { updatePatientProfileSchema } from '@/lib/domain/patient';
 import { apiFailure, apiSuccess, createApiRequestContext } from '@/lib/http/api-response';
-import { boundedPatientPayload, cloudPatientAccess, cloudPatientFailure, cloudPatientMutationAllowed } from '@/lib/cloud/patient-api.server';
+import { boundedPatientPayload, cloudPatientAccess, cloudPatientCursorScope, cloudPatientFailure, cloudPatientMutationAllowed } from '@/lib/cloud/patient-api.server';
 import { parseCloudPatientDetail, parseCloudPatientMutation } from '@/lib/cloud/response-contracts';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ pati
       query.get('facilityId') ?? undefined);
     const patient = parseCloudPatientDetail(await database.call('orion_patient_detail', {
       assignment_id: access.assignment.assignmentId, patient_id: patientId, facility_id: access.facility.id,
-    }), access.assignment.assignmentId, patientId);
+    }), access.assignment.assignmentId, patientId, cloudPatientCursorScope(access));
     if (!patient) return apiFailure(context, 404, 'PATIENT_NOT_FOUND', 'Карточка недоступна.');
     return apiSuccess(context, { viewer: { ...access.user, role: access.assignment.roles.join(', ') },
       organization: access.organization, facility: access.facility, accessAssignment: access.assignment,
@@ -38,7 +38,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pa
     void _facility; void _assignment;
     const patient = parseCloudPatientMutation(await database.call('orion_patient_update', {
       assignment_id: access.assignment.assignmentId, facility_id: access.facility.id, payload: { ...payload, patientId },
-    }), access.assignment.assignmentId, patientId);
+    }), access.assignment.assignmentId, patientId, cloudPatientCursorScope(access));
     if (!patient) return apiFailure(context, 404, 'PATIENT_NOT_FOUND', 'Карточка недоступна.');
     return apiSuccess(context, { patient, persistence: 'supabase' });
   } catch (error) { return cloudPatientFailure(context, error); }

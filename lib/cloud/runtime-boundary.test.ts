@@ -39,6 +39,12 @@ function patient() {
     sexAtBirth: 'female', status: 'active', testIin: null, phone: null, email: null, address: null, photoUrl: null,
     encounterCount: 0, latestEncounter: null, createdAt: 1, updatedAt: 1, version: 1 };
 }
+const endPage = { hasMore: false, nextCursor: null };
+function patientDetail() {
+  return { ...patient(), encounters: [], profileHistory: [{ id: 'profile-a', version: 1, status: 'active',
+    changeReason: 'Synthetic create', createdAt: 1, actorDisplayName: 'Synthetic employee' }], profileHistoryCount: 1,
+    encountersPage: endPage, profileHistoryPage: endPage };
+}
 
 beforeEach(() => {
   vi.stubEnv('ORION_SUPABASE_PROJECT_REF', 'a'.repeat(20));
@@ -101,8 +107,8 @@ describe('cloud server runtime authorization boundary', () => {
 describe('cloud response runtime validators', () => {
   it('accepts the exact scoped access and patient response contracts', () => {
     expect(parseCloudAccessOverview(overview()).assignments).toHaveLength(1);
-    expect(parseCloudPatientList({ patients: [patient()], accessAssignmentId: 'assignment-a', observedAt: 1 }, 'assignment-a')).toHaveLength(1);
-    expect(parseCloudPatientDetail({ patient: { ...patient(), encounters: [], profileHistory: [] }, accessAssignmentId: 'assignment-a', observedAt: 1 }, 'assignment-a', 'patient-a')?.id).toBe('patient-a');
+    expect(parseCloudPatientList({ patients: [patient()], page: endPage, accessAssignmentId: 'assignment-a', observedAt: 1 }, 'assignment-a')).toHaveLength(1);
+    expect(parseCloudPatientDetail({ patient: patientDetail(), accessAssignmentId: 'assignment-a', observedAt: 1 }, 'assignment-a', 'patient-a')?.id).toBe('patient-a');
   });
   it('rejects identity inconsistencies and repeated assignments', () => {
     const value = overview();
@@ -121,20 +127,20 @@ describe('cloud response runtime validators', () => {
     for (const item of invalid) expect(() => parseCloudAccessOverview({ ...value, assignments: [item] })).toThrow();
   });
   it('rejects mixed scopes, duplicate patients, extra fields and unscoped photo URLs', () => {
-    const value = { patients: [patient()], accessAssignmentId: 'assignment-a', observedAt: 1 };
+    const value = { patients: [patient()], page: endPage, accessAssignmentId: 'assignment-a', observedAt: 1 };
     expect(() => parseCloudPatientList(value, 'assignment-b')).toThrow();
     expect(() => parseCloudPatientList({ ...value, patients: [patient(), patient()] }, 'assignment-a')).toThrow();
     expect(() => parseCloudPatientList({ ...value, secret: 'synthetic' }, 'assignment-a')).toThrow();
     expect(() => parseCloudPatientList({ ...value, patients: [{ ...patient(), photoUrl: 'https://unscoped.invalid/patient.png' }] }, 'assignment-a')).toThrow();
   });
   it('rejects a different patient identity and mutation-only metadata in a read response', () => {
-    const value = { patient: { ...patient(), encounters: [], profileHistory: [] }, accessAssignmentId: 'assignment-a', observedAt: 1 };
+    const value = { patient: patientDetail(), accessAssignmentId: 'assignment-a', observedAt: 1 };
     expect(() => parseCloudPatientDetail(value, 'assignment-b', 'patient-a')).toThrow();
     expect(() => parseCloudPatientDetail(value, 'assignment-a', 'patient-b')).toThrow();
     expect(() => parseCloudPatientDetail({ ...value, replayed: false }, 'assignment-a', 'patient-a')).toThrow();
   });
   it('validates both committed and replayed mutation wrappers without loosening read responses', () => {
-    const value = { patient: { ...patient(), encounters: [], profileHistory: [] }, accessAssignmentId: 'assignment-a', observedAt: 1 };
+    const value = { patient: patientDetail(), accessAssignmentId: 'assignment-a', observedAt: 1 };
     for (const replayed of [false, true]) expect(parseCloudPatientMutation({ ...value, replayed }, 'assignment-a', 'patient-a').id).toBe('patient-a');
     expect(() => parseCloudPatientMutation(value, 'assignment-a', 'patient-a')).toThrow();
     expect(() => parseCloudPatientMutation({ ...value, replayed: 'true' }, 'assignment-a', 'patient-a')).toThrow();

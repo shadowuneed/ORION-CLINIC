@@ -1,5 +1,9 @@
 # ORION Cloud continuation checkpoint — 2026-09-30
 
+Historical receipt below. The resumed pagination/security checkpoint and applied
+0004 migration are recorded in `cloud-checkpoint-2026-10-01.md`; use that newer
+handoff first. Do not replay already applied migrations.
+
 Owner requested a bounded stopping point, not a partial deployment represented
 as the finished platform. This checkpoint is **source + applied database setup**.
 There is **no published Vercel deployment or verified project URL** yet.

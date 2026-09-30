@@ -106,7 +106,13 @@ export type EncounterSummary = {
 export type PatientDetail = PatientSummary & {
   encounters: EncounterSummary[];
   profileHistory: PatientProfileHistoryEntry[];
+  // Cloud history is explicitly windowed; the local D1 implementation remains complete.
+  profileHistoryCount?: number;
+  encountersPage?: PatientContinuationPage;
+  profileHistoryPage?: PatientContinuationPage;
 };
+
+export type PatientContinuationPage = { hasMore: boolean; nextCursor: string | null };
 
 export type CreatePatientInput = {
   displayName: string;

@@ -27,7 +27,7 @@ describe('typed Supabase server RPC transport', () => {
     await expect(callCloudRpc({ config, accessToken, name: 'orion_patients_list', args: { query: 'x'.repeat(70_000) }, fetch: transport })).rejects.toBeInstanceOf(CloudRpcError);
     expect(transport).not.toHaveBeenCalled();
   });
-  it.each([[401, 'unauthenticated'], [403, 'forbidden'], [409, 'conflict'], [400, 'unavailable'], [500, 'unavailable']])(
+  it.each([[401, 'unauthenticated'], [403, 'forbidden'], [409, 'conflict'], [400, 'invalid'], [500, 'unavailable']])(
     'redacts upstream failure %s', async (status, kind) => {
       const transport = vi.fn().mockResolvedValue(new Response('private upstream content', { status: status as number }));
       await expect(callCloudRpc({ config, accessToken, name: 'orion_access_overview', fetch: transport })).rejects.toMatchObject({ kind, message: 'The cloud database request could not be completed.' });
