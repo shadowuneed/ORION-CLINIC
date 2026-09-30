@@ -1,8 +1,10 @@
 # ORION Cloud resumed checkpoint — 2026-10-01
 
 Owner explicitly resumed the separate cloud checkout. This is a bounded patient
-pagination/security checkpoint, not the completed online platform. There is no
-published Vercel deployment or verified final project URL at this receipt.
+pagination/security checkpoint, not the completed online platform. The owner
+subsequently explicitly instructed publication of this incomplete slice.
+**Published and anonymously verified on 2026-10-01:**
+https://orion-clinic-cloud.vercel.app/sign-in
 Application checkpoint: `021ef89bd53f0de77e8b3593276ac94a38ff1e14`, committed and
 pushed to existing ORION origin's `codex/cloud-vercel-supabase`. Exact local HEAD
 and `git ls-remote origin refs/heads/codex/cloud-vercel-supabase` matched; cloud
@@ -98,8 +100,8 @@ cookies. HTTP loopback cannot prove this login flow. A prior tool-policy-blocked
 local launch/SQL transport must not be retried through alternate env/tunnel/proxy
 workarounds. Do not weaken origin/cookie checks for acceptance.
 
-Next: owner-confirmed publication of the clearly incomplete Auth/patient HTTPS
-acceptance slice on ONLY the dedicated Vercel project, paired with applied 0004.
+Publication is complete; see the receipt below. Next: actual Auth/patient HTTPS
+acceptance on the canonical origin, paired with applied 0004.
 Use the owner's manual password entry; never request it in chat. Verify actual
 login/access, patient create/update/archive/reload, logout/revocation and
 two-account isolation before calling this slice accepted. External session
@@ -112,3 +114,51 @@ orders, care, scheduling, communications/private storage in real vertical slices
 Those routes, including `/` and pathway, remain closed503 today. STT is deferred.
 Do not present an incomplete URL as the finished platform or infer deployment
 from builds/Git push. Ignored `.env*`, `.vercel`, DB/password/media stay untracked.
+
+## Owner-approved Vercel publication receipt
+
+Owner explicitly requested `публикуй. Я же сказал задеплоить` after the scope and
+limitations above were explained. Published ONLY the dedicated ORION project;
+no unrelated account/project/resource or paid build tier was used.
+
+The initial Windows-prebuilt upload failed, not succeeded: Vercel could not resolve
+Windows absolute paths in generated `.vc-config.json` dependency mappings.
+Its failed inspector is https://vercel.com/shadowocc/orion-clinic-cloud/ak6AH7KFFAir13FFMGscfccm4aLn
+Do not reuse that Windows output for future production publication. A local
+artifact policy pass is not cross-platform packaging acceptance.
+
+Recovery used a clean `git archive` of the exact pushed commit
+`f983b995a6f9daefc5d453d59a2b6d34536d24af`, extracted into an isolated temporary
+source directory. No ignored local environment, DB, recordings or credentials
+were copied. Source snapshot had only the tracked `.env.example`; Vercel dry-run
+explicitly excluded it, with zero database/private-key/audio files. Then the
+provider performed its own Linux Next 16.3.6 build; no security/origin bypass.
+
+```powershell
+pnpm.cmd dlx vercel@59.25.4 deploy --dry --json --prod --yes --scope shadowocc --project prj_gi2FOCNltptWjiZA8uLDrojBQUHT
+pnpm.cmd dlx vercel@59.25.4 deploy --prod --yes --scope shadowocc --project prj_gi2FOCNltptWjiZA8uLDrojBQUHT --archive=tgz --meta sourceCommit=f983b995a6f9daefc5d453d59a2b6d34536d24af
+```
+
+Run these from the clean Git snapshot, not a checkout containing ignored files.
+Vercel returned exit0/READY/production, deployment
+`dpl_7VR2qTLRTP2C2To6r7sdJ2oLNGkt`, and assigned the canonical alias:
+
+- Entry: https://orion-clinic-cloud.vercel.app/sign-in
+- Deployment: https://orion-clinic-cloud-ou7mjbghp-shadowocc.vercel.app
+- Inspector: https://vercel.com/shadowocc/orion-clinic-cloud/7VR2qTLRTP2C2To6r7sdJ2oLNGkt
+
+The entry's canonical hostname is required by exact-origin Auth. Deployment
+hostname is diagnostic, not a substitute login URL.
+
+Fresh public HTTPS checks, without passwords/tokens or identity headers:
+sign-in200; health/live200 with `clinicalReady:false`; patient API401;
+unauthenticated session401; CSRF200 with Secure/HttpOnly/__Host cookie flags;
+wrong-Origin CSRF403; pathway503 as intentionally unported. Responses no-store.
+Two actual stylesheet URLs and the webpack script returned200 with correct
+content types. Browser AX and screenshot showed the styled personal email/password
+form, with no shared technical account. Login tab kept as a deliverable.
+
+No owner password was read, entered, stored or reset. This is publication and
+anonymous entry/denial acceptance, not authenticated CRUD/reload/revocation/
+two-account proof or completion of the remaining clinical modules. Cloud login
+uses the manually created Supabase account, not local `accounts.html` credentials.

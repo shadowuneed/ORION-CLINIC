@@ -965,6 +965,28 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-10-01 owner-approved cloud publication (incomplete slice, actual READY):
+
+- Owner expressly requested publication after the Auth/patient-only scope was
+  explained. Published ONLY `shadowocc/orion-clinic-cloud` project
+  prj_gi2FOCNltptWjiZA8uLDrojBQUHT, paired with applied0004.
+- First Windows-prebuilt upload FAILED because `.vc-config.json` contained
+  unresolvable Windows absolute dependency paths. No success claimed; local
+  artifact checks do not establish cross-platform package compatibility.
+- Recovery: clean git archive of pushedf983b995a6f9daefc5d453d59a2b6d34536d24af,
+  dedicated temporary source, no ignored env/DB/recordings/credentials copied;
+  dry-run excluded tracked.env.example and private DB/key/audio count0. Provider
+  Linux build/TypeScript passed, CLI exit0/READY/production; deployment
+  dpl_7VR2qTLRTP2C2To6r7sdJ2oLNGkt, canonical alias assigned.
+- Actual entry https://orion-clinic-cloud.vercel.app/sign-in verified in browser:
+  styled personal email/password form. Public HTTPS checks sign-in200/health200
+  clinicalReady=false/patients401/session401/CSRF200 hostSecureHttpOnly cookie/
+  wrong-OriginCSRF403/pathway503; no-store. Two CSS assets + webpack script200.
+  No owner password entered or read; no logged-in CRUD or two-account acceptance.
+- Original main/data/accounts/env/3200/3101/STT preserved; no DIR ECHOES reads,
+  paid tier, real data or external audio/AI. Local accounts are not cloud users.
+  Full actual deployment receipt in cloud-checkpoint-2026-10-01.md.
+
 2026-10-01 resumed cloud pagination/security checkpoint (0004 APPLIED, NOT deployed):
 
 - Worked only in separate `ORION-CLINIC-CLOUD/codex/cloud-vercel-supabase`.
@@ -2305,6 +2327,21 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — published Auth/patient cloud slice, 2026-10-01
+
+Owner-approved incomplete version is now genuinely published on dedicated Vercel.
+Entry: https://orion-clinic-cloud.vercel.app/sign-in ; deployment
+dpl_7VR2qTLRTP2C2To6r7sdJ2oLNGkt READY. Clean pushed source was built on Linux
+after Windows-prebuilt dependency mappings failed. No local secrets/data copied.
+Canonical HTTPS sign-in/assets/health/anonymous denial/CSRF checks passed and
+browser styled personal login is visible. This supersedes previous NOT deployed
+status, not clinical readiness. All original preservation boundaries remain.
+Next SINGLE bounded task: owner-entered Supabase password, actual Auth/access/
+patient create/update/archive/reload/logout/revocation/two-account acceptance.
+Never request/reset a password in chat or reuse local accounts. Remaining
+dashboard/pathway/clinical/storage routes503; STT remains deferred. Full receipt:
+`docs/operations/cloud-checkpoint-2026-10-01.md`.
 
 ### Latest — resumed cloud bounded pagination, 2026-10-01
 
@@ -3809,6 +3846,22 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, cloud deployed; real authenticated acceptance next.**
+
+Canonical entry https://orion-clinic-cloud.vercel.app/sign-in is published and
+verified. Dedicated ORION deployment dpl_7VR2qTLRTP2C2To6r7sdJ2oLNGkt READY,
+sourcef983b995a6f9daefc5d453d59a2b6d34536d24af from clean git archive, built on
+provider Linux. Windows-prebuilt attempt failed; do not reuse absolute-path
+mapping output. No ignored local DB/env/password/audio was uploaded. Anonymous
+browser/HTTPS entry/assets/health200, patients/session401, CSRF secure hostcookie,
+wrongorigin403 and unportedpathway503 verified. Password not read/entered/reset;
+local accounts.html is not Supabase credentials. Owner enters the password they
+created manually; then run actual Auth/access/CRUD/reload/logout/revocation and
+two-account acceptance. 0001–0004 applied; NEVER replay0002/0003/0004. Original
+main/owner plan edit/localdata/3200/3101/STT untouched. No unrelated resources or
+paid tier. Broader modules stay503 and STT deferred. New operation receipt has
+actual alias/inspector/checks, not finished-platform or clinical approval claims.
 
 **LATEST RESUME — 2026-10-01, patient pagination applied; HTTPS acceptance remains.**
 
