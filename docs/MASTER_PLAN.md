@@ -965,6 +965,44 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-09-30 post-restart Cloudflare access and dedicated auth database:
+
+- Cloudflare Bindings/Docs/Builds/Observability tools are now callable. A narrowly
+  named D1 lookup for `orion-clinic-auth-pilot` returned no database before creation;
+  no broad Worker, Vercel or unrelated-project inventory was performed.
+- Project-local Wrangler4.127.0 initially reported unauthenticated. Owner approved
+  one Opera device flow; `wrangler whoami --account
+  64a5fad5dd97b1e245fca5363b7968db --json` now confirms the exact account and OAuth
+  permissions account/user read, workers_scripts write, workers_tail read and D1
+  write, plus refresh access. Credential values were not inspected or copied.
+  OS-keyring setup was unavailable because npm was not on PATH; Wrangler reported
+  its standard user-level credential-file fallback, outside this repository.
+- Created ONLY dedicated empty D1 `orion-clinic-auth-pilot`, UUID
+  `c14a40da-a007-4085-b255-86c095591153`, in the verified account. Project-local
+  `wrangler d1 info orion-clinic-auth-pilot --json` with the exact account ID
+  confirms the same UUID, no tables and EEUR region. This is a technical auth
+  database, not approval of medical-data residency or a clinical data migration.
+- A remote read-only `SELECT 1 AS connectivity_ok` returned1, success=true,
+  changed_db=false and rows_written=0. Initial combined connectivity/version
+  probe was rejected because D1 disallows sqlite_version(); it made no writes.
+  No migrations, seeds, staff accounts or local passwords were imported. No
+  R2 bucket, Worker publication, paid subscription or Vercel deployment occurred.
+- Independent read-only reviews reconfirmed auth runtime is five-route-only with
+  no usable sign-in form/provisioning authority boundary. Production still has
+  49direct Sites API identity consumers and disables the legacy-history guard;
+  do not open the existing clinical bundle after adding a cloud cookie.
+- Current official Workers limits: Free10ms CPU/request; existing secure scrypt
+  profile N32768/r8/p3 is unchanged and remote CPU/load fit is NOT measured.
+  Paid Workers has a minimum5USD/month plus overage charges. Ask the owner to
+  choose/approve the authentication topology before enabling a paid plan or
+  promising reliable Free-plan password login. Do not weaken the password KDF.
+  Closest safe next checkpoint remains isolated fail-closed auth composition,
+  authorized provisioning/private ingress and trusted browser/load acceptance;
+  an explicit Vercel gateway is a separate slice, not a blind public rewrite.
+- `git rev-parse HEAD` and exact remote main lookup still match4e298cb at this
+  pre-edit checkpoint. Main local DB/audio/migrations and3200/3101 were untouched.
+  Only this operational receipt is edited; application checks were not rerun.
+
 2026-09-30 owner-authorized Git publication and Vercel preflight:
 
 - Explicit owner request authorizes committing/pushing the current checkpoint to
@@ -2108,6 +2146,18 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest operational checkpoint — Cloudflare ready, empty auth D1, 2026-09-30
+
+Owner restarted Codex and approved the single Opera Wrangler device flow.
+The exact Cloudflare account is verified; dedicated `orion-clinic-auth-pilot`
+D1 exists and a no-write connectivity query passed. UUID and evidence are in
+§13. Keep it separate from the main local clinical database: it has no schema,
+employees or credentials yet. No Worker or Vercel application is deployed.
+Before activating password login, resolve private ingress/provisioning and
+target CPU/load evidence. Paid Workers needs explicit owner approval; an
+alternative Vercel-hosted verifier needs an explicit authenticated gateway,
+not weaker hashes or forwarded Sites identity. Preserve all ONLINE-1B/1C gates.
 
 ### Latest — compact clinical UI and personal local staff login, 2026-09-28
 
@@ -3563,6 +3613,22 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-09-30, restart and Cloudflare access verified.**
+
+Codex's dedicated product tools are live and the owner approved Wrangler in one
+Opera device-flow tab. The exact account64a5fad5dd97b1e245fca5363b7968db is verified.
+Reuse empty D1 `orion-clinic-auth-pilot` UUIDc14a40da-a007-4085-b255-86c095591153;
+do not create a duplicate or point main migrations/seed at it implicitly.
+Remote SELECT1 and account-scoped Wrangler info passed. No public auth/clinical
+endpoint, R2, paid plan or Vercel deployment was created. The old "restart Codex"
+next step below is now superseded; another restart is not needed for Wrangler.
+Next: resolve secure-password runtime/topology with owner approval of any cost,
+then bounded auth-only composition/provisioning/private ingress and load/browser
+acceptance. Free10ms CPU is a likely mismatch for fixed scrypt, not a measured
+remote failure. Preserve the unmodified KDF and do not claim Paid alone closes
+abuse/recovery/material-isolation gates. Vercel gateway and full clinical
+principal/material adapters remain required. §13 records exact evidence/limits.
 
 **LATEST REQUEST — 2026-09-30, publish current checkpoint and Vercel.**
 
