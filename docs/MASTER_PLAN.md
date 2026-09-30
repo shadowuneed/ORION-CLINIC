@@ -968,6 +968,9 @@ rendering, authorization, backup, or external integration behavior.
 2026-10-01 resumed cloud pagination/security checkpoint (0004 APPLIED, NOT deployed):
 
 - Worked only in separate `ORION-CLINIC-CLOUD/codex/cloud-vercel-supabase`.
+  Application checkpoint `021ef89bd53f0de77e8b3593276ac94a38ff1e14` committed/
+  pushed to existing ORION origin; exact local/remote SHA and clean cloud status
+  verified. Later receipt commit changes documentation only, not application.
   Original main remains `fe5d1c6dfa6edbfddd842c19b020630b31deec38` with only
   the owner's pre-existing plan edit; local DB/accounts/env/audio/3200/3101/STT
   and all DIR ECHOES resources untouched.
@@ -3816,8 +3819,9 @@ APIexecute/3indexes/1listsignature, ownerassignment1/patients0. Do NOT replay
 0002/0003/0004 or import original records/accounts. Cloud Next16.3.6 and paired
 bounded DTO/API/UI are ready for the exact new contract; old0002 adapters are not.
 Current checks:438tests, full lint/typecheck/dependency audit, native317+133 and
-Vercel530file artifact guard pass; no upload/deployment/finished URL. Final source
-and Git receipts belong in the new operation checkpoint before ending work.
+Vercel530file artifact guard pass; no upload/deployment/finished URL. Application
+checkpoint021ef89 committed/pushed with exact local/remote SHA verification and
+clean cloud status; final source/Git receipts are in the operation checkpoint.
 Next needs owner's incomplete-slice publication decision and manual password
 entry on configured canonical HTTPS. Test real Auth/CRUD/reload/logout/current
 SQL revocation and two accounts; do not confuse mock/PGlite tests with provider

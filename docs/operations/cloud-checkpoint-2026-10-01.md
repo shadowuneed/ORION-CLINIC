@@ -3,8 +3,11 @@
 Owner explicitly resumed the separate cloud checkout. This is a bounded patient
 pagination/security checkpoint, not the completed online platform. There is no
 published Vercel deployment or verified final project URL at this receipt.
-The previous source checkpoint is `bc17cdb775832ccdb84339bf5ef9eff48f23ce8f`;
-current changes must be committed/pushed on the same dedicated branch after guards.
+Application checkpoint: `021ef89bd53f0de77e8b3593276ac94a38ff1e14`, committed and
+pushed to existing ORION origin's `codex/cloud-vercel-supabase`. Exact local HEAD
+and `git ls-remote origin refs/heads/codex/cloud-vercel-supabase` matched; cloud
+status was clean. This supersedes `bc17cdb775832ccdb84339bf5ef9eff48f23ce8f`.
+The later documentation receipt does not change application code.
 
 ## Exact preservation boundary
 
