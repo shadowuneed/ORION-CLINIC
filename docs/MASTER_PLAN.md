@@ -1007,6 +1007,12 @@ rendering, authorization, backup, or external integration behavior.
 - Exclude the local `.local-build-check.log` from publication. Preserve the
   owner's standalone `a` in the working tree and leave it unstaged. No local
   credential files, runtime DB, audio, secrets or generated dist belong in Git.
+- Published source checkpoint279e42b84bc88ada11da34672a1a946c2619da68 to the
+  authorized `origin/main`; `git push origin main` exited0 and subsequent exact
+  `git ls-remote origin refs/heads/main` matched local HEAD.299source/docs/assets
+  files committed; final source secret scan712files PASS, staged whitespace check
+  PASS. Owner's unrelated `a` remains the only unstaged change. This is Git
+  publication, not Vercel/Cloudflare application deployment.
 - STT host assessment: current stateful FastAPI GigaAM/CAMPPlus sidecar needs
   persistent CPU/GPU compute, TLS and server authentication for cloud access.
   Preferred first pilot host is an always-on GPU VM/Runpod Pod;16GB+ VRAM is a
@@ -3574,6 +3580,12 @@ push or auth-only Worker as a successful live clinical deployment.
 Current source publication excludes local logs/state/secrets and the unrelated
 owner `a`. The STT recommendation is separate persistent GPU compute behind the
 authorized API. Existing main data/migrations/ports remain unchanged.
+Source checkpoint279e42b is now verified on the authorized remote main; the
+publication/setup receipt is recorded in a following documentation commit.
+Cloudflare agent setup is complete. Next operational step is restarting Codex
+to activate the registered MCPs, then dedicated ORION resources and the isolated
+online auth/material boundary before Vercel deployment. Do not request passwords
+or service tokens in chat or copy OAuth credentials into the repository.
 
 **LATEST FOLLOW-UP — 2026-09-28, CSS first-load fix and female silhouette.**
 
