@@ -64,8 +64,10 @@ Fresh canonical public HTTPS checks: sign-in200, health/live200, anonymous
 session401 and patients401, CSRF200 with Secure/HttpOnly/__Host cookie, wrong-Origin
 CSRF403; responses no-store. Browser read visible text only, not field values:
 personal email/password form is present. Owner was asked to refresh and retry their
-existing credentials manually. **Owner authenticated login is not yet verified**;
-do not claim the actual account/password was tested or every401 is resolved.
+existing credentials manually. Owner replied **`Да, вошёл`**, confirming successful
+login with their unchanged credentials after the repair. This is owner-reported
+login acceptance, not agent password handling or authenticated patient CRUD,
+reload, logout/revocation or two-account browser proof. Do not claim every401 is resolved.
 Original main SHA/sole owner plan edit reverified unchanged. No migration replay,
 local account import, external AI/audio request or other resource access occurred.
 

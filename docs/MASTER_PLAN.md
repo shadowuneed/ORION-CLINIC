@@ -981,7 +981,8 @@ rendering, authorization, backup, or external integration behavior.
   built on provider Linux and published READY as dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ;
   canonical alias assigned. Fresh public checks: sign-in/health200, session/patients401,
   CSRF200 with protected cookie, wrong-origin403; no-store. Owner manual retry was
-  requested; successful owner login is not yet claimed. No password reset/read or
+  requested; owner then confirmed `Да, вошёл` using unchanged credentials. This is
+  owner-reported login acceptance, not CRUD/logout/two-account browser proof. No password reset/read or
   local account import. Original local resources and unrelated resources untouched.
 
 2026-10-01 owner-approved cloud publication (incomplete slice, actual READY):
@@ -2354,7 +2355,8 @@ now accepts the provider's legacy12-character token format, retaining size/chara
 bounds, upstream verification, exact-origin/CSRF and SecureHttpOnly cookies. Focused
 104 tests PASS. Patched clean pushed Git source5db36ec was published READY only to
 dedicated ORION Vercel as dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ, canonical alias verified.
-Owner was asked to retry manually on the canonical origin. Do not read/reset their
+Owner retried manually and confirmed successful login on the canonical origin.
+Do not read/reset their
 password. Authenticated acceptance and remaining unported modules stay open.
 Full repair/publication receipt: `docs/operations/cloud-checkpoint-2026-10-01.md`.
 
@@ -3887,8 +3889,8 @@ Provider Linux build PASS and READY dpl_Xu2B6KCwdjxd78TktuzVSczyaPNJ published
 source5db36eca8bb5d6bbd681b48ae2b5c0277e20b66f to dedicated canonical alias. Dry-run760
 files, unsafe uploads0, env.example excluded; never retry Windows-prebuilt output.
 Fresh public sign-in/health/CSRF200, anonymous session/patients401 and wrongorigin403
-verified. Owner manually
-retries with their existing Supabase credentials; no password read/reset or local
+verified. Owner manually retried with their existing Supabase credentials and
+confirmed `Да, вошёл`; no password read/reset or local
 credential import. Follow the operation receipt for actual deployment status.
 Do not replay0001–0004 or touch original DB/env/accounts/audio/3200/3101/STT.
 
