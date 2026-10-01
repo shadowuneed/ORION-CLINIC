@@ -965,6 +965,29 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-10-01 resumed cloud registry acceptance and publication:
+
+- Source b147d2f735277d5c231f1b0c9d4a69fb5cf956f0 pushed; clean Git archive
+  published to dedicated ORION Vercel only, READY dpl_Au2VtQpnJ4g5HjHJhBU1Wk4mcdr8.
+  Final upload audit762 files/unsafe0; provider Linux build and TypeScript PASS.
+- Fixed blocked dynamic patient JS chunks, exact bounded mutation rejections,
+  conflict recovery, safe root landing with explicit selectors and honest cloud
+  navigation. Intermediate relative landing500 corrected before final acceptance.
+- Focused347 tests/14 files + PGlite25/2 files PASS; scoped ESLint, TypeScript,
+  security:secrets and diff checks PASS. This is not full legacy verify:ci.
+- Actual owner-authenticated synthetic UI: create/reload v1, update/history v2,
+  stale second-tab rejection and winning-version reload, archive/reload/history
+  v3, active/archive lists, explicit logout clearing both tabs and back protected.
+  One artificial record archived, not deleted; no password or real/local data read.
+- Final public HTTPS: sign-in/health200, anonymous patient/session401, CSRF200
+  secure cookie flags only, foreign Origin403, root307 preserving access selectors;
+  unported pathway503. Live idempotency replay/body mismatch, two-account isolation
+  and provider-side revocation remain open; no clinical platform readiness claim.
+- No Supabase migration/bootstrap/grant changes. Original mainfe5d1c6 and sole
+  owner plan edit preserved. Background local launch was blocked before process
+  creation; no bypass, no running-local proof. Safe manual web-only command saved.
+  Full receipt: docs/operations/cloud-registry-acceptance-2026-10-01.md.
+
 2026-10-01 owner-requested end-of-day checkpoint:
 
 - No feature development, migration, deployment, credential or data mutation.
@@ -2360,6 +2383,21 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — cloud registry accepted, published and bounded, 2026-10-01
+
+Owner resumed work and requested a local showcase. Published sourceb147d2f,
+READYdpl_Au2VtQpnJ4g5HjHJhBU1Wk4mcdr8 on the canonical ORION Cloud address.
+Basic live synthetic patient CRUD/reload/history/two-tab conflict/archive/logout/
+back passed; see docs/operations/cloud-registry-acceptance-2026-10-01.md.
+372 focused tests PASS; provider build/TypeScript, scoped lint and secret scan PASS.
+Exact live idempotency replay/body mismatch, two-account isolation and external
+revocation proof remain open. Clinical dashboard/observations and other modules
+are not ported and remain closed; STT deferred. Current root leads to the real
+registry, not the unavailable dashboard. Historical checkpoint tag is unchanged.
+Original local code/data/owner plan preserved. Its background launch was blocked
+before execution; owner manual web-only command is in the receipt. No local HTTP
+or STT success is claimed. No new unattended automation was started.
 
 ### Latest — end of day continuation saved, 2026-10-01
 
@@ -3901,6 +3939,22 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, cloud registry acceptance and local launch limit.**
+
+Read AGENTS, full MASTER_PLAN, cloud-resume-2026-10-01.md and the new registry
+acceptance receipt. Cloud branch codex/cloud-vercel-supabase; sourceb147d2f is
+published READY and the synthetic test card is archived at version3/history3.
+Do not repeat completed basic CRUD/conflict/archive/logout checks or recreate it.
+Next live gates: exact idempotency replay and changed-body rejection, two-account
+isolation, provider-side revocation. Owner enters credentials; no new grants
+inferred. Then separately implement reviewed aggregate notification and measured
+observation APIs/forward migrations: never count only a25-record page or invent
+alerts/risk values. Other clinical modules remain503 and STT deferred.
+Local mainfe5d1c6 and owner plan are untouched. Background launch was denied
+before process creation; do not bypass that boundary. Manual web-only wrapper
+command/address are saved for the owner's showcase. Do not replay0001–0004,
+move the historical tag, use Windows-prebuilt, or touch unrelated resources.
 
 **LATEST RESUME — 2026-10-01, owner-requested tomorrow checkpoint.**
 

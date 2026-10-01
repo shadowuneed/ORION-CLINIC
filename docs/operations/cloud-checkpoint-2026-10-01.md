@@ -1,5 +1,12 @@
 # ORION Cloud resumed checkpoint — 2026-10-01
 
+Latest continuation: source `b147d2f735277d5c231f1b0c9d4a69fb5cf956f0` published
+READY; basic synthetic registry CRUD/reload/history/two-tab conflict/archive/
+explicit logout/back acceptance passed. See
+[current acceptance receipt](cloud-registry-acceptance-2026-10-01.md) and
+[resume guide](cloud-resume-2026-10-01.md). The entries below retain historical
+evidence and are not the latest source/deployment.
+
 Owner explicitly resumed the separate cloud checkout. This is a bounded patient
 pagination/security checkpoint, not the completed online platform. The owner
 subsequently explicitly instructed publication of this incomplete slice.
