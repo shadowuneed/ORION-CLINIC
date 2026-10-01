@@ -139,7 +139,8 @@ export function parseCloudPatientListPage(value: unknown, assignmentId: string, 
     throw new Error('Inconsistent cloud directory position.');
   }
   if (result.page.hasMore && result.patients.length === 0) throw new Error('Invalid empty continuation.');
-  return { patients: result.patients as PatientSummary[], page: parsedPage(result.page, assignmentId, 'directory', undefined, undefined, scope) };
+  return { patients: result.patients as PatientSummary[], page: parsedPage(result.page, assignmentId, 'directory', undefined, undefined, scope),
+    observedAt: result.observedAt };
 }
 
 export function parseCloudPatientList(value: unknown, assignmentId: string): PatientSummary[] {

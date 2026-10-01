@@ -33,7 +33,11 @@ const navigation = [
   { href: '/pathway', label: 'Маршрут пациента', icon: Route, capability: 'pathway' },
 ] as const;
 
-const compactLabels: Record<string, string> = { '/': 'Обзор', '/patients': 'Пациенты', '/live': 'Приём', '/scheduling': 'Очередь', '/pathway': 'Маршрут' };
+const cloudNavigation = [
+  { href: '/dashboard', label: 'Обзор', icon: LayoutDashboard, capability: 'dashboard' },
+  { href: '/patients', label: 'Пациенты', icon: Users, capability: 'patientDirectory' },
+] as const;
+const compactLabels: Record<string, string> = { '/': 'Обзор', '/dashboard': 'Обзор', '/patients': 'Пациенты', '/live': 'Приём', '/scheduling': 'Очередь', '/pathway': 'Маршрут' };
 
 function isActivePath(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
@@ -72,6 +76,7 @@ export function ClinicShell({
 }: {
   children: React.ReactNode;
   capabilities: {
+    dashboard?: boolean;
     clinician: boolean;
     patientDirectory: boolean;
     orders: boolean;
@@ -91,6 +96,13 @@ export function ClinicShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceLink = (target: string) => {
+    if (cloudMode && ['/dashboard', '/patients'].includes(target)) {
+      const scoped = new URL(target, 'https://orion.invalid');
+      for (const key of ['accessAssignmentId', 'facilityId']) {
+        for (const value of searchParams.getAll(key)) scoped.searchParams.append(key, value);
+      }
+      return `${scoped.pathname}${scoped.search}`;
+    }
     const url = workspaceNavigationUrl(target, pathname, searchParams.toString());
     if (target !== '/') return url;
     const dashboard = new URL(url, 'https://orion.invalid');
@@ -144,12 +156,13 @@ export function ClinicShell({
 
   // Feature availability is presentation, not permission. The server still
   // authorizes every request against the exact selected assignment.
-  const permittedNavigation = navigation.filter(
-    (item) => capabilities[item.capability] && (!cloudMode || item.href === '/patients'),
+  const permittedNavigation = (cloudMode ? cloudNavigation : navigation).filter(
+    (item) => capabilities[item.capability] === true,
   );
-  const homeTarget = cloudMode ? (capabilities.patientDirectory ? workspaceLink('/patients') : '/access')
+  const homeTarget = cloudMode ? (capabilities.dashboard === true ? workspaceLink('/dashboard') : capabilities.patientDirectory ? workspaceLink('/patients') : '/access')
     : capabilities.clinician ? workspaceLink('/') : '/access';
-  const homeLabel = cloudMode && capabilities.patientDirectory ? 'ORION Clinic — пациенты'
+  const homeLabel = cloudMode && capabilities.dashboard === true ? 'ORION Clinic — рабочий центр'
+    : cloudMode && capabilities.patientDirectory ? 'ORION Clinic — пациенты'
     : !cloudMode && capabilities.clinician ? 'ORION Clinic — обзор' : 'ORION Clinic — моя роль и права';
   const initials = useMemo(
     () =>
@@ -175,7 +188,7 @@ export function ClinicShell({
     <div className={styles.shell} data-orion-route-path={pathname}>
       <header className={styles.topbar}>
         <Link className={styles.brand} href={homeTarget} aria-label={homeLabel}
-          onClick={(event) => navigateWithPathwayMotion(event, homeTarget, cloudMode ? 'Пациенты' : 'Обзор')}>
+          onClick={(event) => navigateWithPathwayMotion(event, homeTarget, cloudMode && capabilities.dashboard !== true ? 'Пациенты' : 'Обзор')}>
           <OrionBrand animated size={44} wordmarkClassName={styles.brandCopy} />
         </Link>
 
@@ -250,7 +263,7 @@ export function ClinicShell({
       <div className={styles.content} data-pathway-page={pathname === '/pathway' ? 'true' : undefined}
         data-orion-page-content tabIndex={-1}>
         {cloudMode && <div className={styles.cloudNotice} aria-label="Возможности облачной версии">
-          <strong>ORION Cloud</strong><span>Доступны карточки пациентов и проверка прав. Приём, маршрут, измерения и уведомления ещё не перенесены в облако.</span>
+          <strong>ORION Cloud</strong><span>Доступны карточки пациентов и проверка прав; рабочий центр показывает последние сохранённые состояния карт. Это не полная клиническая лента. Приём, маршрут, измерения и срочные клинические уведомления ещё не перенесены в облако.</span>
         </div>}
         {children}
       </div>

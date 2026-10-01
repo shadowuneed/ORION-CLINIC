@@ -10,6 +10,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const context = createApiRequestContext(request, '/api/patients');
   const url = new URL(request.url);
+  if (['query', 'status', 'facilityId', 'accessAssignmentId', 'limit', 'cursor']
+    .some(key => url.searchParams.getAll(key).length > 1)) {
+    return apiFailure(context, 400, 'INVALID_QUERY', 'Параметры поиска должны быть однозначными.');
+  }
   const parsed = patientListQuerySchema.extend({ limit: z.coerce.number().int().min(1).max(50).default(25) }).safeParse({
     facilityId: url.searchParams.get('facilityId') ?? undefined,
     accessAssignmentId: url.searchParams.get('accessAssignmentId') ?? undefined,
@@ -25,14 +29,14 @@ export async function GET(request: Request) {
   } catch { return apiFailure(context, 400, 'INVALID_CONTINUATION', 'Проверьте параметры страницы.'); }
   try {
     const { database, access } = await cloudPatientAccess(request, 'patient.directory.read', parsed.data.accessAssignmentId, parsed.data.facilityId);
-    const { patients, page } = parseCloudPatientListPage(await database.call('orion_patients_list', {
+    const { patients, page, observedAt } = parseCloudPatientListPage(await database.call('orion_patients_list', {
       assignment_id: access.assignment.assignmentId, facility_id: access.facility.id,
       query: parsed.data.query ?? null, status: parsed.data.status, max_results: parsed.data.limit, cursor,
     }), access.assignment.assignmentId, cloudPatientCursorScope(access));
     // Read result and audit commit are one PostgreSQL RPC transaction.
     return apiSuccess(context, { viewer: { ...access.user, role: access.assignment.roles.join(', ') },
       organization: access.organization, facility: access.facility, accessAssignment: access.assignment,
-      assignments: access.assignments, patients, page, persistence: 'supabase' });
+      assignments: access.assignments, patients, page, observedAt, persistence: 'supabase' });
   } catch (error) { return cloudPatientFailure(context, error); }
 }
 

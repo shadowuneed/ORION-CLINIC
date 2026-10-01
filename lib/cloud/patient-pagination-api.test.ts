@@ -35,7 +35,7 @@ describe('cloud patient pagination API', () => {
     expect(control.call).toHaveBeenCalledWith('orion_patients_list', {
       assignment_id: 'assignment-a', facility_id: 'facility-a', query: null, status: 'active', max_results: 25, cursor: null,
     });
-    expect((await response.json() as { page: unknown }).page).toEqual(end);
+    expect(await response.json()).toMatchObject({ page: end, observedAt: 1, persistence: 'supabase' });
   });
   it('decodes the directory cursor only for the current independently authorized call', async () => {
     control.call.mockResolvedValue({ patients: [], page: end, accessAssignmentId: 'assignment-a', observedAt: 1 });
@@ -44,10 +44,16 @@ describe('cloud patient pagination API', () => {
     expect(control.call.mock.calls[0][1].cursor).toEqual(directoryCursor);
   });
   it.each(['?limit=100', '?limit=0', '?cursor=', '?cursor=bad', '?cursor=e30&cursor=e30',
+    '?query=a&query=b', '?status=active&status=inactive', '?facilityId=facility-a&facilityId=facility-b',
+    '?accessAssignmentId=assignment-a&accessAssignmentId=assignment-b', '?limit=25&limit=25',
     `?cursor=${encodeCloudPatientCursor(profileCursor)}`, `?cursor=${'a'.repeat(2049)}`])('rejects invalid directory query before authorization/network %s', async query => {
     expect((await list(request(`/api/patients${query}`))).status).toBe(400);
     expect(control.access).not.toHaveBeenCalled();
     expect(control.call).not.toHaveBeenCalled();
+  });
+  it('fails closed when the RPC provenance timestamp is malformed', async () => {
+    control.call.mockResolvedValue({ patients: [], page: end, accessAssignmentId: 'assignment-a', observedAt: 'client-clock' });
+    expect((await list(request('/api/patients'))).status).toBe(503);
   });
   it('requests only the selected older history kind, matching current patient profile version', async () => {
     control.call.mockResolvedValue({ items: [row], page: end, historyKind: 'profile', patientId: 'patient-a', profileVersion: 2,
@@ -66,7 +72,7 @@ describe('cloud patient pagination API', () => {
     expect((await history(request(`/api/patients/patient-a/history${query}`), params)).status).toBe(400);
     expect(control.access).not.toHaveBeenCalled();
   });
-  it.each([['conflict', 409], ['invalid', 400], ['unauthenticated', 401], ['forbidden', 403], ['unavailable', 503]] as const)(
+  it.each([['conflict', 409], ['invalid', 400], ['unauthenticated', 401], ['forbidden', 403], ['not_found', 404], ['unavailable', 503]] as const)(
     'retains current SQL denial %s without leaking private content', async (kind, status) => {
       control.call.mockRejectedValue(new CloudRpcError(kind));
       const response = await history(request(`/api/patients/patient-a/history?kind=profile&cursor=${encodeCloudPatientCursor(profileCursor)}`), params);

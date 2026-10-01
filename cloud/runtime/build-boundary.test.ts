@@ -52,6 +52,7 @@ describe('cloud build boundary', () => {
 
   it.each([
     ['/sign-in', 'GET'], ['/access', 'HEAD'], ['/patients', 'GET'], ['/patients/patient-a', 'GET'],
+    ['/dashboard', 'GET'], ['/dashboard', 'HEAD'],
     ['/api/auth/cloud/csrf', 'GET'], ['/api/auth/cloud/session', 'GET'], ['/api/auth/cloud/login', 'POST'],
     ['/api/auth/cloud/logout', 'POST'], ['/api/auth/cloud/refresh', 'POST'], ['/api/patients', 'GET'],
     ['/api/patients', 'POST'], ['/api/patients/patient-a', 'PATCH'], ['/api/patients/patient-a/archive', 'POST'],
@@ -61,6 +62,7 @@ describe('cloud build boundary', () => {
   });
 
   it.each([['/api/auth/cloud/logout', 'GET'], ['/api/patients/patient-a', 'DELETE'], ['/access', 'POST'],
+    ['/dashboard', 'POST'],
     ['/api/patients/patient-a/history', 'POST']])(
     'rejects unimplemented method %s %s', (path, method) => {
       expect(cloudIngressResponse(request(path, method))?.status).toBe(405);
@@ -78,24 +80,24 @@ describe('cloud build boundary', () => {
     expect(await head?.text()).toBe('');
   });
 
-  it.each(['GET', 'HEAD'])('lands on the implemented registry via %s without exposing the legacy dashboard', method => {
+  it.each(['GET', 'HEAD'])('lands on the scoped cloud dashboard via %s without exposing the legacy dashboard', method => {
     const response = cloudIngressResponse(request('/', method));
     expect(response?.status).toBe(307);
     // Next's proxy adapter requires an absolute URL even for a same-origin redirect.
-    expect(response?.headers.get('Location')).toBe('https://orion.example/patients');
-    expect(cloudIngressResponse(request('/?next=https://other.example/'))?.headers.get('Location')).toBe('https://orion.example/patients');
+    expect(response?.headers.get('Location')).toBe('https://orion.example/dashboard');
+    expect(cloudIngressResponse(request('/?next=https://other.example/'))?.headers.get('Location')).toBe('https://orion.example/dashboard');
     expect(response?.headers.get('Cache-Control')).toContain('no-store');
     expect(cloudIngressResponse(request('/', 'POST'))?.status).toBe(503);
   });
 
   it('preserves explicit landing selectors and duplicates for independent validation without forwarding encounter or return URLs', () => {
-    const response = cloudIngressResponse(request('/?facilityId=fac-a&accessAssignmentId=assignment-a&accessAssignmentId=assignment-b&encounterId=private-encounter&next=https://other.example/'));
+    const response = cloudIngressResponse(request('/?facilityId=fac-a&facilityId=fac-b&accessAssignmentId=assignment-a&accessAssignmentId=assignment-b&encounterId=private-encounter&next=https://other.example/'));
     const target = new URL(response!.headers.get('Location')!);
     expect(target.origin).toBe('https://orion.example');
-    expect(target.pathname).toBe('/patients');
+    expect(target.pathname).toBe('/dashboard');
     expect(target.searchParams.getAll('accessAssignmentId')).toEqual(['assignment-a', 'assignment-b']);
-    expect(target.searchParams.getAll('facilityId')).toEqual(['fac-a']);
-    expect([...target.searchParams.keys()].sort()).toEqual(['accessAssignmentId', 'accessAssignmentId', 'facilityId']);
+    expect(target.searchParams.getAll('facilityId')).toEqual(['fac-a', 'fac-b']);
+    expect([...target.searchParams.keys()].sort()).toEqual(['accessAssignmentId', 'accessAssignmentId', 'facilityId', 'facilityId']);
   });
 
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])(

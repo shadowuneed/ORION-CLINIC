@@ -46,11 +46,11 @@ export function cloudIngressResponse(request: Request): Response | null {
   const pathname = new URL(request.url).pathname;
   const readable = request.method === 'GET' || request.method === 'HEAD';
 
-  // The cloud landing page is the implemented registry, not the retained
+  // The cloud landing page is the scoped cloud dashboard, not the retained
   // local clinical dashboard. The target performs its own session/access check.
   if (readable && pathname === '/') {
     const source = new URL(request.url);
-    const landing = new URL('/patients', source);
+    const landing = new URL('/dashboard', source);
     for (const key of ['accessAssignmentId', 'facilityId']) {
       // Preserve duplicates too: the destination must reject malformed scope,
       // never silently replace an explicit selection with a different grant.
@@ -71,6 +71,7 @@ export function cloudIngressResponse(request: Request): Response | null {
 
   const routeMethods = new Map<string, readonly string[]>([
     ['/sign-in', ['GET', 'HEAD']], ['/access', ['GET', 'HEAD']],
+    ['/dashboard', ['GET', 'HEAD']],
     ['/patients', ['GET', 'HEAD']], ['/favicon.svg', ['GET', 'HEAD']],
     ['/api/auth/cloud/csrf', ['GET']], ['/api/auth/cloud/session', ['GET']],
     ['/api/auth/cloud/login', ['POST']], ['/api/auth/cloud/logout', ['POST']],

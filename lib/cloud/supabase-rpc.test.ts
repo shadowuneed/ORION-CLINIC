@@ -34,6 +34,33 @@ describe('typed Supabase server RPC transport', () => {
     },
   );
   it.each([
+    'orion_patient_update', 'orion_patient_archive', 'orion_patient_history_page',
+  ] as const)('maps only the exact reviewed patient-not-found rejection for %s', async name => {
+    const transport = vi.fn().mockResolvedValue(Response.json({ code: 'PT404', message: 'PATIENT_NOT_FOUND',
+      details: 'private provider content', hint: 'private provider hint' }, { status: 404 }));
+    await expect(callCloudRpc({ config, accessToken, name, fetch: transport }))
+      .rejects.toMatchObject({ kind: 'not_found', message: 'The cloud database request could not be completed.' });
+  });
+  it.each([
+    ['orion_access_overview', 'PT404', 'PATIENT_NOT_FOUND'],
+    ['orion_patient_detail', 'PT404', 'PATIENT_NOT_FOUND'],
+    ['orion_patient_update', 'PGRST202', 'PATIENT_NOT_FOUND'],
+    ['orion_patient_update', 'PT404', 'private provider content'],
+    ['orion_patient_history_page', 'PT403', 'PATIENT_NOT_FOUND'],
+  ] as const)('keeps unreviewed provider 404 unavailable for %s', async (name, code, message) => {
+    await expect(callCloudRpc({ config, accessToken, name,
+      fetch: vi.fn().mockResolvedValue(Response.json({ code, message }, { status: 404 })) }))
+      .rejects.toMatchObject({ kind: 'unavailable' });
+  });
+  it.each([
+    () => new Response('{broken', { status: 404, headers: { 'Content-Type': 'application/json' } }),
+    () => Response.json({ code: 'PT404', message: 'PATIENT_NOT_FOUND', details: 'x'.repeat(4_096) }, { status: 404 }),
+    () => Response.json([{ code: 'PT404', message: 'PATIENT_NOT_FOUND' }], { status: 404 }),
+  ])('keeps malformed or oversized missing-patient errors unavailable and private', async makeResponse => {
+    await expect(callCloudRpc({ config, accessToken, name: 'orion_patient_update', fetch: vi.fn().mockResolvedValue(makeResponse()) }))
+      .rejects.toMatchObject({ kind: 'unavailable' });
+  });
+  it.each([
     ['orion_patient_update', 409, 'PATIENT_VERSION_CONFLICT', 'conflict'],
     ['orion_patient_archive', 409, 'PATIENT_VERSION_CONFLICT', 'conflict'],
     ['orion_patient_update', 409, 'PATIENT_PROFILE_NOT_ACTIVE', 'conflict'],

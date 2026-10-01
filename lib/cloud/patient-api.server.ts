@@ -24,6 +24,7 @@ export function cloudPatientFailure(context: ApiRequestContext, error: unknown) 
     return apiFailure(context, 409, 'ACCESS_ASSIGNMENT_SELECTION_REQUIRED', 'Выберите рабочий контур.', { assignments: error.assignments });
   }
   if (error instanceof CloudRpcError && error.kind === 'unauthenticated') return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
+  if (error instanceof CloudRpcError && error.kind === 'not_found') return apiFailure(context, 404, 'PATIENT_NOT_FOUND', 'Карточка недоступна.');
   if (error instanceof AccessAssignmentNotFoundError || error instanceof AccessMembershipRequiredError ||
       error instanceof AccessPermissionRequiredError || (error instanceof CloudRpcError && error.kind === 'forbidden')) {
     return apiFailure(context, 403, 'PATIENT_DIRECTORY_FORBIDDEN', 'Нет доступа к реестру.');

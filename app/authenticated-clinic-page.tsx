@@ -7,6 +7,7 @@ import {
   toSiteIdentityPrincipal,
 } from '@/lib/auth/site-identity';
 import { cloudAccessRepositoryForPage } from '@/lib/cloud/access-repository.server';
+import { hasCloudDashboardAccess } from '@/lib/cloud/dashboard-access.server';
 import { staffProfileFromAssignments } from '@/lib/auth/staff-profile-summary';
 import { requireChatGPTUser, type ChatGPTUser } from './chatgpt-auth';
 import { ClinicShell } from './clinic-shell';
@@ -15,6 +16,7 @@ import './clinic-shell.module.css';
 import styles from './authenticated-clinic-page.module.css';
 
 export type ClinicCapability =
+  | 'dashboard'
   | 'clinician'
   | 'patient-directory'
   | 'orders'
@@ -30,6 +32,7 @@ export type AuthenticatedClinicContext = {
   user: ChatGPTUser;
   profile: { staffName: string; roles: string[]; workplace: string | null };
   capabilities: {
+    dashboard?: boolean;
     clinician: boolean;
     patientDirectory: boolean;
     orders: boolean;
@@ -60,6 +63,7 @@ export async function getAuthenticatedClinicContext(
   }
 
   const capabilities = {
+      dashboard: accessAssignments.some(assignment => hasCloudDashboardAccess(assignment)),
       clinician: accessAssignments.some((assignment) =>
         isAccessAssignmentCurrentlyActive(assignment) &&
         assignment.roles.includes('doctor') && !assignment.roles.includes('service') &&
@@ -134,6 +138,7 @@ export function AuthenticatedClinicPage({
   requiredCapability: ClinicCapability;
 }) {
   const allowed = {
+    dashboard: context.capabilities.dashboard === true,
     clinician: context.capabilities.clinician,
     'patient-directory': context.capabilities.patientDirectory,
     orders: context.capabilities.orders,
@@ -167,6 +172,8 @@ export function AuthenticatedClinicPage({
 
 function capabilityDenialMessage(capability: ClinicCapability) {
   switch (capability) {
+    case 'dashboard':
+      return 'Нужно одно действующее рабочее назначение с правами просмотра рабочего центра и реестра пациентов.';
     case 'clinician':
       return 'Этот раздел доступен только пользователю с активной ролью врача.';
     case 'chronic-care':

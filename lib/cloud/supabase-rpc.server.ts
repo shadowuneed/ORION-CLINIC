@@ -12,7 +12,7 @@ export type CloudPatientRejection = 'PATIENT_VERSION_CONFLICT' | 'PATIENT_PROFIL
   'PATIENT_PROFILE_UNCHANGED' | 'PATIENT_ALREADY_ARCHIVED';
 
 export class CloudRpcError extends Error {
-  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'conflict' | 'invalid' | 'unavailable',
+  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'not_found' | 'conflict' | 'invalid' | 'unavailable',
     readonly patientRejection?: CloudPatientRejection) {
     super('The cloud database request could not be completed.');
     this.name = 'CloudRpcError';
@@ -71,6 +71,16 @@ async function patientRejection(response: Response, name: CloudRpcName): Promise
   return undefined;
 }
 
+async function reviewedPatientNotFound(response: Response, name: CloudRpcName): Promise<boolean> {
+  if (!(['orion_patient_update', 'orion_patient_archive', 'orion_patient_history_page'] as readonly CloudRpcName[]).includes(name)) return false;
+  try {
+    const body = await boundedJson(response, 4_096);
+    return Boolean(body && typeof body === 'object' && !Array.isArray(body) &&
+      (body as Record<string, unknown>).code === 'PT404' &&
+      (body as Record<string, unknown>).message === 'PATIENT_NOT_FOUND');
+  } catch { return false; }
+}
+
 /**
  * Only typed, reviewed RPCs; no arbitrary SQL, service key or table access.
  * Supabase verifies the bearer and each SQL function rechecks its active session,
@@ -112,6 +122,11 @@ export async function callCloudRpc(input: {
   if (signal.aborted || response.redirected || (response.url && response.url !== url)) throw new CloudRpcError('unavailable');
   if (response.status === 401) throw new CloudRpcError('unauthenticated');
   if (response.status === 403) throw new CloudRpcError('forbidden');
+  if (response.status === 404) {
+    const missing = await reviewedPatientNotFound(response, input.name);
+    if (signal.aborted || !missing) throw new CloudRpcError('unavailable');
+    throw new CloudRpcError('not_found');
+  }
   if (response.status === 409 || response.status === 422) {
     const rejection = await patientRejection(response, input.name);
     if (signal.aborted) throw new CloudRpcError('unavailable');

@@ -11,11 +11,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/link', () => ({ default: 'a' }));
 import { ClinicShell } from './clinic-shell';
 
-function render(clinician = true, full = false, cloudMode = false, patientDirectory = true) {
+function render(clinician = true, full = false, cloudMode = false, patientDirectory = true, dashboard?: boolean) {
   const props = {
     children: 'Рабочая область', user: { displayName: 'Тест', email: null },
     cloudMode,
-    capabilities: { clinician, patientDirectory, orders: true,
+    capabilities: { clinician, patientDirectory, dashboard, orders: true,
       scheduling: true, chronicCare: true, observations: true,
       communications: true, pathway: true, accessOverview: true, accessAdministration: false },
   };
@@ -90,5 +90,31 @@ describe('shared workspace shell', () => {
     expect(html).toContain('ORION Clinic — моя роль и права');
     expect(html).not.toContain('href="/patients');
     expect(html).not.toContain('href="/"');
+  });
+
+  it('offers implemented cloud dashboard to a non-clinician only with its independent capability', () => {
+    location.pathname = '/dashboard'; location.query = 'facilityId=fac-a&accessAssignmentId=assignment-a';
+    const html = render(false, true, true, true, true);
+    expect(html).toContain('ORION Clinic — рабочий центр');
+    expect(html).toContain('href="/dashboard?accessAssignmentId=assignment-a&amp;facilityId=fac-a"');
+    expect(html).toContain('aria-label="Обзор" title="Обзор"');
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain('не полная клиническая лента');
+    for (const path of ['/live', '/scheduling', '/pathway', '/access/manage', '/help']) expect(html).not.toContain(`href="${path}`);
+  });
+
+  it('preserves all explicit selector duplicates for dashboard and registry navigation instead of choosing a fallback', () => {
+    location.pathname = '/dashboard';
+    location.query = 'facilityId=fac-a&facilityId=fac-b&accessAssignmentId=assignment-a&accessAssignmentId=assignment-b&encounterId=private';
+    const html = render(false, true, true, true, true);
+    expect(html).toContain('href="/dashboard?accessAssignmentId=assignment-a&amp;accessAssignmentId=assignment-b&amp;facilityId=fac-a&amp;facilityId=fac-b"');
+    expect(html).toContain('href="/patients?accessAssignmentId=assignment-a&amp;accessAssignmentId=assignment-b&amp;facilityId=fac-a&amp;facilityId=fac-b"');
+    expect(html).not.toContain('encounterId=private');
+  });
+
+  it('does not fall back from clinician capability to an ungranted cloud dashboard', () => {
+    location.pathname = '/patients'; location.query = '';
+    expect(render(true, true, true, true, false)).not.toContain('href="/dashboard');
+    expect(render(true, true, true, false, false)).toContain('ORION Clinic — моя роль и права');
   });
 });
