@@ -10,7 +10,16 @@ import { cloudDatabaseForRequest } from '@/lib/cloud/database-context.server';
 import { cloudAuthCookies } from '@/lib/cloud/auth-session.server';
 import { cloudGenerationHeader } from '@/lib/cloud/account-fence';
 import { encodeCloudPatientCursor } from '@/lib/cloud/patient-cursor.server';
-import { cloudRpcNames, type CloudRpcName } from '@/lib/cloud/supabase-rpc.server';
+import { type CloudRpcName } from '@/lib/cloud/supabase-rpc.server';
+
+// This fixture installs only the reviewed registry migrations. Newer module
+// RPCs have their own migration bridge and cannot silently widen this proof.
+const registryRpcNames = [
+  'orion_access_overview', 'orion_patients_list', 'orion_patient_detail',
+  'orion_patient_create', 'orion_patient_update', 'orion_patient_archive',
+  'orion_patient_history_page',
+] as const satisfies readonly CloudRpcName[];
+type RegistryRpcName = typeof registryRpcNames[number];
 
 // Engineering integration proof ONLY: real HTTP-shaped route handlers, transport,
 // assignment resolver, DTOs and PostgreSQL WASM. Auth and PostgREST are explicit
@@ -57,7 +66,7 @@ type Counts = { patients: number; versions: number; commands: number; patientAud
 
 // SQL names AND argument order are fixed locally. Incoming URLs/JSON can never
 // supply raw SQL, choose another database or invoke private helper functions.
-const rpcContracts: Record<CloudRpcName, { sql: string; fields: string[]; json?: string[] }> = {
+const rpcContracts: Record<RegistryRpcName, { sql: string; fields: string[]; json?: string[] }> = {
   orion_access_overview: { sql: 'select public.orion_access_overview() result', fields: [] },
   orion_patients_list: { sql: 'select public.orion_patients_list($1,$2,$3,$4,$5,$6) result',
     fields: ['assignment_id', 'facility_id', 'query', 'status', 'max_results', 'cursor'], json: ['cursor'] },
@@ -89,7 +98,7 @@ async function providerDouble(input: Parameters<typeof fetch>[0], init?: Request
     return Response.json({ id: selected.subject, role: 'authenticated', is_anonymous: false,
       email: `${selected.staff}@example.invalid` });
   }
-  const name = cloudRpcNames.find(candidate => url === `${providerOrigin}/rest/v1/rpc/${candidate}`);
+  const name = registryRpcNames.find(candidate => url === `${providerOrigin}/rest/v1/rpc/${candidate}`);
   if (!name || init?.method !== 'POST' || typeof init.body !== 'string' ||
       headers.get('content-type') !== 'application/json') {
     unexpectedRequests += 1;
@@ -336,7 +345,7 @@ describe('0004 registry HTTP/PostgreSQL engineering bridge (NOT live provider pr
     const { accessAssignmentId: _a, facilityId: _f, ...createPayload } = creation; void _a; void _f;
     const { accessAssignmentId: _ua, facilityId: _uf, ...updatePayload } = update; void _ua; void _uf;
     const { accessAssignmentId: _aa, facilityId: _af, ...archivePayload } = archive; void _aa; void _af;
-    const requests: Record<CloudRpcName, Record<string, unknown>> = {
+    const requests: Record<RegistryRpcName, Record<string, unknown>> = {
       orion_access_overview: {},
       orion_patients_list: { assignment_id: a.assignment, facility_id: a.facility, query: null, status: 'all', max_results: 25, cursor: null },
       orion_patient_detail: { assignment_id: a.assignment, facility_id: a.facility, patient_id: made.id },
@@ -346,8 +355,8 @@ describe('0004 registry HTTP/PostgreSQL engineering bridge (NOT live provider pr
       orion_patient_history_page: { assignment_id: a.assignment, facility_id: a.facility, patient_id: made.id, history_kind: 'profile', max_results: 25, cursor: null },
     };
     const rpcOffset = seenRpcs.length;
-    for (const name of cloudRpcNames) await expect(database.call(name, requests[name])).rejects.toMatchObject({ kind: 'unauthenticated' });
-    expect(seenRpcs.slice(rpcOffset)).toEqual([...cloudRpcNames]);
+    for (const name of registryRpcNames) await expect(database.call(name, requests[name])).rejects.toMatchObject({ kind: 'unauthenticated' });
+    expect(seenRpcs.slice(rpcOffset)).toEqual([...registryRpcNames]);
     expect(await api(a, `/api/patients/${made.id}?${query(a)}`)).toMatchObject({ status: 401, body: { error: { code: 'UNAUTHENTICATED' } } });
     expect(await api(a, '/api/patients', 'POST', creation)).toMatchObject({ status: 401, body: { error: { code: 'UNAUTHENTICATED' } } });
     expect(await counts()).toEqual(before); // Revoked RPCs cannot even commit access audit.

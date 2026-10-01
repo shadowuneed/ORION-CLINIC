@@ -12,6 +12,10 @@ describe('exact workspace scope transport', () => {
     const url = new URL(scopedWorkspaceUrl('/orders?encounterId=enc-a&recommendationId=hint-a&recommendationVersion=2&accessAssignmentId=old&facilityId=old', selection), 'https://orion.test');
     expect(Object.fromEntries(url.searchParams)).toEqual({ encounterId: 'enc-a', recommendationId: 'hint-a', recommendationVersion: '2', accessAssignmentId: 'assignment-a', facilityId: 'fac-a' });
   });
+  it('opens the selected patient measurements under the exact selected access', () => {
+    const url = new URL(scopedWorkspaceUrl('/observations?patientId=patient-a&facilityId=old&accessAssignmentId=old', selection), 'https://orion.test');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ patientId: 'patient-a', facilityId: 'fac-a', accessAssignmentId: 'assignment-a' });
+  });
   it('retains encounter scope through shell navigation without passing unrelated selections', () => {
     const query = 'encounterId=enc-a&accessAssignmentId=a&facilityId=f&unrelated=value';
     expect(workspaceNavigationUrl('/live', '/', query)).toBe('/live?encounterId=enc-a&accessAssignmentId=a&facilityId=f');
@@ -50,7 +54,7 @@ describe('exact workspace scope transport', () => {
       }
     },
   );
-  it.each(['https://provider.test/api/workspace', '//provider.test/api/workspace', '/patients', '/signin-with-chatgpt', '/api/workspace-foreign', '/orders-foreign', 'https://provider.test/orders', '/api/dashboard/briefing-foreign', '/api/dashboard/briefing/foreign'])(
+  it.each(['https://provider.test/api/workspace', '//provider.test/api/workspace', '/patients', '/signin-with-chatgpt', '/api/workspace-foreign', '/orders-foreign', '/observations-foreign', 'https://provider.test/observations', 'https://provider.test/orders', '/api/dashboard/briefing-foreign', '/api/dashboard/briefing/foreign'])(
     'never propagates context to unrelated destinations: %s', (path) => {
       expect(scopedWorkspaceUrl(path, selection)).toBe(path);
     },

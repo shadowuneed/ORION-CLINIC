@@ -121,4 +121,55 @@ describe('typed Supabase server RPC transport', () => {
     await expect(callCloudRpc({ config, accessToken, name: 'orion_access_overview', signal: AbortSignal.abort(), fetch: transport })).rejects.toBeInstanceOf(CloudRpcError);
     expect(transport).not.toHaveBeenCalled();
   });
+  it.each([
+    'orion_observations_page', 'orion_observation_history_page', 'orion_patient_latest_vitals',
+    'orion_observation_create', 'orion_observation_correct',
+  ] as const)('accepts only the reviewed observation-not-found envelope for %s', async name => {
+    await expect(callCloudRpc({ config, accessToken, name,
+      fetch: vi.fn().mockResolvedValue(Response.json({ code: 'PT404', message: 'OBSERVATION_NOT_FOUND',
+        details: 'private', hint: 'private' }, { status: 404 })) }))
+      .rejects.toMatchObject({ kind: 'not_found', statusCode: 404 });
+  });
+  it.each([
+    ['orion_observations_page', 409, 'PAGINATION_STALE', 'conflict'],
+    ['orion_observation_history_page', 409, 'PAGINATION_STALE', 'conflict'],
+    ['orion_observation_correct', 409, 'OBSERVATION_VERSION_CONFLICT', 'conflict'],
+    ['orion_observation_correct', 409, 'OBSERVATION_NO_CHANGE', 'conflict'],
+    ['orion_observation_create', 409, 'OBSERVATION_IDEMPOTENCY_CONFLICT', 'conflict'],
+    ['orion_observation_correct', 409, 'OBSERVATION_IDEMPOTENCY_CONFLICT', 'conflict'],
+    ['orion_observation_create', 422, 'OBSERVATION_INVALID', 'invalid'],
+    ['orion_observation_correct', 422, 'OBSERVATION_BMI_OUT_OF_RANGE', 'invalid'],
+  ] as const)('preserves bounded exact observation rejection %s %s %s', async (name, status, rejection, kind) => {
+    let error: unknown;
+    try { await callCloudRpc({ config, accessToken, name, fetch: vi.fn().mockResolvedValue(
+      Response.json({ code: `PT${status}`, message: rejection, details: 'private', hint: 'private' }, { status })) }); }
+    catch (caught) { error = caught; }
+    expect(error).toMatchObject({ kind, statusCode: status, observationRejection: rejection, patientRejection: undefined });
+    expect(JSON.stringify(error)).not.toContain('private');
+  });
+  it.each([
+    ['orion_patient_update', 409, 'PT409', 'OBSERVATION_VERSION_CONFLICT'],
+    ['orion_observation_create', 409, 'PT409', 'OBSERVATION_VERSION_CONFLICT'],
+    ['orion_observations_page', 422, 'PT422', 'OBSERVATION_INVALID'],
+    ['orion_observation_correct', 409, 'PT422', 'OBSERVATION_VERSION_CONFLICT'],
+    ['orion_observation_correct', 409, 'PT409', 'private'],
+  ] as const)('does not reinterpret unreviewed observation rejections for %s', async (name, status, code, message) => {
+    await expect(callCloudRpc({ config, accessToken, name,
+      fetch: vi.fn().mockResolvedValue(Response.json({ code, message }, { status })) }))
+      .rejects.toMatchObject({ observationRejection: undefined, statusCode: status });
+  });
+  it.each([
+    () => Response.json({ code: 'PT404', message: 'PATIENT_NOT_FOUND' }, { status: 404 }),
+    () => Response.json({ code: 'PGRST202', message: 'OBSERVATION_NOT_FOUND' }, { status: 404 }),
+    () => Response.json({ code: 'PT404', message: 'OBSERVATION_NOT_FOUND', details: 'x'.repeat(4096) }, { status: 404 }),
+    () => new Response('{broken', { status: 404, headers: { 'Content-Type': 'application/json' } }),
+  ])('keeps unreviewed missing observation/private provider errors unavailable', async response => {
+    await expect(callCloudRpc({ config, accessToken, name: 'orion_observation_correct',
+      fetch: vi.fn().mockResolvedValue(response()) })).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+  it.each([400, 422])('preserves the transport validation status %s without exposing its body', async status => {
+    await expect(callCloudRpc({ config, accessToken, name: 'orion_observations_page',
+      fetch: vi.fn().mockResolvedValue(new Response('private', { status })) }))
+      .rejects.toMatchObject({ kind: 'invalid', statusCode: status, observationRejection: undefined });
+  });
 });

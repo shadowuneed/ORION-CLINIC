@@ -11,11 +11,13 @@ type MeasurementGroup = keyof LatestPatientVitals;
 export type PatientVitalsState = {
   state: 'loading' | 'ready' | 'unavailable';
   value: LatestPatientVitals | null;
+  timeZone?: string;
 };
 
 const labels = { anthropometry: 'Рост, вес и ИМТ', bloodPressure: 'Артериальное давление', temperature: 'Температура' };
 const formatNumber = (value: number) => value.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
-const formatDate = (value: number) => new Intl.DateTimeFormat('ru-RU', {
+const formatDate = (value: number, timeZone?: string) => new Intl.DateTimeFormat('ru-RU', {
+  timeZone,
   day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
 }).format(new Date(value));
 
@@ -80,12 +82,12 @@ export function PatientVitalsPanel({ measurement, patient, measurementsUrl, enco
         <button type="button" className={styles.vitalTile} disabled={!pressure} aria-pressed={selectedGroup === 'bloodPressure'} onClick={() => setChosenGroup('bloodPressure')}>
           <span className={styles.vitalLabel}><HeartPulse size={17} aria-hidden="true" />Давление</span>
           <span className={styles.vitalValue}>{pressure ? `${pressure.systolicMmhg}/${pressure.diastolicMmhg}` : '—'}{pressure && <small>мм рт. ст.</small>}</span>
-          <span className={styles.vitalTime}>{pressure ? formatDate(pressure.measuredAt) : missing}</span>
+          <span className={styles.vitalTime}>{pressure ? formatDate(pressure.measuredAt, measurement.timeZone) : missing}</span>
         </button>
         <button type="button" className={styles.vitalTile} disabled={!temperature} aria-pressed={selectedGroup === 'temperature'} onClick={() => setChosenGroup('temperature')}>
           <span className={styles.vitalLabel}><Thermometer size={17} aria-hidden="true" />Температура</span>
           <span className={styles.vitalValue}>{temperature ? formatNumber(temperature.temperatureC) : '—'}{temperature && <small>°C</small>}</span>
-          <span className={styles.vitalTime}>{temperature ? formatDate(temperature.measuredAt) : missing}</span>
+          <span className={styles.vitalTime}>{temperature ? formatDate(temperature.measuredAt, measurement.timeZone) : missing}</span>
         </button>
       </div>
       <div className={styles.vitalTriple}>
@@ -97,12 +99,12 @@ export function PatientVitalsPanel({ measurement, patient, measurementsUrl, enco
           disabled={value === null || value === undefined} aria-pressed={selectedGroup === 'anthropometry'} onClick={() => setChosenGroup('anthropometry')}>
           <span className={styles.vitalLabel}><Icon size={16} aria-hidden="true" />{label}</span>
           <span className={styles.vitalValue}>{value !== null && value !== undefined ? formatNumber(value) : '—'}{value !== null && value !== undefined && <small>{unit}</small>}</span>
-          <span className={styles.vitalTime}>{anthropometry ? formatDate(anthropometry.measuredAt) : missing}</span>
+          <span className={styles.vitalTime}>{anthropometry ? formatDate(anthropometry.measuredAt, measurement.timeZone) : missing}</span>
         </button>)}
       </div>
 
       <div className={styles.vitalProvenance} aria-live="polite">
-        {selected && selectedGroup ? <><Clock3 size={16} aria-hidden="true" /><div><strong>{labels[selectedGroup]}</strong><span>Измерено {formatDate(selected.measuredAt)} · {selected.recordedBy}</span></div></>
+        {selected && selectedGroup ? <><Clock3 size={16} aria-hidden="true" /><div><strong>{labels[selectedGroup]}</strong><span>Измерено {formatDate(selected.measuredAt, measurement.timeZone)} · {selected.recordedBy}</span></div></>
           : <><Activity size={16} aria-hidden="true" /><div><strong>{loading ? 'Загружаем измерения' : measurement.state === 'unavailable' ? 'Измерения недоступны' : 'Измерений пока нет'}</strong><span>{loading ? 'Получаем последние сохранённые значения.' : measurement.state === 'unavailable' ? 'Для этого рабочего доступа показатели не получены.' : 'Записанные показатели появятся на карте тела и в обзоре.'}</span></div></>}
       </div>
 

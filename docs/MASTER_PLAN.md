@@ -965,6 +965,38 @@ rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
 
+2026-10-01 complete local-to-cloud parity request, then owner-requested wrap-up:
+
+- Published scoped dashboard sourcea4df3b2a49737005fa7c1c260a1c43fba067793e,
+  READYdpl_oEKS7aEg6xodXdgfzKUM7LtoDRtv at the canonical ORION Cloud address.
+  Clean upload audit774/unsafe0 and provider Linux build/TypeScript PASS. Includes
+  stale sign-in recovery4113365/bf47d19; owner confirmed login, actual access visible.
+- Live owner dashboard read existing synthetic archived cardv3 from Supabase,
+  source/time/access binding, separate analytics toggle and both themes at the
+  available narrow viewport. No synthetic alerts/counters substituted; no full
+  desktop/WCAG, provider revocation or two-human-account acceptance claimed.
+- Prepared0005 observations:4closedRLS tables/5scoped authenticated RPCs,
+  immutable corrections/history, CAS/audit/actor-bound command receipts, bounded
+  lists/latest groups. SHA256 AD22ADB4B510255881B56DD273BE14CDAC646E5058995AE5076864533BF7D0C1.
+  Full API/SQL test bridge uses local PostgreSQL/PGlite, not remote Supabase proof.
+- Command `pnpm.cmd test lib/cloud cloud app/sign-in app/dashboard app/patients app/observations lib/workspace-access-url.test.ts`:
+  816/816 in37files PASS98.82s. `pnpm.cmd exec tsc --noEmit`, scoped ESLint,
+  `pnpm.cmd security:secrets`804files and `git diff --check` PASS. UI owner final
+  narrow follow-up54/54 (own41+page13) PASS; final real delayed-stream/UI/helper
+  repeat77/77 in4files PASS5.42s, `pnpm.cmd exec tsc --noEmit --pretty false --incremental false`
+  and scanner805 PASS. Counts overlap; do not sum. Full commands in cloud-port-checkpoint.
+  This is not full legacy verify:ci.
+- Fixed patient fast-response loading timer, exact observations link scope,
+  full latest DTO/timezone/organization validation and disabled legacy encounter
+  link. New UI fences unknown commands by exact bytes/UUID/scope/account;
+  denial statuses retire data immediately even for malformed/unending bodies.
+- Migration0005 consent was requested but not received; no remote SQL executed,
+  ingress observations remains503, patient vitalsAvailable=false. Owner then
+  said to wrap up: stop implementation/activation/deployment at this checkpoint.
+  Full parity list and next steps are saved in cloud-feature-parity and cloud-resume.
+- Original local mainfe5d1c6 and sole owner MASTER_PLAN edit preserved; no local
+  DB/password/audio/STT import or background-launch bypass. Historical tag kept.
+
 2026-10-01 resumed cloud registry acceptance and publication:
 
 - Source b147d2f735277d5c231f1b0c9d4a69fb5cf956f0 pushed; clean Git archive
@@ -2383,6 +2415,20 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Latest — cloud dashboard published; observations prepared, owner wrap-up, 2026-10-01
+
+Owner requested all local functions in cloud, then explicitly requested wrapping
+up. End new implementation/migration/deployment now; continue only on next request.
+Published sourcea4df3b2, READYdpl_oEKS7aEg6xodXdgfzKUM7LtoDRtv; owner login and
+limited real-Supabase card dashboard/analytics/both themes confirmed. This is not
+the full clinical notification center or full local parity. Observations0005,
+API/UI/history/correction are prepared and tested but unmounted: exact schema
+consent outstanding, no live migration proof, vitalsAvailable=false/ingress503.
+Read docs/operations/cloud-port-checkpoint-2026-10-01.md and cloud-feature-parity.
+Next after consent/catalog/live observation acceptance: encounter foundation,
+protocol, orders, care, scheduling, communications, private files and server AI.
+STT remains deferred; preserve original/local data and all resource boundaries.
 
 ### Latest — cloud registry accepted, published and bounded, 2026-10-01
 
@@ -3939,6 +3985,21 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**LATEST RESUME — 2026-10-01, complete port requested, then owner wrap-up.**
+
+Start at cloud-resume, cloud-port-checkpoint and full feature-parity list after
+AGENTS/full MASTER_PLAN and clean status/branch/origin checks. Published a4df3b2
+dashboard/auth recovery READY; basic registry acceptance already complete.
+Prepared0005 sourceSHA256 AD22ADB4B510255881B56DD273BE14CDAC646E5058995AE5076864533BF7D0C1,
+4RLS tables/5authenticated observation RPCs, tested UI/API/local PostgreSQL bridge.
+No owner consent answer for0005 and no remote execution: get exact approval and
+catalog proof before allowing page/API/images/vitals panel and doing live synthetic
+acceptance/release. Never remove the global legacy runtime boundary or fake D1.
+After this slice follow full parity table; encounter design is still read-only,
+not implemented. Original local mainfe5d1c6/owner plan/DB/env/3200/3101/STT and
+historical tag remain intact. Do not repeat0001–0004/bootstrap or inspect any
+unrelated resources. Owner requested stop: no new unattended work or polling.
 
 **LATEST RESUME — 2026-10-01, cloud registry acceptance and local launch limit.**
 
@@ -6825,3 +6886,15 @@ with active implementation and handoff in §15–16. This supersedes earlier sha
 local-login UI notes, not ONLINE-1 public-release or durable recording gates.
 Owner subsequently requested finishing the current work; no further scope added,
 no recurring task created, no deploy/push or main clinical-data initialization.
+
+### 2026-10-01 — cloud parity inventory, dashboard publication and prepared observations
+
+Owner requested transferring all local functionality to the separate cloud
+deployment, not merely its UI. Published scoped card activity dashboard and
+explicit stale-session recovery on a4df3b2; prepared independently reviewed
+observation ledger/API/compact UI with protected activation. Full feature-parity
+inventory and exact continuation saved. SQL0005 approval remains unanswered;
+owner then requested wrap-up, so no migration/activation/new deployment follows.
+Local version, secrets, original data and historical tag preserved; no clinical
+readiness or finished full-parity claim. Details at top of verification/checkpoint/
+handoff and docs/operations/cloud-port-checkpoint-2026-10-01.md.

@@ -1,150 +1,44 @@
-import { env } from 'cloudflare:workers';
-import { resolveObservationAccess } from '@/lib/auth/observation-access';
-import { getSiteIdentity, toSiteIdentityPrincipal } from '@/lib/auth/site-identity';
-import { parseRuntimeConfig } from '@/lib/config/runtime';
-import {
-  createObservationSchema,
-  observationListQuerySchema,
-} from '@/lib/domain/observations';
-import {
-  apiFailure,
-  apiSuccess,
-  createApiRequestContext,
-  hasSameOrigin,
-} from '@/lib/http/api-response';
-import { observationApiFailure } from '@/lib/http/observation-api-errors';
-import { D1AccessGovernanceRepository } from '@/lib/repositories/access-governance';
-import { D1PatientObservationRepository } from '@/lib/repositories/patient-observations';
+import { createObservationSchema } from '@/lib/domain/observations';
+import { apiFailure, apiSuccess, createApiRequestContext } from '@/lib/http/api-response';
+import { boundedObservationPayload, cloudObservationAccess, cloudObservationFailure, cloudObservationMetadata,
+  cloudObservationMutationAllowed, cloudObservationReadQuery, cloudObservationScope, validateCloudObservationCommand } from '@/lib/cloud/observation-api.server';
+import { decodeCloudObservationCursor, requireCloudObservationCursorScope } from '@/lib/cloud/observation-cursor.server';
+import { parseCloudObservationMutation, parseCloudObservationsPage } from '@/lib/cloud/observation-response-contracts.server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const context = createApiRequestContext(request, '/api/observations');
-  const url = new URL(request.url);
-  const parsed = observationListQuerySchema.safeParse({
-    facilityId: url.searchParams.get('facilityId') ?? undefined,
-    accessAssignmentId:
-      url.searchParams.get('accessAssignmentId') ?? undefined,
-    patientId: url.searchParams.get('patientId') ?? undefined,
-    limit: url.searchParams.get('limit') ?? undefined,
-  });
-  if (!parsed.success) {
-    return apiFailure(
-      context,
-      400,
-      'INVALID_OBSERVATION_QUERY',
-      'Проверьте пациента и параметры списка.',
-    );
-  }
   try {
-    if (!parseRuntimeConfig(env).syntheticDataOnly) {
-      return apiFailure(
-        context,
-        503,
-        'DATA_MODE_NOT_APPROVED',
-        'Локальный тестовый контур показателей отключён.',
-      );
+    const query = cloudObservationReadQuery(request);
+    const cursor = decodeCloudObservationCursor(query.cursor);
+    if (cursor && (cursor.kind !== 'observations' || cursor.patientId !== query.patientId)) {
+      return apiFailure(context, 400, 'INVALID_CONTINUATION', 'Проверьте параметры страницы.');
     }
-    const identity = getSiteIdentity(request);
-    if (!identity) {
-      return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
-    }
-    const access = await resolveObservationAccess(
-      new D1AccessGovernanceRepository(env.DB),
-      toSiteIdentityPrincipal(identity),
-      parsed.data.accessAssignmentId,
-      parsed.data.facilityId,
-    );
-    const repository = new D1PatientObservationRepository(env.DB, access.scope);
-    const workspace = await repository.list({
-      patientId: parsed.data.patientId,
-      limit: parsed.data.limit,
-    });
-    await repository.recordListRead({
-      patientId: parsed.data.patientId ?? null,
-      resultCount: workspace.observations.length,
-      requestId: context.requestId,
-    });
-    return apiSuccess(context, {
-      viewer: {
-        id: access.user.id,
-        displayName: access.user.displayName,
-        membershipId: access.scope.membershipId,
-        accessAssignmentId: access.scope.accessAssignmentId,
-        role: access.scope.role,
-      },
-      organization: access.organization,
-      facility: access.facility,
-      accessAssignment: { assignmentId: access.assignment.assignmentId },
-      assignments: access.assignments,
-      ...workspace,
-      persistence: 'd1',
-    });
-  } catch (error) {
-    return observationApiFailure(
-      context,
-      error,
-      'OBSERVATION_LIST_FAILED',
-      'Не удалось загрузить показатели.',
-    );
-  }
+    const { database, access } = await cloudObservationAccess(request, query);
+    const scope = cloudObservationScope(access, query.patientId);
+    requireCloudObservationCursorScope(cursor, scope, 'observations');
+    const result = parseCloudObservationsPage(await database.call('orion_observations_page', {
+      assignment_id: access.assignment.assignmentId, facility_id: access.facility.id, patient_id: query.patientId,
+      max_results: query.limit, cursor,
+    }), scope, { limit: query.limit, cursor });
+    return apiSuccess(context, { ...cloudObservationMetadata(access, result.role), ...result,
+      accessAssignment: { assignmentId: result.accessAssignmentId, assignmentVersionId: result.assignmentVersionId },
+      patients: [result.patient], patientSelection: 'explicit', historyMode: 'bounded-current-window' });
+  } catch (error) { return cloudObservationFailure(context, error); }
 }
 
 export async function POST(request: Request) {
   const context = createApiRequestContext(request, '/api/observations');
-  if (!hasSameOrigin(request)) {
-    return apiFailure(context, 403, 'INVALID_ORIGIN', 'Запрос отклонён.');
-  }
-  let payload;
+  if (!cloudObservationMutationAllowed(request)) return apiFailure(context, 403, 'INVALID_ORIGIN', 'Запрос отклонён.');
+  const parsed = createObservationSchema.safeParse(await boundedObservationPayload(request).catch(() => null));
+  if (!parsed.success) return apiFailure(context, 422, 'OBSERVATION_INVALID', 'Проверьте пациента, время и заполненные группы показателей.');
   try {
-    payload = createObservationSchema.parse(await request.json());
-  } catch {
-    return apiFailure(
-      context,
-      400,
-      'INVALID_OBSERVATION',
-      'Проверьте пациента, время и заполненные группы показателей.',
-    );
-  }
-  try {
-    if (!parseRuntimeConfig(env).syntheticDataOnly) {
-      return apiFailure(
-        context,
-        503,
-        'DATA_MODE_NOT_APPROVED',
-        'Сохранение тестовых показателей отключено.',
-      );
-    }
-    const identity = getSiteIdentity(request);
-    if (!identity) {
-      return apiFailure(context, 401, 'UNAUTHENTICATED', 'Требуется вход.');
-    }
-    const access = await resolveObservationAccess(
-      new D1AccessGovernanceRepository(env.DB),
-      toSiteIdentityPrincipal(identity),
-      payload.accessAssignmentId,
-      payload.facilityId,
-    );
-    const observation = await new D1PatientObservationRepository(
-      env.DB,
-      access.scope,
-    ).create({
-      patientId: payload.patientId,
-      measuredAt: payload.measuredAt,
-      context: payload.context,
-      values: payload.values,
-      note: payload.note,
-      reason: payload.reason,
-      idempotencyKey: payload.idempotencyKey,
-      requestId: context.requestId,
-    });
-    return apiSuccess(context, { observation, persistence: 'd1' }, 201);
-  } catch (error) {
-    return observationApiFailure(
-      context,
-      error,
-      'OBSERVATION_CREATE_FAILED',
-      'Не удалось сохранить показатели.',
-    );
-  }
+    validateCloudObservationCommand(parsed.data);
+    const { database, access } = await cloudObservationAccess(request, parsed.data);
+    const result = parseCloudObservationMutation(await database.call('orion_observation_create', {
+      assignment_id: access.assignment.assignmentId, facility_id: access.facility.id, payload: parsed.data,
+    }), cloudObservationScope(access, parsed.data.patientId), {});
+    return apiSuccess(context, { ...result, persistence: 'supabase' }, 201);
+  } catch (error) { return cloudObservationFailure(context, error); }
 }

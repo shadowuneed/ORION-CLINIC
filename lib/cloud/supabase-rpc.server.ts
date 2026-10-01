@@ -6,14 +6,24 @@ export const cloudRpcNames = [
   'orion_access_overview', 'orion_patients_list', 'orion_patient_detail',
   'orion_patient_create', 'orion_patient_update', 'orion_patient_archive',
   'orion_patient_history_page',
+  'orion_observations_page', 'orion_observation_history_page',
+  'orion_patient_latest_vitals', 'orion_observation_create', 'orion_observation_correct',
 ] as const;
 export type CloudRpcName = typeof cloudRpcNames[number];
 export type CloudPatientRejection = 'PATIENT_VERSION_CONFLICT' | 'PATIENT_PROFILE_NOT_ACTIVE' |
   'PATIENT_PROFILE_UNCHANGED' | 'PATIENT_ALREADY_ARCHIVED';
+export type CloudObservationRejection = 'OBSERVATION_INVALID' | 'OBSERVATION_BMI_OUT_OF_RANGE' |
+  'PAGINATION_STALE' | 'OBSERVATION_VERSION_CONFLICT' | 'OBSERVATION_NO_CHANGE' | 'OBSERVATION_IDEMPOTENCY_CONFLICT';
+const observationRpcNames: readonly CloudRpcName[] = [
+  'orion_observations_page', 'orion_observation_history_page', 'orion_patient_latest_vitals',
+  'orion_observation_create', 'orion_observation_correct',
+];
 
 export class CloudRpcError extends Error {
   constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'not_found' | 'conflict' | 'invalid' | 'unavailable',
-    readonly patientRejection?: CloudPatientRejection) {
+    readonly patientRejection?: CloudPatientRejection,
+    readonly statusCode?: number,
+    readonly observationRejection?: CloudObservationRejection) {
     super('The cloud database request could not be completed.');
     this.name = 'CloudRpcError';
   }
@@ -71,14 +81,35 @@ async function patientRejection(response: Response, name: CloudRpcName): Promise
   return undefined;
 }
 
-async function reviewedPatientNotFound(response: Response, name: CloudRpcName): Promise<boolean> {
-  if (!(['orion_patient_update', 'orion_patient_archive', 'orion_patient_history_page'] as readonly CloudRpcName[]).includes(name)) return false;
+async function reviewedNotFound(response: Response, name: CloudRpcName): Promise<boolean> {
+  const message = observationRpcNames.includes(name) ? 'OBSERVATION_NOT_FOUND' :
+    (['orion_patient_update', 'orion_patient_archive', 'orion_patient_history_page'] as readonly CloudRpcName[]).includes(name)
+      ? 'PATIENT_NOT_FOUND' : null;
+  if (!message) return false;
   try {
     const body = await boundedJson(response, 4_096);
     return Boolean(body && typeof body === 'object' && !Array.isArray(body) &&
       (body as Record<string, unknown>).code === 'PT404' &&
-      (body as Record<string, unknown>).message === 'PATIENT_NOT_FOUND');
+      (body as Record<string, unknown>).message === message);
   } catch { return false; }
+}
+
+async function observationRejection(response: Response, name: CloudRpcName): Promise<CloudObservationRejection | undefined> {
+  if (!observationRpcNames.includes(name)) return undefined;
+  try {
+    const body = await boundedJson(response, 4_096);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+    const value = body as Record<string, unknown>;
+    if (value.code !== `PT${response.status}`) return undefined;
+    if (response.status === 409 && value.message === 'PAGINATION_STALE' &&
+      (name === 'orion_observations_page' || name === 'orion_observation_history_page')) return value.message;
+    if (name !== 'orion_observation_create' && name !== 'orion_observation_correct') return undefined;
+    if (response.status === 422 && (value.message === 'OBSERVATION_INVALID' || value.message === 'OBSERVATION_BMI_OUT_OF_RANGE')) return value.message;
+    if (response.status === 409 && value.message === 'OBSERVATION_IDEMPOTENCY_CONFLICT') return value.message;
+    if (response.status === 409 && name === 'orion_observation_correct' &&
+      (value.message === 'OBSERVATION_VERSION_CONFLICT' || value.message === 'OBSERVATION_NO_CHANGE')) return value.message;
+  } catch { await response.body?.cancel().catch(() => undefined); }
+  return undefined;
 }
 
 /**
@@ -123,16 +154,18 @@ export async function callCloudRpc(input: {
   if (response.status === 401) throw new CloudRpcError('unauthenticated');
   if (response.status === 403) throw new CloudRpcError('forbidden');
   if (response.status === 404) {
-    const missing = await reviewedPatientNotFound(response, input.name);
+    const missing = await reviewedNotFound(response, input.name);
     if (signal.aborted || !missing) throw new CloudRpcError('unavailable');
-    throw new CloudRpcError('not_found');
+    throw new CloudRpcError('not_found', undefined, 404);
   }
   if (response.status === 409 || response.status === 422) {
-    const rejection = await patientRejection(response, input.name);
+    const isObservation = observationRpcNames.includes(input.name);
+    const rejection = isObservation ? undefined : await patientRejection(response, input.name);
+    const observation = isObservation ? await observationRejection(response, input.name) : undefined;
     if (signal.aborted) throw new CloudRpcError('unavailable');
-    throw new CloudRpcError(response.status === 409 ? 'conflict' : 'invalid', rejection);
+    throw new CloudRpcError(response.status === 409 ? 'conflict' : 'invalid', rejection, response.status, observation);
   }
-  if (response.status === 400) throw new CloudRpcError('invalid');
+  if (response.status === 400) throw new CloudRpcError('invalid', undefined, 400);
   if (!response.ok) throw new CloudRpcError('unavailable');
   const result = await boundedJson(response);
   if (signal.aborted) throw new CloudRpcError('unavailable');

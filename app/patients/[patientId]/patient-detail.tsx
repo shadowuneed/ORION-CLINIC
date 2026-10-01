@@ -23,16 +23,17 @@ import {
   X,
 } from 'lucide-react';
 import type { EncounterSummary, PatientContinuationPage, PatientDetail, PatientProfileHistoryEntry } from '@/lib/repositories/patient-registry';
-import type { LatestPatientVitals } from '@/lib/repositories/patient-observations';
 import { appendPatientPhotoVersion } from '@/lib/domain/patient-photo';
 import { scopedWorkspaceUrl } from '@/lib/workspace-access-url';
 import { readCloudGenerationCookie } from '@/lib/cloud/account-fence';
+import { parseCloudObservationLatestClient, readBoundedCloudObservationResponse } from '@/lib/cloud/observation-client-fence';
 import { appendPatientRows, createPatientRequestFence, isPatientContinuationPage } from '../pagination-client';
 import styles from '../patients.module.css';
 import { PatientVitalsPanel, type PatientVitalsState } from './patient-vitals-panel';
 
 type DetailResponse = {
   viewer?: { id: string; displayName: string; role: string };
+  organization?: { id: string; name: string };
   facility?: { id: string; name: string };
   accessAssignment?: { assignmentId: string };
   patient?: PatientDetail;
@@ -202,14 +203,18 @@ export function PatientDetailView({
     void fetch(`/api/observations/latest-vitals?${params}`, {
       cache: 'no-store', credentials: 'same-origin', signal: request.signal,
     }).then(async (response) => {
-      if (!response.ok) throw new Error('Measurement unavailable');
-      const payload = await response.json() as { vitals: LatestPatientVitals };
-      if (request.current()) setMeasurement({ state: 'ready', value: payload.vitals, scopeKey });
+      const payload = await readBoundedCloudObservationResponse(response);
+      if (!request.current()) return;
+      const result = parseCloudObservationLatestClient(payload, { organizationId: data.organization?.id ?? '',
+        patientId: data.patient!.id, facilityId: exactFacility ?? '', accessAssignmentId: exactAssignment ?? '' });
+      window.clearTimeout(timer);
+      if (request.current()) setMeasurement({ state: 'ready', value: result.vitals, scopeKey, timeZone: result.timeZone });
     }).catch(() => {
+      window.clearTimeout(timer);
       if (request.current()) setMeasurement({ state: 'unavailable', value: null, scopeKey });
-    });
+    }).finally(() => request.finish());
     return () => { window.clearTimeout(timer); request.cancel(); };
-  }, [state, data.patient, data.facility?.id, data.accessAssignment?.assignmentId, facilityId, accessAssignmentId, vitalsAvailable, loadedScope, patientId, facilityQuery]);
+  }, [state, data.patient, data.organization?.id, data.facility?.id, data.accessAssignment?.assignmentId, facilityId, accessAssignmentId, vitalsAvailable, loadedScope, patientId, facilityQuery]);
 
   async function loadHistory(kind: HistoryKind) {
     const patient = data.patient;
@@ -599,10 +604,10 @@ export function PatientDetailView({
           {!photoAvailable && <p className={styles.capabilityNotice}>Загрузка фотографий пока недоступна в облачной версии.</p>}
 
           {vitalsAvailable ? <PatientVitalsPanel key={measurementKey} measurement={measurement.scopeKey === measurementKey ? measurement : { state: 'loading', value: null }} patient={patient}
-            measurementsUrl={scopedWorkspaceUrl(`/pathway?view=observations&patientId=${encodeURIComponent(patient.id)}`, {
+            measurementsUrl={scopedWorkspaceUrl(`/observations?patientId=${encodeURIComponent(patient.id)}`, {
               accessAssignmentId: data.accessAssignment?.assignmentId ?? accessAssignmentId ?? '', facilityId: data.facility?.id ?? facilityId ?? '',
             })}
-            encounterUrl={patient.latestEncounter ? encounterUrl(patient.latestEncounter.id) : null}
+            encounterUrl={encounterWorkspaceAvailable && patient.latestEncounter ? encounterUrl(patient.latestEncounter.id) : null}
             encounterStatus={patient.latestEncounter ? encounterStatus[patient.latestEncounter.status] : null} /> : (
               <section className={styles.infoPanel}>
                 <header><h2>Измерения пациента</h2></header>

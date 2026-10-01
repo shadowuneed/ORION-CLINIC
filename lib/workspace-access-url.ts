@@ -5,7 +5,7 @@ export function scopedWorkspaceUrl(path: string, selection: SelectedWorkspaceAcc
   // Scope is only propagated to same-origin clinical routes, never provider URLs.
   if (!path.startsWith('/') || path.startsWith('//')) return path;
   const url = new URL(path, 'https://orion.invalid');
-  const allowed = url.pathname === '/' || url.pathname === '/live' || url.pathname === '/orders' || url.pathname === '/pathway' || url.pathname === '/encounters/new' ||
+  const allowed = url.pathname === '/' || url.pathname === '/live' || url.pathname === '/orders' || url.pathname === '/pathway' || url.pathname === '/observations' || url.pathname === '/encounters/new' ||
     /^\/patients\/[^/]+$/.test(url.pathname) ||
     url.pathname === '/api/workspace' || url.pathname.startsWith('/api/workspace/') || url.pathname === '/api/dashboard/briefing' ||
     url.pathname.startsWith('/api/clinical/') || url.pathname.startsWith('/api/local-speech/');
