@@ -81,7 +81,9 @@ describe('cloud build boundary', () => {
   it.each(['GET', 'HEAD'])('lands on the implemented registry via %s without exposing the legacy dashboard', method => {
     const response = cloudIngressResponse(request('/', method));
     expect(response?.status).toBe(307);
-    expect(response?.headers.get('Location')).toBe('/patients');
+    // Next's proxy adapter requires an absolute URL even for a same-origin redirect.
+    expect(response?.headers.get('Location')).toBe('https://orion.example/patients');
+    expect(cloudIngressResponse(request('/?next=https://other.example/'))?.headers.get('Location')).toBe('https://orion.example/patients');
     expect(response?.headers.get('Cache-Control')).toContain('no-store');
     expect(cloudIngressResponse(request('/', 'POST'))?.status).toBe(503);
   });
