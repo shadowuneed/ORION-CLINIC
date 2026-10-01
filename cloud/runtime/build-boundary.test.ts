@@ -88,6 +88,16 @@ describe('cloud build boundary', () => {
     expect(cloudIngressResponse(request('/', 'POST'))?.status).toBe(503);
   });
 
+  it('preserves explicit landing selectors and duplicates for independent validation without forwarding encounter or return URLs', () => {
+    const response = cloudIngressResponse(request('/?facilityId=fac-a&accessAssignmentId=assignment-a&accessAssignmentId=assignment-b&encounterId=private-encounter&next=https://other.example/'));
+    const target = new URL(response!.headers.get('Location')!);
+    expect(target.origin).toBe('https://orion.example');
+    expect(target.pathname).toBe('/patients');
+    expect(target.searchParams.getAll('accessAssignmentId')).toEqual(['assignment-a', 'assignment-b']);
+    expect(target.searchParams.getAll('facilityId')).toEqual(['fac-a']);
+    expect([...target.searchParams.keys()].sort()).toEqual(['accessAssignmentId', 'accessAssignmentId', 'facilityId']);
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])(
     'does not allow writes through liveness via %s',
     (method) => {

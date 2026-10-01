@@ -49,8 +49,15 @@ export function cloudIngressResponse(request: Request): Response | null {
   // The cloud landing page is the implemented registry, not the retained
   // local clinical dashboard. The target performs its own session/access check.
   if (readable && pathname === '/') {
+    const source = new URL(request.url);
+    const landing = new URL('/patients', source);
+    for (const key of ['accessAssignmentId', 'facilityId']) {
+      // Preserve duplicates too: the destination must reject malformed scope,
+      // never silently replace an explicit selection with a different grant.
+      for (const value of source.searchParams.getAll(key)) landing.searchParams.append(key, value);
+    }
     return new Response(null, { status: 307, headers: { ...responseHeaders,
-      Location: new URL('/patients', request.url).href } });
+      Location: landing.href } });
   }
 
   // Next emits dynamic-route chunks beneath literal or URL-encoded brackets.
