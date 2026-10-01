@@ -64,9 +64,11 @@ function formatDate(value: number | null) {
 export function AccessWorkspace({
   assignments,
   selected,
+  cloudMode = false,
 }: {
   assignments: readonly AccessAssignmentSummary[];
   selected: AccessAssignmentSummary | null;
+  cloudMode?: boolean;
 }) {
   if (!selected) {
     return (
@@ -112,10 +114,10 @@ export function AccessWorkspace({
         <div>
           <span className={styles.eyebrow}>Права текущего пользователя</span>
           <h1>Мой доступ</h1>
-          <p>Полномочия рассчитаны сервером из текущей версии назначения в D1. Права разных контуров не складываются.</p>
+          <p>Полномочия рассчитаны сервером из текущей версии назначения в {cloudMode ? 'Supabase' : 'D1'}. Права разных контуров не складываются.</p>
         </div>
         <div className={styles.headerActions}>
-          {granted.has('access.manage') ? (
+          {!cloudMode && granted.has('access.manage') ? (
             <Link
               className={styles.manageLink}
               href={`/access/manage?assignmentId=${encodeURIComponent(selected.assignmentId)}`}
@@ -126,7 +128,7 @@ export function AccessWorkspace({
           ) : null}
           <span className={styles.d1Badge}>
             <Database aria-hidden="true" size={18} />
-            <span><strong>D1 · текущая версия</strong><small>Не данные браузера</small></span>
+            <span><strong>{cloudMode ? 'Supabase · PostgreSQL · текущая версия' : 'D1 · текущая версия'}</strong><small>Не данные браузера</small></span>
           </span>
         </div>
       </header>
@@ -166,6 +168,7 @@ export function AccessWorkspace({
         <div>
           <strong>{hasClinicalDataAccess ? 'Клинические данные доступны в назначенном контуре' : 'Клинические данные не входят в это назначение'}</strong>
           <p>Даже разрешённое действие дополнительно ограничивается филиалом, отношением к пациенту, целью доступа, статусом записи и действующим согласием.</p>
+          {cloudMode && <p>Разрешения назначены; не все разделы ещё перенесены в облако. Наличие разрешения не означает, что соответствующий раздел уже работает.</p>}
         </div>
       </section>
 
@@ -191,7 +194,7 @@ export function AccessWorkspace({
             <div><dt>Статус</dt><dd>Активно</dd></div>
             <div><dt>Начало</dt><dd>{formatDate(selected.effectiveFrom)}</dd></div>
             <div><dt>Окончание</dt><dd>{formatDate(selected.effectiveUntil)}</dd></div>
-            <div><dt>Источник</dt><dd>{selected.source === 'bootstrap' ? 'Локальная начальная настройка' : 'Администратор организации'}</dd></div>
+            <div><dt>Источник</dt><dd>{selected.source === 'bootstrap' ? (cloudMode ? 'Начальное назначение ORION Cloud' : 'Локальная начальная настройка') : 'Администратор организации'}</dd></div>
             <div><dt>Версия</dt><dd>{selected.assignmentVersion}</dd></div>
           </dl>
         </section>

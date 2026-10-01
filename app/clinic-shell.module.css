@@ -5,6 +5,19 @@
   background: var(--canvas);
 }
 
+.cloudNotice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cloudNotice strong { color: var(--brand-strong); }
+
 .topbar {
   position: sticky;
   top: 0;

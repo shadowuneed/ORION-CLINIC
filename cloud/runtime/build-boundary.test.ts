@@ -25,7 +25,7 @@ describe('cloud build boundary', () => {
   });
 
   it.each([
-    '/', '/sign-out', '/pathway?view=overview', '/scheduling', '/workspace',
+    '/sign-out', '/pathway?view=overview', '/scheduling', '/workspace',
     '/api/orders', '/api/access', '/api/health/ready', '/api/auth/local/login',
     '/api/auth/local/logout', '/api/dashboard/briefing', '/api/speech/transcribe',
     '/_next/data/build-id/patients.json',
@@ -78,6 +78,14 @@ describe('cloud build boundary', () => {
     expect(await head?.text()).toBe('');
   });
 
+  it.each(['GET', 'HEAD'])('lands on the implemented registry via %s without exposing the legacy dashboard', method => {
+    const response = cloudIngressResponse(request('/', method));
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get('Location')).toBe('/patients');
+    expect(response?.headers.get('Cache-Control')).toContain('no-store');
+    expect(cloudIngressResponse(request('/', 'POST'))?.status).toBe(503);
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'])(
     'does not allow writes through liveness via %s',
     (method) => {
@@ -91,6 +99,25 @@ describe('cloud build boundary', () => {
     expect(cloudIngressResponse(request('/_next/static/%2f..%2fapi/patients'))?.status).toBe(503);
     expect(cloudIngressResponse(request('/_next/image?url=http://127.0.0.1/'))?.status).toBe(503);
     expect(cloudIngressResponse(request('/_next/static/../../api/orders'))?.status).toBe(503);
+  });
+
+  it.each([
+    '/_next/static/chunks/app/patients/[patientId]/page-3e9e8888b9871cd9.js',
+    '/_next/static/chunks/app/patients/%5BpatientId%5D/page-3e9e8888b9871cd9.js',
+    '/_next/static/chunks/app/patients/%5bpatientId%5d/page.js',
+    '/_next/static/chunks/app/example/%5B%5B...slug%5D%5D/page.js',
+  ])('loads generated dynamic-route asset %s without opening write methods', path => {
+    expect(cloudIngressResponse(request(path))).toBeNull();
+    expect(cloudIngressResponse(request(path, 'HEAD'))).toBeNull();
+    expect(cloudIngressResponse(request(path, 'POST'))?.status).toBe(503);
+  });
+
+  it.each([
+    '/_next/static/%2Fapi%2Fpatients', '/_next/static/%5BpatientId%5D/%2e%2e%2fapi/patients',
+    '/_next/static/%255BpatientId%255D/page.js', '/_next/static/%5BpatientId%5D/%5c..%5capi',
+    '/_next/static/%5BpatientId%5D/%00page.js', '/_next/data/%5BpatientId%5D/page.json',
+  ])('does not decode unsafe or non-static asset route %s', path => {
+    expect(cloudIngressResponse(request(path))?.status).toBe(503);
   });
 
   it('cannot be unlocked by an environment-ready flag', () => {

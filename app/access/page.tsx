@@ -70,11 +70,12 @@ export default async function AccessPage({
   const content =
     view.kind === 'resolved' ? (
       <AccessWorkspace
+        cloudMode
         assignments={view.overview.assignments}
         selected={view.overview.selected}
       />
     ) : view.kind === 'selection' ? (
-      <AccessWorkspace assignments={view.assignments} selected={null} />
+      <AccessWorkspace cloudMode assignments={view.assignments} selected={null} />
     ) : view.kind === 'service-forbidden' ? (
       <AccessWorkspaceState
         title="Интерактивный вход запрещён"

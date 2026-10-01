@@ -260,6 +260,40 @@ describe('patient pagination client behavior', () => {
     expect(elements(tree).filter(element => element.props.role === 'dialog')).toHaveLength(0);
   });
 
+  it.each([
+    ['Редактировать', 'Загрузить серверную версию', 'PATCH'],
+    ['Архивировать', 'Обновить карточку', 'POST'],
+  ])('recovers a stale %s form by loading the winning server version without a second mutation', async (action, reloadLabel, method) => {
+    const permissions = { canUpdate: true, canArchive: true, canCreateEncounter: false };
+    const winning = { ...patient(), displayName: 'Synthetic winning version', version: 4,
+      profileHistory: [profile('history-4', 4)], profileHistoryCount: 4 };
+    const fetchMock = vi.fn().mockResolvedValueOnce(response({ ...scope, patient: patient(), permissions }))
+      .mockResolvedValueOnce(response({ error: { code: 'PATIENT_VERSION_CONFLICT', message: 'Synthetic version conflict' } }, 409))
+      .mockResolvedValueOnce(response({ ...scope, patient: winning, permissions }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('FormData', class { get(name: string) { return name === 'displayName' ? 'Synthetic losing version' : name === 'changeReason' ? 'Synthetic conflict test' : ''; } });
+    const component = () => PatientDetailView({ patientId: 'patient-a', facilityId: facility, accessAssignmentId: assignment, vitalsAvailable: false });
+    let tree = await mount(component);
+    (button(tree, action).props.onClick as () => void)();
+    tree = render(component);
+    const form = elements(tree).find(element => element.type === 'form');
+    await (form!.props.onSubmit as (event: unknown) => Promise<void>)({ preventDefault() {}, currentTarget: {} });
+    tree = render(component);
+    expect(text(tree)).toContain('Synthetic version conflict');
+    expect(text(tree)).not.toContain('Synthetic winning version');
+    expect(fetchMock.mock.calls[1][1].method).toBe(method);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).expectedVersion).toBe(3);
+    (button(tree, reloadLabel).props.onClick as () => void)();
+    await vi.runAllTimersAsync();
+    tree = render(component);
+    expect(text(tree)).toContain('Synthetic winning version');
+    expect(text(tree)).toContain('Версия 4');
+    expect(text(tree)).not.toContain('Synthetic version conflict');
+    expect(elements(tree).filter(element => element.props.role === 'dialog')).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][1].method ?? 'GET').toBe('GET');
+  });
+
   it('keeps already loaded history after a bounded mutation and uses the new version cursor', async () => {
     const next = { ...patient(), version: 4, profileHistory: [profile('history-4', 4)], profileHistoryCount: 4,
       profileHistoryPage: { hasMore: true, nextCursor: 'new-version-cursor' } };

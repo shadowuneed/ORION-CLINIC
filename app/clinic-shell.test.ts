@@ -11,10 +11,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/link', () => ({ default: 'a' }));
 import { ClinicShell } from './clinic-shell';
 
-function render(clinician = true, full = false) {
+function render(clinician = true, full = false, cloudMode = false, patientDirectory = true) {
   const props = {
     children: 'Рабочая область', user: { displayName: 'Тест', email: null },
-    capabilities: { clinician, patientDirectory: true, orders: true,
+    cloudMode,
+    capabilities: { clinician, patientDirectory, orders: true,
       scheduling: true, chronicCare: true, observations: true,
       communications: true, pathway: true, accessOverview: true, accessAdministration: false },
   };
@@ -67,5 +68,27 @@ describe('shared workspace shell', () => {
     const html = render(true, true);
     expect(html).toContain('data-pathway-page="true"');
     expect(html).toContain('aria-current="page"');
+  });
+
+  it('offers only implemented cloud navigation while leaving granted capabilities intact', () => {
+    location.pathname = '/patients/patient-a';
+    location.query = 'facilityId=fac-a&accessAssignmentId=assignment-a';
+    const html = render(true, true, true);
+    expect(html).toContain('ORION Clinic — пациенты');
+    expect(html).toContain('href="/patients?accessAssignmentId=assignment-a&amp;facilityId=fac-a"');
+    expect(html).toContain('aria-label="Мой доступ"');
+    expect(html).toContain('Доступны карточки пациентов и проверка прав');
+    expect(html).toContain('ещё не перенесены в облако');
+    for (const path of ['/', '/live', '/scheduling', '/pathway', '/access/manage', '/help']) {
+      expect(html).not.toMatch(new RegExp(`href="${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[?\"]|&amp;)`));
+    }
+  });
+
+  it('uses self-access as cloud home without patient-directory permission', () => {
+    location.pathname = '/access'; location.query = '';
+    const html = render(true, true, true, false);
+    expect(html).toContain('ORION Clinic — моя роль и права');
+    expect(html).not.toContain('href="/patients');
+    expect(html).not.toContain('href="/"');
   });
 });

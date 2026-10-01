@@ -68,6 +68,7 @@ export function ClinicShell({
   capabilities,
   user,
   profile,
+  cloudMode = false,
 }: {
   children: React.ReactNode;
   capabilities: {
@@ -84,6 +85,7 @@ export function ClinicShell({
   };
   user: { displayName: string; email: string | null };
   profile?: { staffName: string; roles: string[]; workplace: string | null };
+  cloudMode?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -140,9 +142,15 @@ export function ClinicShell({
     return () => window.clearTimeout(timer);
   }, []);
 
+  // Feature availability is presentation, not permission. The server still
+  // authorizes every request against the exact selected assignment.
   const permittedNavigation = navigation.filter(
-    (item) => capabilities[item.capability],
+    (item) => capabilities[item.capability] && (!cloudMode || item.href === '/patients'),
   );
+  const homeTarget = cloudMode ? (capabilities.patientDirectory ? workspaceLink('/patients') : '/access')
+    : capabilities.clinician ? workspaceLink('/') : '/access';
+  const homeLabel = cloudMode && capabilities.patientDirectory ? 'ORION Clinic — пациенты'
+    : !cloudMode && capabilities.clinician ? 'ORION Clinic — обзор' : 'ORION Clinic — моя роль и права';
   const initials = useMemo(
     () =>
       (profile?.staffName || user.displayName)
@@ -166,8 +174,8 @@ export function ClinicShell({
   return (
     <div className={styles.shell} data-orion-route-path={pathname}>
       <header className={styles.topbar}>
-        <Link className={styles.brand} href={capabilities.clinician ? workspaceLink('/') : '/access'} aria-label={capabilities.clinician ? 'ORION Clinic — обзор' : 'ORION Clinic — моя роль и права'}
-          onClick={(event) => navigateWithPathwayMotion(event, capabilities.clinician ? workspaceLink('/') : '/access', 'Обзор')}>
+        <Link className={styles.brand} href={homeTarget} aria-label={homeLabel}
+          onClick={(event) => navigateWithPathwayMotion(event, homeTarget, cloudMode ? 'Пациенты' : 'Обзор')}>
           <OrionBrand animated size={44} wordmarkClassName={styles.brandCopy} />
         </Link>
 
@@ -176,27 +184,27 @@ export function ClinicShell({
             <button aria-expanded={profileOpen} aria-controls="orion-profile-panel" aria-label={`Открыть профиль: ${profile?.staffName || user.displayName}`}
               className={styles.profileTrigger} onClick={() => setProfileOpen((open) => !open)} type="button">
               <span className={styles.avatar} aria-hidden="true">{initials}</span>
-              <span className={styles.identityCopy}><strong>{profile?.staffName || user.displayName}</strong><small>{profile?.roles.join(' · ') || (localAccountModeEnabled() ? 'Доступ не назначен' : 'Технический вход')}</small></span>
+              <span className={styles.identityCopy}><strong>{profile?.staffName || user.displayName}</strong><small>{profile?.roles.join(' · ') || (cloudMode || localAccountModeEnabled() ? 'Доступ не назначен' : 'Технический вход')}</small></span>
               <ChevronDown aria-hidden="true" size={16} />
             </button>
             {profileOpen && <div className={styles.profileMenu} id="orion-profile-panel" aria-label="Профиль и настройки">
               <div className={styles.profileSummary}>
                 <span className={styles.profileEyebrow}>Рабочий профиль</span>
                 <strong>{profile?.staffName || user.displayName}</strong>
-                <span>{profile?.roles.join(' · ') || (localAccountModeEnabled() ? 'Активное назначение не найдено' : 'Персональный доступ сотрудника не подключён')}</span>
+                <span>{profile?.roles.join(' · ') || (cloudMode || localAccountModeEnabled() ? 'Активное назначение не найдено' : 'Персональный доступ сотрудника не подключён')}</span>
                 {profile?.workplace && <span>{profile.workplace}</span>}
-                <small>{localAccountModeEnabled() ? 'Личный вход сотрудника' : 'Вход среды разработки'}: {user.displayName}{user.email ? ` · ${user.email}` : ''}</small>
+                <small>{cloudMode ? 'Персональный вход Supabase' : localAccountModeEnabled() ? 'Личный вход сотрудника' : 'Вход среды разработки'}: {user.displayName}{user.email ? ` · ${user.email}` : ''}</small>
               </div>
               <Link href={workspaceLink('/access')} onClick={(event) => { setProfileOpen(false); navigateWithPathwayMotion(event, workspaceLink('/access'), 'Моя роль и права'); }}><ShieldCheck aria-hidden="true" size={18} />Моя роль и права</Link>
-              {capabilities.accessAdministration && <Link href={workspaceLink('/access/manage')} onClick={(event) => { setProfileOpen(false); navigateWithPathwayMotion(event, workspaceLink('/access/manage'), 'Сотрудники и доступ'); }}><KeyRound aria-hidden="true" size={18} />Сотрудники и доступ</Link>}
+              {!cloudMode && capabilities.accessAdministration && <Link href={workspaceLink('/access/manage')} onClick={(event) => { setProfileOpen(false); navigateWithPathwayMotion(event, workspaceLink('/access/manage'), 'Сотрудники и доступ'); }}><KeyRound aria-hidden="true" size={18} />Сотрудники и доступ</Link>}
               {(searchParams.has('accessAssignmentId') || searchParams.has('facilityId')) &&
-                <a href={pathname}><KeyRound aria-hidden="true" size={18} />Сменить рабочий доступ</a>}
-              <Link href="/help" onClick={(event) => { setProfileOpen(false); navigateWithPathwayMotion(event, '/help', 'Инструкция'); }}><BookOpen aria-hidden="true" size={18} />Инструкция</Link>
+                <a href={cloudMode ? '/access' : pathname}><KeyRound aria-hidden="true" size={18} />Сменить рабочий доступ</a>}
+              {!cloudMode && <Link href="/help" onClick={(event) => { setProfileOpen(false); navigateWithPathwayMotion(event, '/help', 'Инструкция'); }}><BookOpen aria-hidden="true" size={18} />Инструкция</Link>}
               <button onClick={toggleTheme} type="button">
                 {theme === 'dark' ? <Sun aria-hidden="true" size={18} /> : <Moon aria-hidden="true" size={18} />}
                 {theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
               </button>
-              {localAccountModeEnabled() && <>
+              {!cloudMode && localAccountModeEnabled() && <>
                 <a href="/account/password"><KeyRound aria-hidden="true" size={18} />Сменить пароль</a>
                 <a href="/sign-in"><Users aria-hidden="true" size={18} />Другой аккаунт</a>
               </>}
@@ -230,12 +238,20 @@ export function ClinicShell({
               </Link>
             );
           })}
+          {cloudMode && capabilities.accessOverview && <Link className={`${styles.navItem} ${pathname === '/access' ? styles.navActive : ''}`}
+            href="/access" aria-label="Мой доступ" title="Мой доступ" aria-current={pathname === '/access' ? 'page' : undefined}>
+            <ShieldCheck aria-hidden="true" size={20} strokeWidth={1.8} />
+            <span>Мой доступ</span><span className={styles.mobileLabel}>Доступ</span>
+          </Link>}
         </nav>
 
       </aside>
 
       <div className={styles.content} data-pathway-page={pathname === '/pathway' ? 'true' : undefined}
         data-orion-page-content tabIndex={-1}>
+        {cloudMode && <div className={styles.cloudNotice} aria-label="Возможности облачной версии">
+          <strong>ORION Cloud</strong><span>Доступны карточки пациентов и проверка прав. Приём, маршрут, измерения и уведомления ещё не перенесены в облако.</span>
+        </div>}
         {children}
       </div>
     </div>

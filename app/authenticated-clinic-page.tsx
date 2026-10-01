@@ -147,7 +147,7 @@ export function AuthenticatedClinicPage({
   }[requiredCapability];
 
   return (
-    <ClinicShell capabilities={context.capabilities} user={context.user} profile={context.profile}>
+    <ClinicShell cloudMode capabilities={context.capabilities} user={context.user} profile={context.profile}>
       {context.accessCheck === 'unavailable' ? (
         <AccessState
           title="Проверка доступа недоступна"

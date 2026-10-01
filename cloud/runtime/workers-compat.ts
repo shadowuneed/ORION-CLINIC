@@ -46,7 +46,16 @@ export function cloudIngressResponse(request: Request): Response | null {
   const pathname = new URL(request.url).pathname;
   const readable = request.method === 'GET' || request.method === 'HEAD';
 
-  const buildAsset = /^\/_next\/static\/[a-zA-Z0-9_./-]+$/.test(pathname) &&
+  // The cloud landing page is the implemented registry, not the retained
+  // local clinical dashboard. The target performs its own session/access check.
+  if (readable && pathname === '/') {
+    return new Response(null, { status: 307, headers: { ...responseHeaders, Location: '/patients' } });
+  }
+
+  // Next emits dynamic-route chunks beneath literal or URL-encoded brackets.
+  // Allow those filename characters only; encoded separators/traversal remain
+  // closed, and this never enables a page/API route or a write method.
+  const buildAsset = /^\/_next\/static\/(?:[a-zA-Z0-9_./-]|\[|\]|%5B|%5D)+$/i.test(pathname) &&
     !pathname.split('/').some((segment) => segment === '.' || segment === '..');
   if (readable && buildAsset) {
     return null;

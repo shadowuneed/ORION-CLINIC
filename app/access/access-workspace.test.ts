@@ -151,4 +151,18 @@ describe('self-access workspace', () => {
     expect(html).toContain('Доступ закрыт безопасно');
     expect(html).toContain('Полномочия не выданы.');
   });
+
+  it('describes cloud authority honestly without linking unimplemented administration', () => {
+    const selected: AccessAssignmentSummary = { ...assignment(), source: 'bootstrap',
+      effectivePermissions: [...assignment().effectivePermissions, 'access.manage'] };
+    const html = renderToStaticMarkup(createElement(AccessWorkspace, { assignments: [selected], selected, cloudMode: true }));
+    expect(html).toContain('Supabase · PostgreSQL · текущая версия');
+    expect(html).toContain('Начальное назначение ORION Cloud');
+    expect(html).toContain('не все разделы ещё перенесены в облако');
+    expect(html).toContain('access.manage');
+    expect(html).toContain('Разрешено');
+    expect(html).not.toContain('href="/access/manage');
+    expect(html).not.toContain('D1');
+    expect(html).not.toContain('Локальная начальная настройка');
+  });
 });

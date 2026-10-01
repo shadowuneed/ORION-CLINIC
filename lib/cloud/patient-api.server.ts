@@ -29,9 +29,21 @@ export function cloudPatientFailure(context: ApiRequestContext, error: unknown) 
     return apiFailure(context, 403, 'PATIENT_DIRECTORY_FORBIDDEN', 'Нет доступа к реестру.');
   }
   if (error instanceof CloudRpcError && error.kind === 'conflict') {
+    if (error.patientRejection === 'PATIENT_VERSION_CONFLICT') {
+      return apiFailure(context, 409, 'PATIENT_VERSION_CONFLICT', 'Карточку уже изменили. Загрузите серверную версию перед повтором.');
+    }
+    if (error.patientRejection === 'PATIENT_PROFILE_NOT_ACTIVE') {
+      return apiFailure(context, 409, 'PATIENT_PROFILE_NOT_ACTIVE', 'Карточка больше не активна. Обновите страницу.');
+    }
     return apiFailure(context, 409, 'PATIENT_COMMAND_CONFLICT', 'Состояние изменилось. Обновите карточку.');
   }
   if (error instanceof CloudRpcError && error.kind === 'invalid') {
+    if (error.patientRejection === 'PATIENT_PROFILE_UNCHANGED') {
+      return apiFailure(context, 422, 'PATIENT_PROFILE_UNCHANGED', 'Данные не изменились. Измените нужное поле или отмените редактирование.');
+    }
+    if (error.patientRejection === 'PATIENT_ALREADY_ARCHIVED') {
+      return apiFailure(context, 422, 'PATIENT_ALREADY_ARCHIVED', 'Карточка уже находится в архиве. Обновите страницу.');
+    }
     return apiFailure(context, 400, 'INVALID_PATIENT_REQUEST', 'Проверьте данные запроса или обновите страницу.');
   }
   return apiFailure(context, 503, 'CLOUD_DATABASE_UNAVAILABLE', 'Не удалось подтвердить доступ или сохранить операцию в облачной базе.');

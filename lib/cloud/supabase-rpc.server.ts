@@ -8,16 +8,18 @@ export const cloudRpcNames = [
   'orion_patient_history_page',
 ] as const;
 export type CloudRpcName = typeof cloudRpcNames[number];
+export type CloudPatientRejection = 'PATIENT_VERSION_CONFLICT' | 'PATIENT_PROFILE_NOT_ACTIVE' |
+  'PATIENT_PROFILE_UNCHANGED' | 'PATIENT_ALREADY_ARCHIVED';
 
 export class CloudRpcError extends Error {
-  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'conflict' | 'invalid' | 'unavailable') {
+  constructor(readonly kind: 'unauthenticated' | 'forbidden' | 'conflict' | 'invalid' | 'unavailable',
+    readonly patientRejection?: CloudPatientRejection) {
     super('The cloud database request could not be completed.');
     this.name = 'CloudRpcError';
   }
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
-  const maxBytes = 1_048_576;
+async function boundedJson(response: Response, maxBytes = 1_048_576): Promise<unknown> {
   const length = response.headers.get('content-length');
   if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '') ||
       (length !== null && (!/^\d+$/.test(length) || Number(length) > maxBytes)) || !response.body) {
@@ -43,6 +45,30 @@ async function boundedJson(response: Response): Promise<unknown> {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw new CloudRpcError('unavailable'); }
+}
+
+/** Only exact reviewed SQL rejections, never upstream details or arbitrary text. */
+async function patientRejection(response: Response, name: CloudRpcName): Promise<CloudPatientRejection | undefined> {
+  if (name !== 'orion_patient_update' && name !== 'orion_patient_archive') return undefined;
+  try {
+    const body = await boundedJson(response, 4_096);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+    const value = body as Record<string, unknown>;
+    if (value.code !== `PT${response.status}`) return undefined;
+    if (response.status === 409 && (value.message === 'PATIENT_VERSION_CONFLICT' || value.message === 'PATIENT_PROFILE_NOT_ACTIVE')) {
+      return value.message;
+    }
+    if (response.status === 422 && name === 'orion_patient_update' && value.message === 'PATIENT_PROFILE_UNCHANGED') {
+      return value.message;
+    }
+    if (response.status === 422 && name === 'orion_patient_archive' && value.message === 'PATIENT_ALREADY_ARCHIVED') {
+      return value.message;
+    }
+  } catch {
+    // Malformed/oversized/private provider errors keep only their generic status.
+    await response.body?.cancel().catch(() => undefined);
+  }
+  return undefined;
 }
 
 /**
@@ -86,7 +112,11 @@ export async function callCloudRpc(input: {
   if (signal.aborted || response.redirected || (response.url && response.url !== url)) throw new CloudRpcError('unavailable');
   if (response.status === 401) throw new CloudRpcError('unauthenticated');
   if (response.status === 403) throw new CloudRpcError('forbidden');
-  if (response.status === 409) throw new CloudRpcError('conflict');
+  if (response.status === 409 || response.status === 422) {
+    const rejection = await patientRejection(response, input.name);
+    if (signal.aborted) throw new CloudRpcError('unavailable');
+    throw new CloudRpcError(response.status === 409 ? 'conflict' : 'invalid', rejection);
+  }
   if (response.status === 400) throw new CloudRpcError('invalid');
   if (!response.ok) throw new CloudRpcError('unavailable');
   const result = await boundedJson(response);
