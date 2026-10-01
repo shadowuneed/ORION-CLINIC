@@ -42,7 +42,7 @@ describe('cloud sign-in entry', () => {
     requestHeaders.mockResolvedValue(new Headers({ cookie: '__Host-orion-cloud-refresh=example-refresh-cookie' }));
     const html = renderToStaticMarkup(await SignInPage());
     expect(html).toContain('Сеанс нужно обновить');
-    expect(html).toContain('Продолжить сеанс');
+    expect(html).toContain('Попробовать продолжить сеанс');
     expect(html).toContain('Завершить сеанс и войти снова');
     expect(html).not.toContain('Ваш сеанс открыт');
     expect(html).not.toContain('example-refresh-cookie');

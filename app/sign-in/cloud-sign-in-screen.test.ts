@@ -73,11 +73,12 @@ describe('cloud sign-in recovery and bounded requests', () => {
     enterCredentials(); submit(render()); await vi.runAllTimersAsync();
     const recovery = render();
     expect(text(recovery)).toContain('Сеанс нужно обновить');
-    expect(text(recovery)).toContain('Сначала завершите текущий сеанс');
+    expect(text(recovery)).toContain('Найден прежний сеанс');
     expect(text(recovery)).not.toContain('Личность подтверждена');
     expect(all(recovery).some(element => element.props.type === 'password')).toBe(false);
     expect(replace).not.toHaveBeenCalled();
-    (button(recovery, 'Завершить сеанс и войти снова').props.onClick as () => void)();
+    expect(button(recovery, 'Завершить сеанс и войти снова').props.type).toBe('submit');
+    submit(recovery);
     await vi.runAllTimersAsync();
     expect(send.mock.calls.map(call => call[0])).toEqual([
       '/api/auth/cloud/csrf', '/api/auth/cloud/login', '/api/auth/cloud/csrf', '/api/auth/cloud/logout',
@@ -92,8 +93,9 @@ describe('cloud sign-in recovery and bounded requests', () => {
       .mockResolvedValueOnce(challenge()).mockResolvedValueOnce(json({ authenticated: true }));
     vi.stubGlobal('fetch', send);
     enterCredentials(); submit(render()); await vi.runAllTimersAsync();
-    const recovery = render(); button(recovery, 'Продолжить сеанс');
-    submit(recovery); await vi.runAllTimersAsync();
+    const recovery = render();
+    (button(recovery, 'Попробовать продолжить сеанс').props.onClick as () => void)();
+    await vi.runAllTimersAsync();
     expect(send.mock.calls[3][0]).toBe('/api/auth/cloud/refresh');
     expect(JSON.parse(send.mock.calls[3][1].body)).not.toHaveProperty('password');
     expect(replace).toHaveBeenCalledWith('/access');
@@ -144,7 +146,7 @@ describe('cloud sign-in recovery and bounded requests', () => {
       { 'X-ORION-Local-Session-Cleared': 'true' }));
     vi.stubGlobal('fetch', send);
     const tree = render({ hasStoredSession: true });
-    (button(tree, 'Завершить сеанс и войти снова').props.onClick as () => void)();
+    submit(tree);
     await vi.runAllTimersAsync();
     expect(replace).toHaveBeenCalledWith('/sign-in');
     expect(send.mock.calls[1][0]).toBe('/api/auth/cloud/logout');

@@ -42,7 +42,7 @@ export function CloudSignInScreen({ authenticated = false, email = null, hasStor
         }
         setError(code === 'AUTH_RATE_LIMITED' ? 'Слишком много попыток. Попробуйте позже.' : code === 'AUTH_REJECTED'
           ? 'Не удалось войти. Проверьте email и пароль.' : code === 'SIGN_OUT_BEFORE_ACCOUNT_CHANGE'
-            ? 'Сначала завершите текущий сеанс, затем войдите в другой аккаунт.' : 'Не удалось выполнить вход. Попробуйте ещё раз.');
+            ? 'Найден прежний сеанс. Завершите его кнопкой ниже — затем откроется форма входа.' : 'Не удалось выполнить вход. Попробуйте ещё раз.');
         return;
       }
       // Full navigation unloads the previous component/account material. No JWT
@@ -53,7 +53,7 @@ export function CloudSignInScreen({ authenticated = false, email = null, hasStor
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void authenticate(authenticated ? 'logout' : sessionDetected ? 'refresh' : 'login');
+    void authenticate(authenticated || sessionDetected ? 'logout' : 'login');
   }
 
   return <main className={shared.page}>
@@ -62,7 +62,7 @@ export function CloudSignInScreen({ authenticated = false, email = null, hasStor
       <section className={shared.card} aria-labelledby="cloud-auth-title">
         <span className={shared.eyebrow}><ShieldCheck size={17} aria-hidden="true" /> Защищённое рабочее место</span>
         <h1 id="cloud-auth-title">{authenticated ? 'Ваш сеанс открыт' : sessionDetected ? 'Сеанс нужно обновить' : 'Вход для сотрудников'}</h1>
-        <p className={shared.description}>{authenticated ? 'Личность подтверждена. Разделы платформы открываются только по действующему рабочему назначению.' : sessionDetected ? 'Продолжите ранее открытый сеанс или завершите его, чтобы войти под другим аккаунтом. Доступ будет проверен заново.' : 'Введите email и пароль своего аккаунта ORION Clinic.'}</p>
+        <p className={shared.description}>{authenticated ? 'Личность подтверждена. Разделы платформы открываются только по действующему рабочему назначению.' : sessionDetected ? 'Завершите прежний сеанс, чтобы открыть форму входа. Если хотите остаться в том же аккаунте, можно отдельно попробовать продолжить сеанс.' : 'Введите email и пароль своего аккаунта ORION Clinic.'}</p>
         <form className={styles.form} onSubmit={submit}>
           {authenticated ? <div className={shared.provider}><strong>{email ?? 'Подтверждённый сотрудник'}</strong><p>Чтобы войти под другим аккаунтом, завершите этот сеанс.</p></div> : !sessionDetected && <>
             <label htmlFor="cloud-email"><span><Mail size={15} aria-hidden="true" /> Email</span><input id="cloud-email" type="email" autoComplete="username" maxLength={320} required disabled={busy} value={address} onChange={(event) => setAddress(event.target.value)} /></label>
@@ -70,10 +70,10 @@ export function CloudSignInScreen({ authenticated = false, email = null, hasStor
           </>}
           {error && <p role="alert" className={styles.error}>{error}</p>}
           <button type="submit" className={`${shared.primary} ${styles.submit}`} disabled={busy}>
-            {busy ? <OrionMark animated size={20} /> : authenticated ? <LogOut size={19} aria-hidden="true" /> : <LogIn size={19} aria-hidden="true" />}
-            <span>{busy ? 'Проверяем…' : authenticated ? 'Выйти и сменить аккаунт' : sessionDetected ? 'Продолжить сеанс' : 'Войти в рабочее место'}</span><ArrowRight size={18} aria-hidden="true" />
+            {busy ? <OrionMark animated size={20} /> : authenticated || sessionDetected ? <LogOut size={19} aria-hidden="true" /> : <LogIn size={19} aria-hidden="true" />}
+            <span>{busy ? 'Проверяем…' : authenticated ? 'Выйти и сменить аккаунт' : sessionDetected ? 'Завершить сеанс и войти снова' : 'Войти в рабочее место'}</span><ArrowRight size={18} aria-hidden="true" />
           </button>
-          {!authenticated && sessionDetected && <button type="button" disabled={busy} className={shared.secondary} onClick={() => void authenticate('logout')}>Завершить сеанс и войти снова</button>}
+          {!authenticated && sessionDetected && <button type="button" disabled={busy} className={shared.secondary} onClick={() => void authenticate('refresh')}>Попробовать продолжить сеанс</button>}
         </form>
         {authenticated && <Link className={shared.secondary} href="/access">Открыть рабочий доступ</Link>}
         <p className={shared.footnote}>Если аккаунта ещё нет, обратитесь к администратору клиники. Самостоятельная регистрация закрыта.</p>
