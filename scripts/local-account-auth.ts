@@ -1,8 +1,16 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { LocalSession, LocalSessionStore } from './local-account-store.ts';
+import { privateHttpFiles, type PrivateHttpPathsOptions } from './private-http-paths.ts';
 
 export type LocalAccount = { login: string; subject: string; issuer: string; name: string; salt: string; digest: string };
+/** Private server capability. Never serialize it or reconstruct it from HTTP headers. */
+export type VerifiedLocalPrincipal = Readonly<{
+  issuer: string;
+  subject: string;
+  generation: string;
+  revalidate: () => Promise<boolean>;
+}>;
 export const localAccountCookie = 'orion_local_session';
 const generationCookie = 'orion_local_generation';
 const generationHeader = 'x-orion-local-generation';
@@ -20,7 +28,7 @@ export function parseLocalAccounts(value: unknown): LocalAccount[] {
     if (!item || typeof item !== 'object' || !/^[a-z0-9._-]{3,64}$/.test(item.login) ||
       typeof item.subject !== 'string' || !/^[^\s\p{Cc}]{1,256}$/u.test(item.subject) ||
       typeof item.issuer !== 'string' || !/^[^\s\p{Cc}]{1,256}$/u.test(item.issuer) ||
-      typeof item.name !== 'string' || !item.name.length || item.name.length > 120 ||
+      typeof item.name !== 'string' || !item.name.length || item.name.length > 160 ||
       !/^[a-f0-9]{32}$/.test(item.salt) || !/^[a-f0-9]{128}$/.test(item.digest) ||
       logins.has(item.login) || subjects.has(JSON.stringify([item.issuer,item.subject]))) throw new Error('Invalid local account registry');
     logins.add(item.login); subjects.add(JSON.stringify([item.issuer,item.subject]));
@@ -44,9 +52,16 @@ function memoryStore(): LocalSessionStore {
   };
 }
 
-export function localAccountAuth(port: number, loadAccounts: () => Promise<LocalAccount[]>, now = () => Date.now(), store: LocalSessionStore = memoryStore()) {
+export function localAccountAuth(port: number, loadAccounts: () => Promise<LocalAccount[]>, now = () => Date.now(), store: LocalSessionStore = memoryStore(),
+  verified?: (request: IncomingMessage, principal: VerifiedLocalPrincipal) => void, privateFiles?: PrivateHttpPathsOptions) {
   const dummySalt = bytesToHex(randomBytes(16)); let derivations = 0;
+  const protectFiles = privateHttpFiles(privateFiles);
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    // Block static/private paths before any credential or database lookup, even
+    // when an account registry is missing or a user has an active session.
+    let allowedPath = false;
+    protectFiles(req, res, () => { allowedPath = true; });
+    if (!allowedPath) return;
     // Sole identity provider in explicit local mode: Sites development auto-login is absent.
     const incomingGeneration = req.headers[generationHeader];
     const isIdentity = (key: string) => key.toLowerCase().startsWith('oai-authenticated-user-') || key.toLowerCase().startsWith('x-orion-local-');
@@ -63,11 +78,13 @@ export function localAccountAuth(port: number, loadAccounts: () => Promise<Local
       !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '') || req.headers['x-forwarded-host']) {
       send(403, 'Локальный доступ', '<p>Этот способ входа доступен только на компьютере клиники.</p>'); return;
     }
-    const origin = `http://${host}`; const url = new URL(req.url ?? '/', origin);
+    const origin = `http://${host}`;
+    let url: URL;
+    try { url = new URL(req.url ?? '/', origin); }
+    catch { res.statusCode=400; res.setHeader('Cache-Control','no-store'); res.end(); return; }
     const loginRoute = ['/login', '/sign-in', '/signin-with-chatgpt', '/signed-out'].includes(url.pathname);
     const logoutRoute = ['/logout', '/signout-with-chatgpt'].includes(url.pathname);
     const passwordRoute = url.pathname==='/account/password';
-    if (url.pathname.includes('/local-auth/') || url.pathname.includes('accounts.sqlite') || url.pathname.includes('accounts.html')) { res.statusCode=404;res.end();return; }
     try {
       const accounts = parseLocalAccounts(await loadAccounts());
       const cookies = (req.headers.cookie ?? '').split(';').map(x => x.trim()).filter(x => x.startsWith(`${localAccountCookie}=`));
@@ -127,7 +144,7 @@ export function localAccountAuth(port: number, loadAccounts: () => Promise<Local
         const opaque = bytesToHex(randomBytes(32)); const generation=bytesToHex(randomBytes(16));
         store.putSession(hash(opaque), { issuer:current.issuer, subject: current.subject, digest: current.digest, created: now(), touched: now(), generation });
         res.setHeader('Set-Cookie', [`${localAccountCookie}=${opaque}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`,`${generationCookie}=${generation}; SameSite=Strict; Path=/; Max-Age=28800`]);
-        redirect('/'); return;
+        redirect(current.issuer === 'orion:local:directives' ? '/crm?view=directives' : '/'); return;
       }
       if (url.pathname === '/api/local-account/session') {
         res.statusCode = account ? 200 : 401; res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json');
@@ -138,6 +155,7 @@ export function localAccountAuth(port: number, loadAccounts: () => Promise<Local
       // Every JSON API read and write needs the current page's session fence.
       const nativeRead = req.method==='GET' && (url.pathname.startsWith('/api/health/') ||
         /^\/api\/patients\/[^/]+\/photo$/.test(url.pathname) || /^\/api\/orders\/[^/]+\/result$/.test(url.pathname) ||
+        /^\/api\/regional\/v1\/directive-attachments\/[A-Za-z0-9_-]{1,160}$/.test(url.pathname) ||
         url.pathname==='/api/workspace/exports/download');
       const fencedApi = url.pathname.startsWith('/api/') && !nativeRead;
       if (account && session && ((incomingGeneration && incomingGeneration!==session.generation) || (fencedApi && incomingGeneration!==session.generation))) {
@@ -145,6 +163,17 @@ export function localAccountAuth(port: number, loadAccounts: () => Promise<Local
       }
       if (account && session) {
         session.touched = now(); store.putSession(sessionHash,session);
+        verified?.(req, Object.freeze({
+          issuer: account.issuer, subject: account.subject, generation: session.generation,
+          revalidate: async () => {
+            // Re-read after awaits; never upsert/touch a revoked session here.
+            const active = parseLocalAccounts(await loadAccounts()).some(candidate =>
+              candidate.issuer === account.issuer && candidate.subject === account.subject && candidate.digest === account.digest);
+            const current = store.getSession(sessionHash, now());
+            return active && !!current && current.issuer === account.issuer && current.subject === account.subject &&
+              current.digest === account.digest && current.generation === session.generation;
+          },
+        }));
         const identity = { 'oai-authenticated-user-id': account.subject, 'oai-authenticated-user-full-name': encodeURIComponent(account.name),
           'oai-authenticated-user-full-name-encoding':'percent-encoded-utf-8','x-orion-local-issuer':account.issuer,[generationHeader]:session.generation };
         for (const [key, value] of Object.entries(identity)) { req.headers[key] = value; req.rawHeaders.push(key, value); }

@@ -11,7 +11,19 @@ const credentialPatterns = [
   ['github-token', /\bgh[pousr]_[A-Za-z0-9]{20,}\b/],
   ['aws-key', /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
   ['private-key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
+  ['supabase-secret', /\bsb_secret_[A-Za-z0-9_-]{20,}\b/],
 ];
+
+/** Find privileged legacy JWTs by claim, without returning any token value. */
+export function serviceRoleTokenOffsets(text) {
+  const offsets = [];
+  for (const match of text.matchAll(/\beyJ[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+\b/g)) {
+    try {
+      if (JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8')).role === 'service_role') offsets.push(match.index);
+    } catch { /* Not a parseable JWT; other token rules still apply. */ }
+  }
+  return offsets;
+}
 
 function hasPrefix(bytes, prefix) {
   return bytes.subarray(0, prefix.length).equals(Buffer.from(prefix));
@@ -27,7 +39,7 @@ function isUninspectedContainer(bytes) {
   ].some(prefix => hasPrefix(bytes, prefix)) || bytes.subarray(257, 262).toString('ascii') === 'ustar';
 }
 
-function isKnownBinaryAsset(bytes, extension) {
+export function isKnownBinaryAsset(bytes, extension) {
   switch (extension) {
     case '.woff2': return bytes.length >= 48 && hasPrefix(bytes, Buffer.from('wOF2')) && bytes.readUInt32BE(8) === bytes.length;
     case '.woff': return bytes.length >= 44 && hasPrefix(bytes, Buffer.from('wOFF')) && bytes.readUInt32BE(8) === bytes.length;
@@ -48,6 +60,7 @@ function isPrivateFile(name) {
   // Backups of a private file remain private even when their final extension changes.
   const base = name.replace(/(?:\.(?:bak|backup|old|orig|save|tmp)|~)+$/, '');
   return base.startsWith('.env') || base.startsWith('.dev.vars') || base.startsWith('dev.vars') ||
+    /^accounts(?:-[a-z0-9-]+)?\.html(?:[.~].*)?$/.test(base) ||
     [...privateNames].some(name => base === name || base.startsWith(`${name}.`) || base.startsWith(`${name}~`)) || base.endsWith('.log') ||
     /\.(?:db|sqlite|sqlite3)-(?:wal|shm|journal)$/.test(base) || privateExtensions.has(extname(base));
 }
@@ -94,6 +107,7 @@ export async function checkDeploymentArtifact(directory) {
     if (isUninspectedContainer(bytes)) { report(path, 'uninspected-container'); return; }
     const text = bytes.toString('utf8');
     for (const [rule, pattern] of credentialPatterns) if (pattern.test(text)) report(path, rule);
+    if (serviceRoleTokenOffsets(text).length) report(path, 'supabase-service-role');
     // A NUL or invalid UTF-8 must never disable inspection for the entire file.
     // Known image/font/wasm signatures permit ordinary binary assets, not arbitrary
     // binaries renamed to .png. This is NOT a decoder, PHI or steganography audit.

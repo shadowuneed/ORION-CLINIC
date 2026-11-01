@@ -2,10 +2,11 @@ import { readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isKnownBinaryAsset, serviceRoleTokenOffsets } from './check-deployment-artifact.mjs';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const maxTextFileBytes = 4 * 1024 * 1024;
+const maxInspectedFileBytes = 64 * 1024 * 1024;
 const syntheticFixturePrefix = 'tests/fixtures/synthetic/';
 
 const forbiddenArtifactExtensions = new Set([
@@ -48,6 +49,10 @@ const secretRules = [
   {
     name: 'private-key',
     pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+  },
+  {
+    name: 'supabase-secret',
+    pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/g,
   },
   {
     name: 'sensitive-assignment',
@@ -127,6 +132,32 @@ function scanText(filePath, text) {
     }
   }
 
+  for (const index of serviceRoleTokenOffsets(text)) {
+    findings.push({ filePath, line: lineNumberAt(text, index), rule: 'supabase-service-role' });
+  }
+
+  return findings;
+}
+
+/** Pure inspection helper: results contain only path, line and rule, not content. */
+export function scanSourceBuffer(filePath, buffer) {
+  if (/(?:^|\/)accounts(?:-[a-z0-9-]+)?\.html(?:[.~].*)?$/i.test(normalizePath(filePath))) return [{ filePath, line: 1, rule: 'private-account-handoff' }];
+  if (buffer.length > maxInspectedFileBytes) return [{ filePath, line: 1, rule: 'file-too-large-to-inspect' }];
+  const findings = scanText(filePath, buffer.toString('utf8'));
+  // A binary prefix/NUL cannot suppress token scanning for the rest of a file.
+  // Ordinary verified image/font/wasm assets and declared synthetic fixtures
+  // remain allowed, but any recognizable credential bytes inside still fail.
+  const extension = extname(filePath).toLowerCase();
+  // Some handbook screenshots have a .png name but genuine JPEG bytes. Check
+  // a real supported image signature rather than trusting the file extension.
+  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico'];
+  const imageAsset = imageExtensions.includes(extension) && imageExtensions.some(type => isKnownBinaryAsset(buffer, type));
+  if (imageAsset || isKnownBinaryAsset(buffer, extension) || filePath.startsWith(syntheticFixturePrefix)) return findings;
+  if (buffer.includes(0)) findings.push({ filePath, line: 1, rule: 'uninspected-binary' });
+  else {
+    try { new TextDecoder('utf-8', { fatal: true }).decode(buffer); }
+    catch { findings.push({ filePath, line: 1, rule: 'uninspected-encoding' }); }
+  }
   return findings;
 }
 
@@ -145,8 +176,7 @@ function main() {
     }
 
     const buffer = readFileSync(resolve(projectRoot, filePath));
-    if (buffer.length > maxTextFileBytes || buffer.includes(0)) continue;
-    findings.push(...scanText(filePath, buffer.toString('utf8')));
+    findings.push(...scanSourceBuffer(filePath, buffer));
   }
 
   if (findings.length > 0) {
@@ -164,4 +194,4 @@ function main() {
   );
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();

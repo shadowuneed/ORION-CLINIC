@@ -19,6 +19,7 @@ import {
   KeyRound,
   BookOpen,
   ChevronDown,
+  Building2,
 } from 'lucide-react';
 import styles from './clinic-shell.module.css';
 import { OrionBrand } from './brand/orion-brand';
@@ -34,10 +35,11 @@ const navigation = [
   { href: '/pathway', label: 'Маршрут пациента', icon: Route, capability: 'pathway' },
 ] as const;
 
-const compactLabels: Record<string, string> = { '/': 'Обзор', '/patients': 'Пациенты', '/live': 'Приём', '/scheduling': 'Очередь', '/pathway': 'Маршрут' };
+const compactLabels: Record<string, string> = { '/': 'Обзор', '/patients': 'Пациенты', '/live': 'Приём', '/scheduling': 'Очередь', '/pathway': 'Маршрут', '/crm': 'CRM' };
 
 function isActivePath(pathname: string, href: string) {
   if (href === '/') return pathname === '/';
+  if (href === '/live' && pathname === '/clinical') return true;
   if (href === '/pathway') return ['/pathway', '/orders', '/care', '/observations', '/communications'].includes(pathname);
   if (href === '/access') return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -90,6 +92,9 @@ export function ClinicShell({
   const router = useRouter();
   const searchParams = useSearchParams();
   const workspaceLink = (target: string) => {
+    // The unified local routes select their own PostgreSQL context, never a stale D1 assignment.
+    if (target === '/crm') return '/crm';
+    if (localAccountModeEnabled() && navigation.some(item => item.href === target)) return target === '/live' ? '/clinical' : target;
     const url = workspaceNavigationUrl(target, pathname, searchParams.toString());
     if (target !== '/') return url;
     const dashboard = new URL(url, 'https://orion.invalid');
@@ -141,9 +146,10 @@ export function ClinicShell({
     return () => window.clearTimeout(timer);
   }, []);
 
-  const permittedNavigation = navigation.filter(
-    (item) => capabilities[item.capability],
-  );
+  const permittedNavigation = [
+    ...navigation.filter((item) => capabilities[item.capability]),
+    ...(localAccountModeEnabled() ? [{ href: '/crm', label: 'CRM · карта', icon: Building2 }] : []),
+  ];
   const initials = useMemo(
     () =>
       (profile?.staffName || user.displayName)

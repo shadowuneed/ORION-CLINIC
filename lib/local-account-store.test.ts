@@ -86,6 +86,19 @@ it('keeps the rolling attempt limit across reopen and successful logins',()=>{
   expect(store.reserveAttempt(1000)).toBe(false);expect(store.reserveAttempt(301001)).toBe(true);
 });
 
+it('reuses read-only SQL handles without caching authority or missing committed membership changes',()=>{
+  const data=fixture(); const auth=join(data.dir,'accounts.sqlite');
+  const store=openLocalAccountStore(auth,data.path); cleanups.push(()=>store.close());
+  for(const person of readLocalStaff(data.path)) store.provision(person,person.id,'a'.repeat(32),'b'.repeat(128));
+  expect(store.loadAccounts().map(account=>account.login)).toEqual(['u-a','u-b']);
+  data.db.prepare("update memberships set status='disabled' where user_id='u-b'").run();
+  expect(store.loadAccounts().map(account=>account.login)).toEqual(['u-a']);
+  data.db.prepare("update memberships set status='active' where user_id='u-b'").run();
+  expect(store.loadAccounts().map(account=>account.login)).toEqual(['u-a','u-b']);
+  data.db.prepare("update users set display_name='Changed synthetic name' where id='u-a'").run();
+  expect(store.loadAccounts()[0].name).toBe('Changed synthetic name');
+});
+
 it('changes a personal password with current-password verification and revokes all sessions of that person only',async()=>{
   const data=fixture();const store=openLocalAccountStore(join(data.dir,'accounts.sqlite'),data.path);cleanups.push(()=>store.close());
   const passwords=await provision(store,data.path);const app=await runtime(store);

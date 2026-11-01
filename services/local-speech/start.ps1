@@ -17,6 +17,9 @@ if (-not (Test-Path -LiteralPath $VenvPython)) {
 
 $env:ORION_STT_DEVICE = $Device.ToLowerInvariant()
 $env:ORION_ALLOW_MODEL_DOWNLOAD = if ($AllowModelDownload) { "1" } else { "0" }
+$env:HF_HUB_OFFLINE = if ($AllowModelDownload) { "0" } else { "1" }
+$env:TRANSFORMERS_OFFLINE = if ($AllowModelDownload) { "0" } else { "1" }
+$env:HF_HUB_DISABLE_TELEMETRY = "1"
 $env:ORION_MODEL_DIR = Join-Path $RuntimeDir "models"
 $env:ORION_HF_CACHE_DIR = Join-Path $env:ORION_MODEL_DIR "huggingface"
 

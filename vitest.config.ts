@@ -25,10 +25,15 @@ export default defineConfig({
         test: {
           name: 'database-integration',
           include: ['lib/repositories/**/*.test.ts', 'db/**/*.test.ts'],
+          exclude: ['db/crm/**/*.test.ts'],
           // These tests install the complete forward migration chain and exercise
           // multiple transactional commands. This is not an application deadline.
           testTimeout: 20000,
         },
+      },
+      {
+        extends: true,
+        test: { name: 'crm-postgres', include: ['db/crm/**/*.test.ts'], testTimeout: 30000 },
       },
     ],
   },

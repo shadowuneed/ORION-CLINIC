@@ -1,0 +1,36 @@
+.console { position: fixed; z-index: 160; display: flex; flex-direction: column; min-width: 0; max-height: max(84px, min(68dvh, calc(100dvh - 220px))); top: clamp(12px, 115px, calc(100dvh - 110px)); border: 1px solid var(--line-strong); border-radius: 13px; background: var(--surface-strong); color: var(--ink); box-shadow: 0 15px 42px rgb(17 39 29 / 18%); overflow: hidden; animation: console-arrive 140ms ease-out both; }
+.operations { width: min(1100px, 72vw); left: max(86px, calc((100vw - min(1100px, 72vw)) / 2 + 26px)); }
+.details { width: min(300px, calc(100vw - 100px)); right: 22px; }
+.booking { width: min(420px, calc(100vw - 100px)); right: 22px; }
+.titlebar { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; min-height: 56px; padding: 6px 7px 5px 10px; border-bottom: 1px solid var(--line); background: var(--surface); cursor: grab; touch-action: none; user-select: none; }
+.titlebar:active { cursor: grabbing; }
+.titlebar h2 { flex: 1; min-width: 0; margin: 0; font-size: 14px; font-weight: 650; line-height: 1.4; }
+.handle { display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; min-height: 44px; padding: 5px 3px; border: 0; background: transparent; color: var(--ink); font: inherit; font-weight: inherit; text-align: left; touch-action: none; cursor: grab; }
+.handle:active { cursor: grabbing; }
+.handle > svg { flex: 0 0 auto; color: var(--ink-muted); }
+.handle > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconButton, .closeButton, .moveButton { display: grid; place-items: center; flex: 0 0 auto; min-width: 42px; min-height: 42px; border: 1px solid transparent; border-radius: 7px; padding: 8px; color: var(--ink-soft); background: transparent; cursor: pointer; }
+.closeButton { color: var(--ink); }
+.iconButton:hover:not(:disabled), .closeButton:hover:not(:disabled), .moveButton:hover:not(:disabled) { background: var(--surface-muted); border-color: var(--line); }
+.console button:disabled { cursor: not-allowed; opacity: .48; }
+.console button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -3px; }
+.positionControls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; min-height: 39px; padding: 3px 8px; border-bottom: 1px solid var(--line); background: var(--surface-strong); }
+.positionControls > span { margin-right: auto; padding-left: 5px; color: var(--ink-muted); font-size: 10px; line-height: 1.5; }
+.moveButton { min-width: 35px; min-height: 35px; padding: 7px; background: var(--surface); border-color: var(--line); }
+.body { flex: 1 1 auto; min-width: 0; min-height: 0; padding: 18px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.details .body { padding: 0; }
+.booking .body { padding: 17px; }
+:global(html[data-theme='dark']) .console { box-shadow: 0 15px 42px rgb(0 0 0 / 40%); }
+@keyframes console-arrive { from { opacity: .65; } to { opacity: 1; } }
+@media (max-width: 1050px) and (min-width: 761px) { .operations { left: 85px; width: calc(100vw - 116px); } }
+@media (max-width: 760px) {
+  .console { top: auto !important; right: 8px !important; left: 8px !important; bottom: calc(72px + env(safe-area-inset-bottom)); width: auto; max-height: min(55dvh, calc(100dvh - 150px)); border-radius: 13px; z-index: 160; }
+  .titlebar { min-height: 54px; padding-left: 12px; cursor: default; touch-action: auto; }
+  .handle { cursor: default; touch-action: auto; }
+  .handle:disabled { opacity: 1; cursor: default; }
+  .handle > svg, .titlebar > .iconButton, .positionControls { display: none; }
+  .body, .booking .body { padding: 14px; }
+  .details .body { padding: 0; }
+  .closeButton { min-height: 44px; min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .console { animation: none; } .body { scroll-behavior: auto; } }

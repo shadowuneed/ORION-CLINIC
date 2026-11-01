@@ -1,0 +1,70 @@
+.motionSurface { position: relative; }
+.actor { isolation: isolate; }
+.moving { animation-timing-function: linear; animation-iteration-count: infinite; transform-box: view-box; }
+.motionSurface[data-motion='paused'] .moving,
+.motionSurface[data-motion='paused'] .workBody,
+.moving:hover, .moving:focus-within { animation-play-state: paused; }
+.actor:hover .workBody, .actor:focus-within .workBody { animation-play-state: paused; }
+.actorButton { display: flex; align-items: flex-start; justify-content: center; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.actorButton > span { display: grid; place-items: center; min-width: 29px; height: 25px; padding: 0 4px; border: 2px solid var(--surface-strong); border-radius: 7px; background: #376d91; color: white; box-shadow: 0 2px 4px rgb(0 0 0 / 15%); font-size: 9px; font-weight: 750; }
+.actorButton[data-status='arrived'] > span { background: #986537; }
+.actorButton[data-status='in_service'] > span { background: #276d61; }
+.actorButton[data-status='called'] > span { background: #276d61; outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+.actorButton[data-status='scheduled'] > span { background: #626e7c; }
+.actorButton[data-staff='true'] > span { color: var(--brand-strong); background: var(--surface-strong); border-color: var(--brand-strong); }
+.actorButton[aria-pressed='true'] > span { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.actorButton:focus-visible { border-radius: 8px; outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+.workBody { transform-origin: 0 -30px; animation: clinicalWork 3.4s ease-in-out infinite; }
+@keyframes clinicalWork { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(2deg) translateY(-1px); } }
+.workMark { fill: var(--surface-strong); stroke: var(--brand-strong); stroke-width: 1.5; }
+.corridor { fill: none; stroke: var(--crm-floor); stroke-width: 19; stroke-linecap: round; stroke-linejoin: round; opacity: .75; pointer-events: none; }
+.selectedRoute { fill: none; stroke: var(--brand-strong); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 6 5; pointer-events: none; }
+.routeDot { fill: var(--surface-strong); stroke: var(--brand-strong); stroke-width: 2; pointer-events: none; }
+.motionToggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-size: 11px; white-space: nowrap; }
+.motionToggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.motionToggle:disabled { cursor: not-allowed; }
+.motionStatus { display: block; color: var(--ink-muted); font-size: 10px; margin-top: 4px; }
+.gameViewport { touch-action: none; user-select: none; }
+.cameraWorld { transition: transform 260ms cubic-bezier(.2,.65,.25,1); }
+.gameViewport[data-camera-dragging='true'] .cameraWorld { transition: none; }
+.layerControls { position: absolute; top: 89px; left: 21px; z-index: 4; display: flex; flex-wrap: wrap; gap: 5px; padding: 5px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); }
+.layerControls button { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 7px 9px; border: 0; border-radius: 5px; background: transparent; color: var(--ink-soft); cursor: pointer; font: inherit; font-size: 11px; }
+.layerControls button[aria-pressed='true'] { color: var(--brand-strong); background: var(--brand-soft); }
+.buildingControls { position: absolute; top: 210px; left: 18px; z-index: 104; display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; max-width: calc(100% - 140px); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-strong); }
+.buildingControls button { min-height: 34px; padding: 6px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 11px; cursor: pointer; }
+.buildingControls button[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand-strong); }
+.buildingName { fill: var(--ink-soft); font-size: 15px; font-weight: 750; letter-spacing: .035em; pointer-events: none; }
+.gameRoomPin { width: 156px; height: 34px; min-height: 34px; max-height: 36px; gap: 6px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
+.gameRoomPin b { min-width: 19px; padding: 3px; font-size: 10px; }
+.taskPin { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 36px; min-height: 30px; padding: 4px; border: 1px solid var(--brand-strong); border-radius: 6px; background: var(--surface-strong); color: var(--brand-strong); font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.taskPin[data-urgent='true']::after { content: ''; position: absolute; top: -3px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); border: 1px solid var(--surface-strong); }
+.taskPin:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+@media (max-width: 600px) { .layerControls { left: 12px; top: 77px; } .layerControls button { min-height: 44px; padding: 7px; font-size: 10px; } }
+@media (prefers-reduced-motion: reduce) { .moving, .workBody { animation: none !important; } .cameraWorld { transition: none; } }
+
+/* Opt-in hospital plan: labels live in a readable rail, never on top of people. */
+.facilitySurface { border: 0; border-radius: 0; background: var(--crm-map); }
+.facilitySurface > header { padding: 16px 20px 10px; }
+.facilitySurface > header h2 { font-size: 13px; }
+.facilityRooms { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 7px; margin: 0 18px; max-height: 220px; overflow-y: auto; padding: 3px 2px; scrollbar-width: thin; }
+.facilityRooms button, .facilityPeople button { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 54px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.facilityRooms button > b { display: grid; place-items: center; min-width: 27px; height: 27px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--brand-soft); color: var(--brand-strong); font-size: 12px; }
+.facilityRooms button > span, .facilityPeople button > span { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.facilityRooms small, .facilityPeople small { display: block; margin-top: 3px; font-size: 10px; color: var(--ink-muted); }
+.facilityRooms button[aria-pressed='true'], .facilityPeople button[aria-pressed='true'] { border-color: var(--brand-strong); background: var(--brand-soft); box-shadow: inset 0 0 0 1px var(--brand-strong); }
+.facilitySelection { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 12px; min-height: 46px; margin: 0; padding: 10px 20px; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.facilitySelection strong { color: var(--brand-strong); font-size: 12px; }
+.facilitySurface .facilityViewport { margin-top: 0; height: clamp(340px, 31vw, 500px); }
+.facilitySurface .facilityViewport[data-empty='true'] { height: 180px; }
+.facilityRoomIndex { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 2px solid var(--line-strong); border-radius: 10px; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 14px; font-weight: 750; cursor: pointer; box-shadow: 0 2px 4px rgb(0 0 0 / 12%); }
+.facilityRoomIndex[aria-pressed='true'] { border-color: var(--brand-strong); background: var(--brand-soft); color: var(--brand-strong); }
+.facilitySurface button:focus-visible, .facilityPeople summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.facilityPeople { padding: 0 20px 13px; border-top: 1px solid var(--line); font-size: 12px; }
+.facilityPeople summary { min-height: 42px; padding: 12px 0; color: var(--brand-strong); cursor: pointer; }
+.facilityPeople > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; max-height: 250px; overflow-y: auto; scrollbar-width: thin; }
+.facilityPeople svg { flex-shrink: 0; color: var(--brand-strong); }
+.facilitySurface > div:last-child { align-items: stretch; flex-direction: column-reverse; gap: 10px; padding: 12px 18px; }
+.facilitySurface > div:last-child > p { max-width: none; }
+.facilitySurface [aria-label='Управление схемой'] { flex-wrap: wrap; gap: 5px; }
+.facilitySurface [aria-label='Управление схемой'] button { min-width: 36px; }
+@media(max-width:560px) { .facilityRooms { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 10px; }.facilityRooms button { padding: 8px 7px; font-size: 11px; gap: 7px; }.facilitySelection { padding: 10px 12px; }.facilityPeople { padding-inline: 12px; }.facilitySurface .facilityViewport { height: 340px; } }

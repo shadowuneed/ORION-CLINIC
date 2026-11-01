@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -15,6 +17,7 @@ export default async function LiveConsultationPage({
 }: {
   searchParams: Promise<WorkspacePageQuery>;
 }) {
+  if (localAccountModeEnabled()) redirect('/clinical');
   const query = await searchParams;
   const encounterId =
     typeof query.encounterId === 'string' ? query.encounterId.trim() : '';

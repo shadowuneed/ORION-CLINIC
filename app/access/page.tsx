@@ -13,6 +13,12 @@ import {
   getAuthenticatedClinicContext,
 } from '../authenticated-clinic-page';
 import { AccessWorkspace, AccessWorkspaceState } from './access-workspace';
+import Link from 'next/link';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
+import { ClinicalShell } from '../clinical/clinical-shell';
+import { FirstPaintStyles } from '../first-paint-styles';
+import clinicalCss from '../clinical/registry.module.css?inline';
+import clinicalStyles from '../clinical/registry.module.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +27,7 @@ export default async function AccessPage({
 }: {
   searchParams: Promise<{ assignmentId?: string | string[] }>;
 }) {
+  if (localAccountModeEnabled()) return <ClinicalShell returnTo="/access"><FirstPaintStyles id="clinical-access" css={clinicalCss} /><main className={clinicalStyles.page}><header className={clinicalStyles.header}><div><span className={clinicalStyles.eyebrow}>ORION · PostgreSQL</span><h1>Моё рабочее место</h1><p>Вход подтверждает личность. Доступ к пациентам сервер проверяет отдельно при каждом запросе.</p></div></header><section className={clinicalStyles.panel}><h2>Рабочие разделы</h2><div className={clinicalStyles.actions}><Link className={clinicalStyles.primary} href="/">Рабочий день</Link><Link className={clinicalStyles.button} href="/patients">Мои пациенты</Link><Link className={clinicalStyles.button} href="/crm">CRM и очередь</Link><Link className={clinicalStyles.button} href="/clinical/team">Сотрудники и права</Link></div><p className={clinicalStyles.hint}>Управление сотрудниками доступно только администратору с действующим назначением. Права врача не выдаются автоматически вместе с входом.</p></section></main></ClinicalShell>;
   const query = await searchParams;
   const assignmentId =
     typeof query.assignmentId === 'string' ? query.assignmentId : undefined;

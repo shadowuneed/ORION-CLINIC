@@ -162,6 +162,8 @@ export class GroqClinicalAnalysisProvider implements ClinicalAnalysisProvider {
         `${this.options.baseUrl.replace(/\/$/, '')}/chat/completions`,
         {
           method: 'POST',
+          // Never forward clinical transcript or server credentials to a redirect target.
+          redirect: 'error',
           headers: {
             authorization: `Bearer ${this.options.apiKey}`,
             'content-type': 'application/json',

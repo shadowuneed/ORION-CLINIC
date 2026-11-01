@@ -40,3 +40,25 @@ it('rejects malformed or duplicate account registries', () => {
   expect(() => parseLocalAccounts({})).toThrow();
   expect(() => parseLocalAccounts([{ login: 'doctor', subject: 'arbitrary-admin' }])).toThrow();
 });
+
+it('lands dedicated directive accounts in their workspace and keeps downloads authenticated', async () => {
+  const passphrase = bytesToHex(randomBytes(24)); const salt = bytesToHex(randomBytes(16));
+  const account = { login: 'directive-admin', subject: 'directive-admin', issuer: 'orion:local:directives', name: 'Administrator', salt,
+    digest: bytesToHex(await derivePassword(passphrase, salt)) };
+  let verified = false;
+  const server = createServer((req, res) => { verified = false; void handler(req, res, () => { res.statusCode = verified ? 200 : 401; res.end(verified ? 'authorized downstream check' : 'anonymous'); }); });
+  servers.push(server); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('No port');
+  const handler = localAccountAuth(address.port, async () => [account], undefined, undefined, () => { verified = true; });
+  const origin = `http://127.0.0.1:${address.port}`;
+  const login = await fetch(`${origin}/login`, { method: 'POST', headers: { origin, 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ login: account.login, password: passphrase }), redirect: 'manual' });
+  expect(login.headers.get('location')).toBe('/crm?view=directives');
+  const cookie = login.headers.get('set-cookie')!.split(';')[0];
+  const path = `${origin}/api/regional/v1/directive-attachments/directive-file-a`;
+  expect((await fetch(path)).status).toBe(401);
+  expect((await fetch(path, { headers: { cookie } })).status).toBe(200);
+  expect((await fetch(path, { headers: { cookie, 'x-orion-local-generation': 'wrong-generation' } })).status).toBe(409);
+  expect((await fetch(`${origin}/api/regional/v1/directives`, { headers: { cookie } })).status).toBe(409);
+  expect((await fetch(path, { method: 'POST', headers: { cookie } })).status).toBe(409);
+});

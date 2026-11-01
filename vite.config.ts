@@ -4,9 +4,30 @@ import vinext from 'vinext';
 import { defineConfig, type ViteDevServer } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import type { IncomingMessage } from 'node:http';
 import hostingConfig from './.openai/hosting.json' with { type: 'json' };
-import { localAccountAuth } from './scripts/local-account-auth';
-import { findLocalStaffDatabase, localAccountPaths, openLocalAccountStore } from './scripts/local-account-store';
+import { localAccountAuth, type VerifiedLocalPrincipal } from './scripts/local-account-auth';
+import { findLocalStaffDatabase, localAccountPaths, openLocalAccountStore, readLocalAccountAuthority } from './scripts/local-account-store';
+import { crmLocalMiddleware } from './scripts/crm-local-middleware';
+import { readCrmLocalConfig } from './scripts/crm-local-config';
+import { createCrmPostgresRepository } from './scripts/crm-postgres-repository';
+import { parseCrmCommand } from './lib/crm/contracts';
+import { privateFileDenyPatterns, privateHttpFiles } from './scripts/private-http-paths';
+import { excludePrivateEnvironmentAssets } from './scripts/vite-private-output';
+import { clinicalLocalMiddleware } from './scripts/clinical-local-middleware';
+import { createClinicalPostgresRepository } from './scripts/clinical-postgres-repository';
+import { clinicalCommandSchema } from './lib/clinical/contracts';
+import { createClinicalSpeechBridge } from './scripts/clinical-speech-bridge';
+import { LocalGigaamProvider } from './lib/providers/local-gigaam';
+import { readClinicalProviderConfig } from './scripts/clinical-provider-config';
+import { GroqClinicalAnalysisProvider } from './lib/providers/groq-clinical-analysis';
+import { assertDirectoryAuthority, createPostgresStaffDirectory } from './scripts/postgres-staff-directory';
+import { createDirectoryPostgresRepository } from './scripts/directory-postgres-repository';
+import { directoryLocalMiddleware } from './scripts/directory-local-middleware';
+import { postgresAuthorityRouteGuard } from './scripts/postgres-authority-route-guard';
+import { createRegionalPostgresRepository } from './scripts/regional-postgres-repository';
+import { regionalLocalMiddleware } from './scripts/regional-local-middleware';
+import { regionalBriefingMiddleware } from './scripts/regional-ai-briefing';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   '00000000-0000-4000-8000-000000000000';
@@ -85,13 +106,21 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
     mode,
     process.env.NODE_ENV ?? (command === 'build' ? 'production' : 'development'),
   ].map(encodeURIComponent).join('-');
+  const cacheDir = resolve(fileURLToPath(new URL('./.orion-runtime/vite-cache/', import.meta.url)), cacheScope);
 
   return {
     define: { __ORION_LOCAL_CREDENTIALS__: JSON.stringify(localCredentials) },
-    cacheDir: resolve(fileURLToPath(new URL('./.orion-runtime/vite-cache/', import.meta.url)), cacheScope),
+    cacheDir,
     css: { postcss: { plugins: [tailwindcss()] } },
     server: {
       ...(localCredentials ? { host: '127.0.0.1', strictPort: true } : {}),
+      fs: { deny: privateFileDenyPatterns },
+      // Pre-transform only the frequently opened local CRM/client shell. This
+      // warms code, never patient snapshots or authentication/authority results.
+      ...(localCredentials ? { warmup: { clientFiles: [
+        './app/clinic-shell.tsx', './app/crm/crm-workspace.tsx',
+        './app/crm/crm-scene.tsx', './app/crm/crm-operations.tsx',
+      ] } } : {}),
       watch: isCodexSeatbeltSandbox
         ? {
             ignored: ignoredRuntimePaths,
@@ -105,12 +134,58 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
       // previously immutable ?v= imports cannot retain a different React copy
       // after a cache relocation or a runtime-mode change.
       { name: `orion-cache-v1-${cacheScope}-${localCredentials ? 'staff' : 'provider'}` },
+      { name: 'orion-private-http-files', enforce: 'pre' as const, configureServer(server: ViteDevServer) {
+        server.middlewares.use(privateHttpFiles({ root, clientCacheDir: cacheDir }));
+      } },
       ...(localCredentials && accountPaths ? [{ name: 'orion-local-staff-credentials', enforce: 'pre' as const,
-        configureServer(server: ViteDevServer) {
-          const store = openLocalAccountStore(accountPaths.database, findLocalStaffDatabase(root));
+        async configureServer(server: ViteDevServer) {
+          const authority = readLocalAccountAuthority(accountPaths.database);
+          const config = readCrmLocalConfig();
+          if (authority === 'postgresql' && !config) throw new Error('PostgreSQL staff directory is required after cutover.');
+          const directoryProbe = config ? createPostgresStaffDirectory(config) : null;
+          // Read the canonical mode on every startup, including hot restarts,
+          // even when the private marker says legacy.
+          // A missing/stale marker must never revive D1 after PG activation.
+          // The directory source and the private downgrade fence must agree.
+          if (directoryProbe) {
+            try { assertDirectoryAuthority(await directoryProbe.mode(), authority); }
+            catch (error) { await directoryProbe.close(); throw error; }
+          }
+          const staffDirectory = authority === 'postgresql' ? directoryProbe : null;
+          if (directoryProbe && !staffDirectory) await directoryProbe.close();
+          const store = openLocalAccountStore(accountPaths.database, staffDirectory ?? findLocalStaffDatabase(root));
           const port = server.config.server.port ?? 3200;
-          server.middlewares.use(localAccountAuth(port, async () => store.loadAccounts(), Date.now, store));
-          server.httpServer?.once('close', () => store.close());
+          const principals = new WeakMap<IncomingMessage, VerifiedLocalPrincipal>();
+          // Read PC-only connection config only in explicit local development.
+          let repository: ReturnType<typeof createCrmPostgresRepository> | null = null;
+          let clinicalRepository: ReturnType<typeof createClinicalPostgresRepository> | null = null;
+          let speech: ReturnType<typeof createClinicalSpeechBridge> | null = null;
+          let directoryRepository: ReturnType<typeof createDirectoryPostgresRepository> | null = null;
+          let regionalRepository: ReturnType<typeof createRegionalPostgresRepository> | null = null;
+          let regionalProvider: ReturnType<typeof readClinicalProviderConfig>['groq'] | null = null;
+          try {
+            if (config) {
+              repository = createCrmPostgresRepository(config);
+              clinicalRepository = createClinicalPostgresRepository(config);
+              directoryRepository = createDirectoryPostgresRepository(config);
+              regionalRepository = createRegionalPostgresRepository(config);
+              const providers = readClinicalProviderConfig(root);
+              regionalProvider = providers.groq;
+              speech = createClinicalSpeechBridge({ repository: clinicalRepository,
+                provider: new LocalGigaamProvider(providers.localSpeech),
+                analysisProvider: providers.groq.apiKey ? new GroqClinicalAnalysisProvider({ ...providers.groq, apiKey: providers.groq.apiKey }) : undefined });
+            }
+          } catch { /* New APIs fail closed; never substitute the legacy clinical database. */ }
+          server.middlewares.use(localAccountAuth(port, () => store.loadActiveAccounts(), Date.now, store,
+            (request, principal) => principals.set(request, principal), { root, clientCacheDir: cacheDir }));
+          server.middlewares.use(postgresAuthorityRouteGuard(() => readLocalAccountAuthority(accountPaths.database)));
+          server.middlewares.use(regionalBriefingMiddleware({ port, principal: request => principals.get(request), repository: regionalRepository, provider: regionalProvider }));
+          server.middlewares.use(regionalLocalMiddleware({ port, principal: request => principals.get(request), repository: regionalRepository }));
+          server.middlewares.use(directoryLocalMiddleware({ port, principal: request => principals.get(request), repository: directoryRepository }));
+          server.middlewares.use(clinicalLocalMiddleware({ port, principal: request => principals.get(request), repository: clinicalRepository,
+            parseCommand: value => clinicalCommandSchema.parse(value), speech }));
+          server.middlewares.use(crmLocalMiddleware({ port, principal: request => principals.get(request), repository, parseCommand: parseCrmCommand }));
+          server.httpServer?.once('close', () => { store.close(); void repository?.close(); void clinicalRepository?.close(); void speech?.close(); void directoryRepository?.close(); void regionalRepository?.close(); void staffDirectory?.close(); });
         },
       }] : []),
       vinext(),
@@ -119,6 +194,7 @@ export default defineConfig(async ({ command, mode, isPreview }) => {
         viteEnvironment: { name: 'rsc', childEnvironments: ['ssr'] },
         config: localBindingConfig,
       }),
+      excludePrivateEnvironmentAssets(),
     ],
   };
 });

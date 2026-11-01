@@ -106,9 +106,9 @@
   width: 72px;
   padding: 22px 10px 14px;
   border-right: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 68%, transparent);
-  backdrop-filter: blur(18px) saturate(1.2);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  /* Keep the rail opaque: a backdrop-filter on an overflowing sticky rail can
+     smear the adjacent WebGL/map surface beyond the rail's own width. */
+  background: var(--surface);
   min-width: 0;
   overflow: visible;
   z-index: 70;

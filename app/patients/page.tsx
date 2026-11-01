@@ -1,4 +1,9 @@
 import { PatientDirectory } from './patient-directory';
+import { ClinicalShell } from '../clinical/clinical-shell';
+import { ClinicalRegistry } from '../clinical/registry';
+import { FirstPaintStyles } from '../first-paint-styles';
+import clinicalRegistryCss from '../clinical/registry.module.css?inline';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -14,6 +19,7 @@ export default async function PatientsPage({
     accessAssignmentId?: string | string[];
   }>;
 }) {
+  if (localAccountModeEnabled()) return <ClinicalShell returnTo="/patients"><FirstPaintStyles id="clinical-registry" css={clinicalRegistryCss} /><ClinicalRegistry mode="patients" /></ClinicalShell>;
   const query = await searchParams;
   const facilityId =
     typeof query.facilityId === 'string' ? query.facilityId : undefined;

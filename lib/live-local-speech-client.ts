@@ -3,6 +3,7 @@
 import { useWorkspaceFetch } from '@/lib/workspace-access-context';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { localSpeechEndpoints, type ClinicalSpeechApiBase } from './clinical/speech-endpoints';
 
 export type LocalSpeechToken = {
   segmentIndex?: number;
@@ -76,6 +77,7 @@ type PersistedSegmentResponse = {
 
 type LocalSpeechTranscriptionOptions = {
   encounterId?: string | null;
+  apiBase?: ClinicalSpeechApiBase;
   onPersistedSegment?: (persistedSegment: LocalSpeechToken) => void;
 };
 
@@ -485,10 +487,12 @@ export function useLocalSpeechTranscription(
   const recordingStopPromiseRef = useRef<Promise<Blob | null> | null>(null);
   const stopOperationRef = useRef<Promise<Blob | null> | null>(null);
   const encounterIdRef = useRef(options.encounterId ?? null);
+  const apiBaseRef = useRef(options.apiBase);
   const onPersistedSegmentRef = useRef(options.onPersistedSegment);
 
   useEffect(() => {
     encounterIdRef.current = options.encounterId ?? null;
+    apiBaseRef.current = options.apiBase;
     onPersistedSegmentRef.current = options.onPersistedSegment;
   });
 
@@ -734,9 +738,7 @@ export function useLocalSpeechTranscription(
     const encounterId = encounterIdRef.current;
     try {
       await fetch(
-        encounterId
-          ? '/api/workspace/transcript/speech/session'
-          : '/api/local-speech/session',
+        localSpeechEndpoints(encounterId, apiBaseRef.current).session,
         {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -809,9 +811,7 @@ export function useLocalSpeechTranscription(
           );
           const sessionSignal = requestAbortRef.current?.signal;
           const encounterId = encounterIdRef.current;
-          const response = await fetch(encounterId
-            ? '/api/workspace/transcript/speech/transcribe'
-            : '/api/local-speech/transcribe', {
+          const response = await fetch(localSpeechEndpoints(encounterId, apiBaseRef.current).transcribe, {
             method: 'POST',
             headers: {
               'Content-Type': 'audio/wav',
@@ -1039,9 +1039,7 @@ export function useLocalSpeechTranscription(
     try {
       const encounterId = encounterIdRef.current;
       const healthResponse = await fetch(
-        encounterId
-          ? `/api/workspace/transcript/speech/health?encounterId=${encodeURIComponent(encounterId)}`
-          : '/api/local-speech/health', {
+        localSpeechEndpoints(encounterId, apiBaseRef.current).health, {
         signal: controller.signal,
         cache: 'no-store',
         },
@@ -1057,9 +1055,7 @@ export function useLocalSpeechTranscription(
       if (run !== runRef.current) return;
 
       updateStatus('connecting');
-      const sessionResponse = await fetch(encounterId
-        ? '/api/workspace/transcript/speech/session'
-        : '/api/local-speech/session', {
+      const sessionResponse = await fetch(localSpeechEndpoints(encounterId, apiBaseRef.current).session, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
@@ -1329,6 +1325,7 @@ export function useLocalSpeechTranscription(
     recordedAudio,
     recordingStatus,
     recordingError,
+    getCaptureStatus: () => statusRef.current,
     start,
     stop,
     reset,

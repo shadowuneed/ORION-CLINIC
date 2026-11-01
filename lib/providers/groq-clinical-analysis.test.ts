@@ -54,6 +54,7 @@ describe('Groq clinical analysis provider', () => {
     const result = await provider.analyze({ segments });
     expect(result.output).toEqual(output);
     expect(new Headers(capturedInit?.headers).get('authorization')).toBe('Bearer test-key');
+    expect(capturedInit?.redirect).toBe('error');
     const body = JSON.parse(String(capturedInit?.body)) as {
       response_format: { type: string; json_schema: { strict: boolean } };
     };
@@ -64,6 +65,8 @@ describe('Groq clinical analysis provider', () => {
   });
 
   it.each([
+    [307, 'upstream_failed'],
+    [308, 'upstream_failed'],
     [401, 'unauthorized'],
     [429, 'rate_limited'],
     [503, 'upstream_failed'],

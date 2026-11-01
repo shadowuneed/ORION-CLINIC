@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -14,6 +16,7 @@ export default async function SchedulingPage({
     accessAssignmentId?: string | string[];
   }>;
 }) {
+  if (localAccountModeEnabled()) redirect('/crm?view=schedule');
   const query = await searchParams;
   const facilityId =
     typeof query.facilityId === 'string' ? query.facilityId : undefined;

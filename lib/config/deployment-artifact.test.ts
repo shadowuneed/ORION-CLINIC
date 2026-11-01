@@ -21,7 +21,7 @@ describe('deployment artifact safety boundary', () => {
     expect(await checkDeploymentArtifact(await fixture({ 'index.html': '<main>ORION</main>', 'assets/app.js': 'export const ready = true;' })))
       .toEqual({ files: 2, findings: [], safe: true });
   });
-  it.each(['.dev.vars', '.dev.vars.production', '.env', '.env.local', 'auth.json', 'state.sqlite', 'state.db-wal', 'audio.webm', 'server.log'])('blocks private artifact %s regardless of value', async name => {
+  it.each(['.dev.vars', '.dev.vars.production', '.env', '.env.local', 'auth.json', 'accounts.html', 'accounts-reset-1234abcdef.html', 'state.sqlite', 'state.db-wal', 'audio.webm', 'server.log'])('blocks private artifact %s regardless of value', async name => {
     const result = await checkDeploymentArtifact(await fixture({ [`server/${name}`]: 'artificial fixture' }));
     expect(result.safe).toBe(false);
     expect(result.findings).toContainEqual({ path: `server/${name}`, rule: 'private-file' });
@@ -35,6 +35,14 @@ describe('deployment artifact safety boundary', () => {
     const result = await checkDeploymentArtifact(await fixture({ 'assets/client.js': `const key = '${artificial}';` }));
     expect(result.findings).toEqual([{ path: 'assets/client.js', rule: 'groq-key' }]);
     expect(JSON.stringify(result)).not.toContain(artificial);
+  });
+  it('rejects Supabase privileged keys, including legacy service-role JWTs', async () => {
+    const key = 'sb_secret_' + 'c'.repeat(30);
+    const jwt = [Buffer.from('{"alg":"HS256"}').toString('base64url'), Buffer.from('{"role":"service_role"}').toString('base64url'), 'artificial-signature'].join('.');
+    const result = await checkDeploymentArtifact(await fixture({ 'app.js': `const first = '${key}'; const second = '${jwt}';` }));
+    expect(result.findings).toEqual([{ path: 'app.js', rule: 'supabase-secret' }, { path: 'app.js', rule: 'supabase-service-role' }]);
+    expect(JSON.stringify(result)).not.toContain(key);
+    expect(JSON.stringify(result)).not.toContain(jwt);
   });
   it('fails closed for an empty or nonexistent artifact', async () => {
     const root = await fixture({});

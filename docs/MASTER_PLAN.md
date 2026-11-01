@@ -1,6 +1,6 @@
 # ORION Clinic — Master implementation and AI handoff plan
 
-- Last updated: 2026-09-30
+- Last updated: 2026-10-20
 - Plan owner: product owner + clinical lead
 - Current implementation agent: Codex
 - Repository: `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`
@@ -964,6 +964,1009 @@ Build success does not prove microphone, STT, role separation, real Word/PDF
 rendering, authorization, backup, or external integration behavior.
 
 ### Verification ledger
+
+2026-10-20 — owner-requested local project launch only:
+
+- Initially no3200/55432 listeners. Existing initialized PostgreSQL started with
+  `scripts/run-orion-web.ps1`, initial hidden launcher472; PG55432 PID24428.
+  Early health was not ready, later `node scripts/crm-local-postgres.mjs health`
+  PASS. Initial web startup and diagnostic foreground retry stopped with
+  STAFF_DIRECTORY_UNAVAILABLE; no credentials or raw driver errors printed.
+- Native provider probe `createPostgresStaffDirectory(readCrmLocalConfig()).mode()`
+  PASS: postgres/revision4/importComplete:true. Unchanged hidden launcher25892
+  retry started web3200 PID29568; sign-in?return_to=%2Fcrm HTTP200 and both
+  listeners confirmed127.0.0.1. Exact transient startup cause not established.
+- `/crm` requested in Codex browser. No code/configuration, schema, seed,
+  credentials, grants, cloud, STT, commit/push/deploy or shutdown change. Only
+  this launch ledger/handoff updated; prior implementation checkpoint unchanged.
+
+2026-10-12 — second owner-requested local restart:
+
+- Ports3200/55432 were stopped. Started existing initialized services with
+  `scripts/run-orion-web.ps1`, hidden launcher24380; web3200 PID9568 and
+  PG55432 PID12312 verified loopback-only. PostgreSQL health PASS and sign-in
+  HTTP200. Requested `/crm` in Codex browser. No migration, seed, credentials,
+  permission, configuration, cloud or STT change.
+
+2026-10-12 — owner-requested restart after completed map/data slice:
+
+- Existing initialized cluster started with `scripts/run-orion-web.ps1`, hidden
+  launcher564; PG55432 PID20288 and web3200 PID18044 listen only on127.0.0.1.
+- `node scripts/crm-local-postgres.mjs health` PASS. HTTP
+  /sign-in?return_to=%2Fcrm200 after startup. `/crm` opened in Codex browser.
+  No migration, seed, credentials, permissions, cloud or STT change.
+- One diagnostic duplicate `vinext dev` attempt refused the existing startup
+  process, as intended; no duplicate listener or forced process termination.
+
+2026-10-12 — MAP-ENTRY-UX resumed and completed locally at the owner's request:
+
+- Corrected five paired half-hour appointment overlaps before freezing forward
+  migration0006. `node scripts/verify-facility-dataset.mjs dry-run` PASS, including
+  rollback, preservation and nonempty-institution skip checks. Full owned local
+  database backup saved to `%LOCALAPPDATA%/ORION-Clinic-CRM/backups/
+  orion-crm-2026-10-12T12-15-48-154Z.dump`; restore drill not repeated this turn.
+- `node scripts/regional-local-postgres.mjs migrate` and
+  `node scripts/verify-facility-dataset.mjs verify` PASS. 0006 is now APPLIED and
+  FROZEN, SHA256 B6DE04E322B9C7BED3995AB0944E328A9A09E162B59B424C16381DACC0C6A823.
+  Migrations0001–0005 unchanged. Added56 manually fictional patients/visits/cards,
+  40 ordered labs,84 tasks/stock rows and19 queued visits in28 previously empty
+  institutions; no forged approval, signed note, prescription or lab result.
+- All36 public facility snapshots parsed under actual app role/contracts: no
+  empty institutions;76 patients/visits/cards,60 labs,112 tasks and25 queued.
+  Regional overview correctly excludes separate Shymkent:34 institutions,
+  72 patients,23 queued. Dataset dates remain9–10 October; overdue work on12
+  October is intentionally not backdated or relabelled as completed.
+- Camera-facing schematic facades, roof crosses, entrances and courts corrected;
+  actual map boundaries/north and DB coordinates unchanged. Rotated courts fit
+  actual Arys geography with adaptive scale/clearance; displaced symbols keep
+  coordinate connectors. District camera fits buildings plus nearby ground,
+  while the visible whole-territory button retains full geographical extent.
+  950×520 regression: hospital110–180px and front>60px, both facilities visible.
+  Resizing preserves relative view/bookmarks instead of jumping back to default.
+- Labels fade while the camera moves;600/650ms flights and matching data+camera
+  gate precede the600ms anchored2.5D entrance. Exit removes clinical DOM
+  immediately and animates a neutral layer. Reduced-motion has no flights/effects;
+  hidden GPU stops and idle rendering stays on demand. No3D interior added.
+- Mobile375×900 preview auto-scrolls below the fixed header (reduced-motion auto),
+  with intrinsic-height map/footer/attribution. Desktop1440×1000 keeps adjacent
+  entry CTA and map visible. Removed duplicate overlay badge/hint, added saved
+  patient/queue counters, clearer tier header and district-named back control.
+- Live user-a acceptance in existing tab1: region→Arys→building preview→explicit
+  hospital→matching2.5D/cards/history/labs/queue→district→region; Baydibek→selected
+  polyclinic→explicit interior. Reload preserves actual PostgreSQL records.
+  Found and fixed legacy read-only flag incorrectly disabling regional queue
+  commands: queue hints now use an immutable copy with canonical regional
+  manage/manageVisits; embedded legacy CRM stays read-only. FIFO, resource
+  occupancy, version checks and startVisits remain enforced. Queue position is
+  resource-local, not global sequence. Call confirmation opened/cancelled in
+  browser; no acceptance-test visit change was committed.
+- RED2 queue regressions→GREEN85 tests/3files (`regional-workspace`,
+  `regional-dispatcher`, CRM scheduling). Scene/camera62 tests/6files PASS.
+  Full unit command with ORION_KPI_PG_TEST/ORION_DIRECTIVES_PG_TEST/
+  ORION_OPERATIONAL_KPI_PG_TEST=1, `pnpm exec vitest run --project unit
+  --no-file-parallelism --maxWorkers=1`:195files,3021PASS/1providerSKIP before
+  final queue fix; focused85 rerun after fix. Actual regional PG command with
+  ORION_REGIONAL_PG_TEST=1, `pnpm exec vitest run --project database-integration
+  db/regional/postgres.test.ts --no-file-parallelism --maxWorkers=1`:30PASS
+  after fix. `node scripts/verify-operational-kpi.mjs verify` PASS.
+- Final `pnpm typecheck`, `pnpm lint`, `pnpm build:deploy-check` PASS after queue
+  fix;620 artifact files checked. Existing native config/chunk-size warnings
+  retained, not suppressed. Final `pnpm security:secrets`929 files PASS;
+  `git diff --check` PASS. Browser viewport override reset, tab1 retained at
+  /crm?area=baydibek with polyclinic preview and visible explicit entry.
+  Screenshots saved in docs/user-guide/images/regional-crm/2026-10-12-*.jpg.
+  No credentials/grants reset, external transmission, commit/push/deploy or
+  shutdown. Existing security/release and directives browser gates remain
+  separate; this is bounded local map/data completion, not production clearance.
+
+2026-10-12 — owner-requested local startup only:
+
+- Started existing initialized PostgreSQL and web with scripts/run-orion-web.ps1,
+  hidden launcher31948. Loopback PostgreSQL55432 PID4456 and web3200 PID30068.
+- First web attempt exited STAFF_DIRECTORY_UNAVAILABLE. Native provider probe
+  createPostgresStaffDirectory(readCrmLocalConfig()).mode() then passed with
+  postgres/revision4/importComplete:true; retry started normally. No code/config/
+  account/schema change made. Exact cause of transient initial failure unconfirmed.
+- Invoke-WebRequest /sign-in?return_to=%2Fcrm HTTP200. Requested /crm in Codex
+  browser panel (queued). Previous MAP-ENTRY-UX work stays paused; draft0006
+  remains unapplied. No migrations, seeds, credentials changes, cloud or STT work.
+
+2026-10-09 — MAP-ENTRY-UX checkpoint, explicitly paused by owner before dataset apply:
+
+- Diagnosing-bugs RED reproduced actual loaded React composition: detached entry
+  preview outside map stage and detailed KPI before map. Authenticated browser
+  measured map top1011px with viewport918px. New map-first workspace places
+  selection summary + explicit hospital/polyclinic entry beside map, top search,
+  separate retained-state indicators view. Read-only data/permissions unchanged.
+- Three-dimensional geography retained; differentiated hospital/polyclinic
+  buildings, hemisphere/key/rim lighting, contact layers, selection plinth and
+  visible text controls. Existing2.5D interior retained. Five-building projected
+  roofs/plinths clipped at375x470/630x350 in RED; bounded adaptive layout GREEN.
+  No geography coordinates changed; displaced symbols retain anchor connectors.
+- Owner logged in as existing user-a in browser tab3. Live checked region→Sozak
+  district→building preview (not automatic entry)→explicit hospital→matching2.5D
+  interior→exact district→region; global Baydibek search→polyclinic preview;
+  indicators selection and browser Back. Desktop1440x1000 entry button top414/
+  bottom462 within viewport. Browser override reset at pause; user tab retained.
+- Scope RED: selected hospital operational report showed district counts and
+  other hospital findings. New regionalAnalyticsScope aligns report counts,
+  findings and AI request; identity/scope fences reject stale AI after preview
+  close/change/same-territory breadcrumb. Mocked-provider tests only, no liveAI.
+- Latest focused acceptance37tests/4files PASS; scene/layout44tests/6files PASS;
+  overall typecheck PASS, lint PASS, source scan926files PASS, diff-check PASS.
+  Intermediate regional suite4RED/458PASS/51skipped recorded during test-first
+  work; four REDs now separately GREEN. Full final suite/build NOT rerun after
+  all edits because owner requested pause. Prior dependency blocker unchanged.
+- Additive regional0006 draft and guarded dry-run ONLY, NOT APPLIED. Last hash:
+  F42225766734F74F49F9087E3F6BB8D50FE734CEEB4F8C408C3425427DA011B4.
+  Dry-run PASS with rollback/preservation/nonempty-institution checks: planned
+  56manual fictional patients +56visits/history,40ordered labs,84tasks,84stocks,
+  19queued visits across28empty institutions. No real IIN, forged approval,
+  published clinical note, fake result or completed work. Existing rows and
+  identities/grants unchanged. Sequence reservations can leave harmless gaps.
+- NOT FREEZE_READY: five paired30min visit slots overlap for one doctor in
+  otyrar-hospital,tolebi-hospital,tulkibas-hospital,zhetisay-hospital,sauran-hospital.
+  Fix second scheduled times and regression before review/backup/apply. On resume
+  run `node scripts/verify-facility-dataset.mjs dry-run`, backup owned local DB,
+  apply only reviewed forward migration, verify and check UI after refresh.
+- Remaining visual issue found at375px: selecting an off-screen directory row
+  reorders preview above map but scroll anchoring leaves CTA partly behind fixed
+  header; narrow mapPanel fixed height can clip footer/attribution. Fix responsive
+  scroll positioning and intrinsic map height, verify mobile+desktop, then final
+  suite/build. No edits for these two findings made after STOP.
+- All subagents stopped with saved files. Web3200 PID6416 and PG55432 PID10908
+  remain loopback-only/running. No account reset, commit, push, cloud/deploy or
+  shutdown. Explicit pause is not a completion/production-readiness claim.
+
+2026-10-09 — DIRECTIVES-1 + operational KPI implemented locally; authenticated browser acceptance pending:
+
+- Reused accepted Q1–20; no renewed interview, cloud mutation or existing-account
+  expansion. Separate administrator issues/reviews;36 institution heads submit
+  only their own institution's documents. These accounts receive NO clinical-chart
+  assignments or regional-dashboard grant. This is not a generic superuser role.
+- Regional0004 applied after backup and rollback-only dry-run. Frozen SHA256:
+  `7A4F2DB8756810DB5FD9B75396B9DA38FDDC45FB9036EAC01FF9BFD1340F5594`.
+- Regional0005 applied after independent review and combined rollback-only tests.
+  Frozen SHA256:`B09B2CA345C0A00E5E83F8CA6B8713509DCB7A110289F225083E6537DCF3B8BC`.
+  Applied0001–0004 were preserved;0005 forward-fixes Cyrillic duplicate filenames
+  using guarded ICU case folding and bounded text validation. Never edit applied SQL.
+- Full owned-DB backups before0004/0005:
+  `%LOCALAPPDATA%/ORION-Clinic-CRM/backups/orion-crm-2026-10-09T11-18-57-091Z.dump`
+  and`orion-crm-2026-10-09T11-27-24-013Z.dump`. Restore drill not repeated this turn.
+- Atomic directive commands store immutable reports/supporting files/explanations,
+  events and idempotency receipts together. Files private in PostgreSQL bytea, up to
+  3 per package/2MiB each/6MiB total; HTTP9MiB streamed envelope cap. Downloads check
+  exact current actor+assignment, digest and length, force attachment/no-store/
+  nosniff/sandbox. Header/type checks are NOT antivirus or Office-content sanitizing.
+- Fixed deadlines cannot move. Actual completion, report submission and review
+  dates remain separate. Document return preserves completion; work return opens a
+  new completion cycle. Late work needs an explanation for that cycle; acceptance
+  never erases lateness. Late verification alone never makes timely work late.
+- POST expected-actor header plus existing session-generation fence prevents a
+  stale tab submitting under a switched account. Unknown post-commit outcome keeps
+  exact command UUID/body/files for safe replay, not a new attempt. No offline
+  durable upload queue is claimed. Bounded retained-history view50 events; private
+  attachment links remain available for earlier versions.
+- New local credentials provisioned with new-only guarded helper:37 created,
+  previous credential-row fingerprint unchanged. Private index:
+  `%LOCALAPPDATA%/ORION-Clinic/5bd7b8e5a1549d88/directive-accounts-2026-10-09T11-28-03-795Z.html`.
+  Admin login`directive-admin`, handoff`accounts-pg-1504f61651ccf55bf2361b0c.html`
+  in the same directory. Never copy passwords/hashes/private HTML into this repo.
+  New issuer lands at`/crm?view=directives`; old logins retain existing landing.
+- Added5 operational indicators over existing records, not painted counters:
+  prescription dispensing, on-time procurement, on-time work tasks, completed
+  scheduled visits, encounters with a published clinician protocol. No new clinical
+  records or fake completions inserted. Internal targets remain null, NOT MoH norms.
+  Aggregates and evidence share one source function; cutoff=min(period end,now).
+  Clinical content/names/IIN never enter indicator evidence or AI aggregates.
+- Limitations: regional prescription/procurement/task/visit registers are distinct
+  from legacy clinic registers; no unsupported cross-registry cohort union. Visits
+  use updated_at as completion proxy, explicitly documented. Published notes are
+  counted once per encounter, drafts not counted. Closed-period source calculations
+  are not signed frozen government reports; privileged source correction may change
+  them. Current periods incomplete. Missing denominator stays missing.
+- UI groups9 indicators into medicine/resources versus operations, current/previous
+  month shortcuts, source formula/table/evidence pages. KPI-specific AI is manual,
+  summary<=350 chars +<=3 priorities, bound to scope+period and canonical numeric
+  aggregates; saved draft/source hash, no autonomous actions. Actual provider call
+  was NOT made this turn. Old task briefing remains explicitly separate.
+- Verification:
+  - guarded0004 and0005 dry-run/apply/verify PASS; verification fixtures ROLLBACK.
+  - Actual PG contracts:133 tests/4 files PASS (30 directives,9 legacy KPI,
+    12 operational KPI,82 contract tests); temporary principals/data rolled back.
+  - Focused UI/API/auth/provision/secret regression:459 PASS,39 opt-in cases skipped
+    in that particular run (actual PG cases separately run as above).
+  - New-only batch planning/provision helper:17 tests PASS. Final standalone UI
+    checks91 tests/3 files PASS, including two progress/time bars: early85 versus
+    overdue85,100 not yet accepted, and timely work reviewed after the deadline.
+  - Before the dependency patch, full `pnpm test`:215 files PASS/14 skipped,
+    3421 tests PASS/140 skipped,1186.42s. Optional gates were not silently enabled.
+  - Updated only direct `next` and`eslint-config-next`16.3.6→16.3.8 plus lockfile.
+    After patch, `pnpm exec vitest run --project unit --no-file-parallelism
+    --maxWorkers=1` with ORION_KPI_PG_TEST/ORION_DIRECTIVES_PG_TEST/
+    ORION_OPERATIONAL_KPI_PG_TEST=1:191 files PASS,2955 tests PASS/1 optional provider
+    skipped,127.44s; this includes all51 regional actual-PG cases. Flags were scoped
+    to the command process. Legacy DB suite not repeated after this dependency-only
+    patch; its preceding full-run evidence above is not relabeled as post-patch.
+  - Post-patch full lint/typecheck PASS; source scan917 files PASS; `db:check` and
+    `git diff --check` PASS. `pnpm build:deploy-check` PASS,620 artifact files clean.
+    Existing extensionless Vite-config/large-chunk warnings remain; no suppression.
+  - Next patch removed all six reported Next advisories. `pnpm audit --prod
+    --audit-level high` exits0, no known vulnerabilities. Full audit still exits1:
+    one HIGH transitive`braces`<=3.0.3 nesting DoS, no published patch. Both paths
+    are dev/build tooling (ESLint/Vinext glob transforms); no CRM API caller found.
+    Do NOT replace the full security gate with --prod or ignore this advisory.
+    This remains a release/security blocker, not evidence of an exploited endpoint.
+    References: [Next advisory](https://github.com/advisories/GHSA-cjq9-62q9-8jv4),
+    [braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+- Authenticated visual/upload/download acceptance still awaits owner login. Browser
+  currently sign-in; owner was given private admin handoff, not asked to send a
+  password. After patch, restarted only verified ORION web PID23672; new hidden
+  launcher18044/web6416 on127.0.0.1:3200. Existing PG10908 on55432 unchanged.
+  Sign-in HTTP200; anonymous directives/KPI/private-attachment probes all401.
+  Logs:`%LOCALAPPDATA%/ORION-Clinic-CRM/web-directives-final-20261009.{stdout,stderr}.log`.
+  Browser tab2 remains on sign-in, marked for handoff. No production,
+  pentest, full security, deployment, commit, push or shutdown completion claimed.
+
+2026-10-09 — DISPATCH-KPI-1 local source-to-screen slice implemented:
+
+- Local-only, authorized by Q20. Existing accounts/grants, cloud services and
+  clinical records preserved. Before migration, full local DB backup saved at
+  `%LOCALAPPDATA%/ORION-Clinic-CRM/backups/orion-crm-2026-10-09T10-26-51-751Z.dump`.
+- New regional0003 passed transaction-only dry-run, then was applied using the
+  guarded runner. Frozen SHA256:
+  `B87D0CDF18E75D14D6E5E853366D674CD248EB9E929570AFA4F39874D5485849`.
+  Regional0001/0002 unchanged. Never edit applied0003; use a forward migration.
+- Persisted fictional July–September2026 registers cover36 facilities:2,121
+  completed-care episodes,6 complaint decisions,324 lab samples,54 HR snapshots,
+  708 position rows,563 main-doctor rows,1 provenance batch and4 definitions;
+  3,781 insert-audit rows. These small cohorts are not government statistics or
+  full hospital activity; source references are not existing clinical chart IDs.
+- Indicators: separate hospital/polyclinic substantiated complaints per1,000
+  completed cases/visits; hospital staffingG1; mean sample-receipt-to-result-dispatch
+  time. Official source/version/applicability retained. Monthly complaint targets
+  only apply to full calendar months; no universal lab target invented. Staffing
+  uses latest dated snapshot, not summed months. Scope values combine compatible
+  source numerators/denominators; no average percentages. Missing denominator
+  is not zero. Default Turkestan aggregate excludes separate Shymkent.
+- GET `/api/regional/v1/kpi` and `/api/regional/v1/kpi/evidence`: server-derived
+  actor, existing exact facility/network authorization, private tables, bounded
+  validated selectors, session revalidation and no-store. Evidence20/page,
+  offset<=10000 with explicit UI cap notice; only references/timestamps/numeric
+  facts, no patient names/IIN/clinical text. Read audits survive successful calls.
+- UI: dates, compact cards, compatible facility table, formulas/sources, lazy
+  evidence pages; no polling/fallback numbers. Abort/generation guards stop stale
+  responses, access loss clears protected state. Dates survive navigation. First
+  paint includes KPI CSS. HR snapshot date is distinct from refresh time.
+- Selection previews an institution; a separate button enters its2.5D interior.
+  Compact map labels replace large prose cards. Directory search spans the network
+  with an accurate heading; same-district navigation closes preview. Operational
+  task/AI blocks are explicitly separate from medical KPI. Existing AI still uses
+  task data only, not the new medical indicator records.
+- Verification:
+  - `node scripts/verify-regional-kpi.mjs dry-run`,
+    `node scripts/regional-local-postgres.mjs migrate`,
+    `node scripts/verify-regional-kpi.mjs verify` — PASS. Dry-run migration and all
+    verification fixtures/audit writes ROLLBACK; actual migration alone commits.
+  - With `$env:ORION_KPI_PG_TEST='1'`: `pnpm exec vitest run lib/regional
+    app/crm/region/regional-kpi-panel.test.ts app/first-paint-styles.test.ts
+    lib/config/source-secret-scan.test.ts lib/config/private-http-paths.test.ts
+    lib/config/deployment-artifact.test.ts lib/postgres-authority-route-guard.test.ts
+    --no-file-parallelism --maxWorkers=1` —383 tests/17 files PASS, including9 actual
+    PG tests. Temporary principals removed by rollback. Unset flag afterwards.
+    This is focused regression, not the entire repository suite.
+  - `pnpm typecheck`, scoped ESLint on changed regional/API/KPI/first-paint files,
+    `pnpm security:secrets` (898 files), `git diff --check` — PASS.
+  - `pnpm build:deploy-check` — PASS;610 artifact files inspected. Existing large
+    chunk and extensionless Vite-config warnings remain; not runtime acceptance.
+- Hidden local web runner started on3200; PG on55432. Browser reached real sign-in.
+  Authenticated visual/interaction acceptance awaits owner login. No password
+  fetched/reset, no auth bypass, no deployment/commit/push/shutdown. Do not claim
+  the changed map/table visually accepted just because code tests pass.
+- NOT implemented: dedicated administrator-of-directives account/role, institution
+  head report uploads, acceptance/return/explanation workflow, medication/procurement
+  indicator sources, medical-KPI AI recommendations, or linkage of new training
+  registers to clinical chart workflow. Subsequent work, not a completed dispatcher
+  or production/security/clinical readiness claim.
+
+2026-10-09 — DISPATCH-KPI-1 implementation started after owner answer 20:
+
+- Owner accepted the distinct institution-indicator/directive presentation and
+  explicitly said to implement for MULTIPLE hospitals using near-real KPI rules.
+  This is the transition from the design interview to the bounded first vertical
+  slice, not authority to change cloud services or existing account permissions.
+- First slice: additive local PostgreSQL indicator catalogue/source records,
+  period-filtered authorized aggregates, comparable institution/district/network
+  views and an actual UI. Clinical/quality, resources and internal operations stay
+  distinguishable. Synthetic source data persists in the DB, never UI-only totals.
+- No simple mean of hospital percentages; combine compatible source numerators
+  and denominators, show coverage/missing data, keep Shymkent outside Turkestan
+  regional totals. Source version/applicability/period accompanies each metric.
+- Full document-submission/review workflow and dedicated new accounts remain
+  subsequent work, not features to fake or mark implemented in this slice.
+
+2026-10-09 — DISPATCH-DESIGN interview, answers 16–19 and official KPI research:
+
+- Q16 accepted: distinguish return for document corrections from return for
+  unfinished work. A paperwork correction alone does not make work overdue.
+- Q17 accepted: after a missed deadline the institution remains obliged to
+  complete the work; an explanatory letter does not erase lateness. Once accepted,
+  late actual completion is shown as completed late.
+- Q18 is NOT approval of invented KPI volumes/formulas: the owner requests
+  research into actual Kazakhstan/MoH indicators first, with realistic manual
+  examples only where no applicable official basis is found. Primary-source
+  research is complete for a bounded initial catalogue; national, institution and internal assignment metrics
+  must be separated and source/version/applicability recorded.
+- Saved seven sourced examples and limitations in
+  docs/research/kazakhstan-healthcare-kpi-2026-10-09.md. Official bases include
+  ҚР ДСМ-230/2020 (quality), №170/2023 (ГОБМП/ОСМС supplier rating), and
+  ҚР ДСМ-257/2020 (laboratory process). Different profiles/periods/denominators
+  must not be collapsed into one completion percentage. No universal procurement
+  target was confirmed in this bounded search; this is not proof of absence.
+  Website/version-access limits are documented, not a full compliance opinion.
+- Read-only schema coverage check: ordinary visits are not inpatient episodes;
+  staff counts do not encode staffing positions; patient satisfaction survey
+  entities are absent in checked PostgreSQL contracts. Official formulas require
+  appropriate persisted source records, not visually fabricated counters.
+- Q19: the head/first leader of the hospital submits the documents, not an
+  arbitrary staff member. A platform domain title of head of institution avoids
+  incorrectly imposing one legal job title on all organization forms. No existing
+  account expanded or new identity provisioned during the interview.
+- Official role evidence: MoH order ҚР ДСМ-305/2020, appendix 3, chapter 2 §1,
+  describes the medical organization's head (director/chief physician/general
+  director) and management/representation/reporting duties. Source:
+  https://adilet.zan.kz/rus/docs/V2000021856 . The ORION document-submission button
+  and separation from the network reviewer are product decisions, not a claim
+  that this exact digital workflow is mandated by the order. No automatic PHI
+  or network-wide access follows from the head-of-institution title.
+- Skills: research for primary-source investigation; grilling/grill-with-docs and
+  domain-modeling for unresolved decisions and accepted vocabulary. Documentation
+  only; code/runtime/database/cloud/provider unchanged.
+
+2026-10-09 — DISPATCH-DESIGN interview, answers 13–15 accepted:
+
+- Completion submission requires uploaded reports and supporting documents, not
+  merely a textual completion notice. The dedicated administrator accepts the
+  submission or returns it with a remark. This changes the domain specification
+  only; no upload service, account, schema or workflow has been implemented.
+- Timeliness follows the confirmed actual work-completion date. Late review does
+  not turn timely work into late work; submission and review dates stay distinct.
+- Deadline extensions are explicitly forbidden. A facility that misses the
+  deadline submits an explanatory letter, not an extension request. Do not build
+  the previously proposed extension/approval branch.
+- Further decisions: document-only corrections versus unfinished work, continued
+  fulfilment and the effect of an explanatory letter, measurable assignment
+  volumes/source evidence, and scoped submission responsibility. Proposed rules
+  are not accepted until answered; final design confirmation still gates code.
+- Updated GLOSSARY.md and this ledger/checkpoint/handoff only. Read-only fact
+  finding covers existing document and role foundations. No runtime/DB/provider
+  mutation or implementation test; documentation verification: git diff --check.
+- Read-only prerequisites confirmed: the regional PostgreSQL API has no report
+  upload/download flow or directive submission/review permissions. Legacy D1/R2
+  clinical attachment handling is patient-scoped and closed by the PostgreSQL
+  authority guard; it is a technical reference, not an institutional attachment
+  endpoint to reopen. Separate accounts and facility assignments already exist,
+  but new narrow rights must be added explicitly, not inferred from administrator
+  or regional manage. No live accounts or credentials were inspected.
+
+2026-10-09 — DISPATCH-DESIGN interview resumed at the owner's request:
+
+- Restored the accepted answers 1–10. Next questions concern plan ownership and
+  deadline-change/history policy. No code, schema, data, access or provider
+  changes; final shared-understanding confirmation still gates implementation.
+- Answer 11: real-world assignments originate as an order or letter from an
+  authority; in the current platform an administrator enters/assigns them.
+  Answer 12 introduces a distinct completion-report and human-confirmation
+  workflow, not an approval of the proposed deadline-extension policy.
+- Owner explicitly requires a NEW dedicated administrator account/role for
+  issuing these assignments and approving facility reports, leaving existing
+  administrator accounts and powers unchanged. Name in the design glossary:
+  administrator of directives (Администратор поручений). Account not yet created;
+  no new grant or credential issued. Existing PHI boundaries remain intact.
+- Reporting completion and confirming it are separate concepts. Exact reviewer
+  actions, reporting-deadline attribution and extension policy remain open.
+  No governmental connector, official legal procedure or external transmission
+  has been authorized or represented as already implemented.
+
+2026-10-08 — DISPATCH-DESIGN: owner interview in progress, documentation only:
+
+- The owner rejected the current regional visual presentation and selected a
+  dispatcher centre: map beside indicators and institution list. They explicitly
+  requested grill-me, grill-with-docs and grilling before redesign.
+- Round 1 accepted: administrator priority is complete KPI visibility; interiors
+  remain available for detailed information but are not required for overview.
+  Map and list are equally useful; fast institution search belongs at the top.
+  Selecting a building shows a short institution summary; explicit entry opens
+  the full interior. AI explanations must be specific and visual, not prose-only.
+- Round 2 accepted: five concise groups (visits/queue, labs, medication,
+  procurement, tasks), with only essential information visible. Reporting dates
+  must be user-selectable and include a table view of persisted older data.
+  Completion must be interpreted with its deadline: the owner contrasts 85%
+  completed early with 85% still incomplete at the deadline. This does not yet
+  decide the denominator, milestone schedule, target owner or pace formula.
+- Round 3 accepted (answers 8–10): completion and on-time execution are separate;
+  show completed/total plus remaining time, and identify incomplete work at the
+  deadline. Table indicators open the saved source records within existing
+  access rights. Missing history is no data, not zero. Header contains search
+  and period, followed by five compact KPI blocks; main area has the large 3D
+  map left and institution list/summary right. Map/table switching retains
+  selected period and territory; large text cards do not cover map buildings.
+- Owner explicitly asked to stop at a checkpoint and continue later. Interview
+  is paused by that request, not concluded. Next unresolved decisions are who
+  defines each institution's plan/volume/deadline and how deadline changes are
+  reflected in historical reporting; then present the consolidated agreement
+  for explicit confirmation before implementation. No further questions sent
+  while the owner is leaving. Documentation diff check passed; no runtime test
+  or code/database/provider change was made during these interview rounds.
+- Read-only code review established that current regional KPI is only on-time
+  task completion over the last 30 days. The five groups are now agreed, but
+  exact KPI formulas and target values have not been approved. Null KPI means
+  no due-task sample, not a broken source.
+  Provider input contains no evidence of connector health or module failures;
+  the owner's screenshot includes unsupported technical explanations.
+- Additional read-only prerequisites: regional visits are separate from CRM
+  visits linked by clinical encounters; regional commands do not yet complete
+  visits and do not preserve dedicated full stage timing. Do not infer waiting
+  times from updated_at or clinical completion from an unrelated visit record.
+  Lab/task/procurement deadlines and actual completion/receipt exist, while
+  configurable KPI targets do not. Some frozen lab fixtures have due_at before
+  ordered_at; any correction requires a forward migration, never seed rewrite.
+  Current overview/search caps are 200 facilities and 30 territories, with no
+  global facility search or pagination. Search performance remains unmeasured.
+- Added a narrow GLOSSARY.md for settled dispatcher/summary/interior terms.
+  No runtime, schema, data, access or provider changes. No implementation tests
+  were rerun for documentation. Implementation remains gated on a final shared
+  understanding confirmation; individual interview answers are not that gate.
+
+2026-10-08 — REGIONAL-1: local PostgreSQL medical network and scoped map journey:
+
+- Local-only work in ORION-CLINIC. Regional migrations 0001/0002 applied after
+  creating a PostgreSQL backup; backup is the private file
+  `ORION-Clinic-CRM/backups/orion-unified-2026-10-08T13-03-29-128Z.dump`
+  under LOCALAPPDATA. `node scripts/regional-local-postgres.mjs migrate` and
+  `status` passed:18territories,36facilities,20hand-authored fictional patients.
+  The region total excludes the separately administered Shymkent:34facilities
+  and18patients in Turkestan. Empty institutions honestly show no patient cards.
+  Clinical history, labs, prescriptions, stock, procurement and work tasks are
+  persisted, not manufactured by the map. Training identifiers are visibly
+  non-real `TRAIN-ORION-...`, never valid identity numbers.
+- Frozen regional SQL SHA256:0001
+  `69EB2AE577CA3E63B867EB06174762E57C8C973F8791B03A966A7408FD7B3C7A`,
+  0002 `CB48A568679196A987666A5AAA7EBA7FFCD3693D3BB798A745A2FDBFF2366930`.
+  Existing CRM0001–0011/clinical0001–0004 remain immutable. Future DB changes
+  require a forward migration. No cloud migration, account reset or new grant
+  was performed during visual refinements.
+- Regional overview is gated by the explicit network administrator grant and
+  a current authorized assignment. Other staff only get assigned institutions;
+  /scope is fetched before /overview. API/RPC still enforce scope, expiry,
+  capabilities, version checks and idempotency. UI drops stale access/snapshot
+  generations and handles SESSION_CHANGED as access loss. Uncertain write
+  responses retain their key; browser/SPA leave is guarded while unresolved.
+- Real OSM GeoJSON is triangulated with holes into an on-demand Three.js map.
+  No 2D toggle; unavailable WebGL has an honest retry state and accessible
+  institution list. The owner explicitly rejected a 3D hospital interior:
+  rooms remain SVG2.5D with saved coordinates, fitted bounds, numbered room
+  selection, visible selection and co-located actor counts/accessibility list.
+  Existing /crm?view=clinic behaviour is opt-out/default unchanged.
+- District selection is a distinct step from choosing a building. Bright
+  selected-territory contour/fill/title, detached close building markers and
+  dotted true-coordinate anchors clarify the current scope. Display-only
+  displacement never writes coordinates to PostgreSQL. Back is hospital→its
+  district→region. Navigation normalizes the hospital parent from granted scope;
+  stale camera callbacks/gestures cannot select a different institution.
+  Interior transitions no longer scale the whole page; region and institution
+  animation are separated. Sidebar backdrop blur that covered adjacent content
+  was removed and visually checked in the in-app browser.
+- Earlier bounded verification:133focused tests,29real-PostgreSQL rollback tests
+  passed. One manually confirmed synthetic operation changed Turkestan hospital
+  supply task pending→in_progress; no medications, lab approval or procurement
+  transaction was executed through the UI. Real Groq invocation/microphone flow
+  and a complete historical test suite were not run for this map task.
+- Final bounded verification (2026-10-08, 19:02 local):
+  `pnpm exec vitest run lib/regional app/crm/region lib/crm/facility-layout.test.ts lib/crm/motion.test.ts lib/postgres-authority-route-guard.test.ts app/first-paint-styles.test.ts --no-file-parallelism --maxWorkers=1`
+  passed 195 tests in 16 files. `pnpm typecheck` and scoped ESLint for
+  app/crm/region, app/crm/crm-scene.tsx, app/crm/page.tsx, lib/regional and
+  lib/crm/facility-layout{,.test}.ts passed. `pnpm security:secrets` passed
+  887 files; `pnpm build:deploy-check` passed and inspected 610 artifact files.
+  Existing build warnings include chunks over 500 kB and extensionless config;
+  this is not a measured FPS/Core Web Vitals or complete security attestation.
+- Authenticated browser acceptance: Baydibek hospital/polyclinic selection,
+  same-hospital refresh, Turkestan populated room selection, browser Back,
+  hospital-to-district-to-region navigation and Sozak empty institution passed.
+  Double-clicking Turkestan now settles on the district at 100% camera fit,
+  without entering a hospital or cancelling the flight. The 2.5D interior
+  reveals over 420 ms from the projected selected-building position; exit
+  reverses a neutral curtain while clinical DOM is immediately removed.
+  Browser inspection confirmed both animations, matching facility ID, and
+  no recent console errors after the resolved development/HMR errors.
+  Desktop 1440x1000 and default 646px viewport checked; no horizontal overflow.
+  Temporary viewport override reset. Reduced-motion disables the transitions.
+- The web-perf skill guided lazy Three loading, on-demand/hidden-paused drawing
+  and removal of sidebar blur. Performance-trace/Lighthouse tools were not
+  available; no performance score is claimed. No commit, push or deployment.
+
+
+2026-10-07 — CLINICAL-UI-2: conversation-first encounter and live AI sidebar:
+
+- Owner rejected the form-first clinical screen and asked to restore the useful
+  in-person layout: live text in the centre, AI recommendations on the right and
+  visible conversation activity. The default view is now Conversation; the five
+  clinical fields remain in the Note tab, which opens for review after speech
+  stop/flush. Completed encounters open their read-only note, including after
+  asynchronous loading. Existing PG storage and publication controls are retained.
+- Added LiveConversation: clinician/patient/unknown speaker bubbles, actual
+  capture states, current-session timer from streaming, saved-segment count,
+  status animation and scroll-to-new-replies control. Exact server source IDs
+  deduplicate persisted speech responses before the next snapshot. DB sequence
+  orders resumed recordings; no provisional text is invented. Initial microphone
+  permission/connect wait has an enabled Cancel button. Speech errors preserve
+  readable saved text. Both themes use existing doctor/patient palette variables.
+- Added LiveAssistant and read-only POST /api/clinical/v1/analysis/live. Only the
+  encounter ID is accepted; transcript and actor come from verified PG access.
+  Returns bounded real provider suggestions, exact quoted evidence and source
+  revision. Live suggestions never write note fields, confirm facts or publish.
+  AI starts explicitly; starting speech enables it only after streaming begins
+  and with saved external-AI consent. Opening an old consented encounter alone
+  does not cause egress. Pending local opt-out also disables the client.
+- Auto scheduling waits3s after changed canonical speech, at least12s between
+  starts, minimum80characters; current source window max24segments/16kcharacters.
+  One client request, bounded backoff, no unchanged-error retry loop, identity/
+  encounter/consent fences, caller abort and45s total client deadline. Final saved
+  speech can be analyzed after recording stops. Server coalesces/cache-bound jobs
+  (32actors/8livejobs/5min), uses35s deadline and repeats current authorization,
+  consent version and exact-source checks immediately before external send and
+  before response. Provider redirects are rejected. Manual draft /analysis received
+  the same pre-send checks while retaining its explicit empty-field draft behavior.
+- Root focused `pnpm exec vitest run app/clinical lib/clinical
+  lib/providers/groq-clinical-analysis.test.ts lib/providers/groq-live-mode.test.ts
+  app/first-paint-styles.test.ts --no-file-parallelism --maxWorkers=1`:
+  25files/240tests PASS,1existing optional SKIP. Full typecheck PASS. Scoped ESLint
+  passed after fixing a callback dependency found in the final lint run; no rule
+  was suppressed. Updated component tests cover conversation selected/note hidden,
+  AI sidebar, SSR no-network, cancellation/drain, exact merge and escaped text.
+- Legitimate private user-a login HTTP smoke: existing handoff password verified
+  against current KDF before one login303; snapshot/patient/clinical-page200;
+  malformed live-analysis body400 without provider call; logout303 only that new
+  in-memory cookie, then session401. No password/cookie value printed or saved.
+  SSR styles and loading are present; the conversation itself hydrates from the
+  API, so this is NOT authenticated browser visual acceptance. Actual microphone
+  recording and real external AI calls were not exercised in this slice.
+- Final build/artifact/source receipts are recorded in the current handoff below.
+  No migration, reseed, account reset, clinical test mutation, cloud deployment,
+  Git write or poweroff. Existing local web remains3200, speech3101, PG55432.
+
+2026-10-07 — CLINICAL-PG-1: unified local care core and one-way identity cutover:
+
+- Current owner request: rebuild the clinical/CRM data path, doctor-scoped work,
+  safer accounts and a short encounter flow. Work remains ONLY in this original
+  ORION-CLINIC repository. No Cloud project, dir-ECHO resource, remote deployment,
+  commit/push, password reset or repeat PC shutdown is authorized by this slice.
+- Applied immutable forward clinical migrations 0001..0004 to the existing
+  owner-marked PostgreSQL database `orion_crm_local` on127.0.0.1:55432. Existing
+  CRM patient/visit/task/room/staff rows are the shared operational records, not
+  copied frontend fixtures. New closed `orion_clinical` tables hold practitioners,
+  encounters, care relationships, immutable note/consent versions, addressed
+  referrals, consented transcripts, receipts and audits. `orion_directory` holds
+  exact staff identities, memberships and effective assignments. Private login
+  hashes/sessions remain in the PC credential vault, not browser storage.
+- Directory import preserved exact source issuer/subject/IDs, deny permissions,
+  effective dates and scopes. Primary org-a/fac-a -> crm-clinic-local has5accounts,
+  5memberships/2assignments. Secondary org-b/fac-b -> crm-clinic-org-b-fac-b has
+  1account/1membership/0assignments; its empty separate clinic prevents identity
+  loss or accidental access to the primary clinic. No guessed name-based merge.
+- Root applied both private reviewed plans, ran readonly `verify-all`, set the
+  private one-way PostgreSQL fence FIRST, verified HTTP503 during the bounded
+  unavailable interval, reverified all source hashes/login coverage, and activated
+  canonical directory mode. Canonical postgres revision4/importComplete=true and
+  private postgresql now agree. Running auth reads PG on every validation; failed
+  PG/mismatched marker cannot fall back to D1. Startup probes canonical mode even
+  when a private marker is missing/stale. Legacy API and page loaders are closed
+  after cutover. Old clinical D1 records remain preserved but NOT imported yet.
+- All6 credential rows (user_id/issuer/subject/login/salt/digest) exactly match
+  the pre-cutover private SQLite backup. Existing passwords are unchanged.
+  New-only `configure-postgres-account.mjs <exactUserId>` provisions an explicitly
+  created active employee only; rejects any existing identity/login, never resets
+  old accounts or revokes sessions. Password output is exclusive private HTML,
+  not stdout/repo. This new provisioning command was NOT run on live accounts.
+- Registry/card/home, incoming referrals, clinical encounter, CRM and team UI
+  use the new PG APIs. One Start button from list/card/exact calendar visit creates
+  or resumes the encounter and atomically advances its permitted queue stages;
+  FIFO, room capacity, exact ownership and visit conflict checks remain. Saving,
+  reviewing/publishing and completion are explicit; completion and linked CRM
+  status commit together. Direct CRM start/complete cannot bypass clinical review.
+- Drafts/transcripts/consents remain author-only. Another doctor sees authorized
+  published notes through current care or an addressed referral, not all patients.
+  Referral recipients require current doctor authority; stale/expired mappings do
+  not qualify. patient.profile.write/scheduling.manage/care.manage are checked
+  independently. No automatic promotion of nurses, registrars or user-b. Team
+  changes have expectedVersion, reason, audit and last-current-admin protection.
+- Client mutation gates preserve exact payload/idempotencyKey across ambiguous
+  failures, fence double clicks/late responses, bound waits, preserve typed reason
+  on rejected referrals, and close forms only on a durable command receipt. Fixed
+  encounter-to-card links, duplicate start in the map drawer and exact visitId.
+  Compiled first-paint CSS is embedded for new pages and the full CRM console.
+- Local speech bridge uses canonical encounter/consent scope; mono bounded WAV,
+  per-actor TTL sessions, no persisted audio, consent revalidation and trusted
+  provider-only transcript writes. Optional external Groq is consent-gated and
+  reads canonical transcript; verified source quotes fill only empty draft fields,
+  never publish clinical facts automatically. Existing CUDA local service returned
+  the synthetic6.6s acceptance audio in492ms earlier in this slice; no real patient
+  recording or end-to-end live microphone acceptance was performed. Offline env
+  flags added to speech launcher take effect on its NEXT launch, not retroactively.
+- Root full `pnpm test`:186files PASS/9SKIP,2852tests PASS/54SKIP,776.12s. Optional
+  PG tests are explicit opt-in, not silently counted as passed. Post-cutover root
+  ORION_CLINICAL_PG_TEST=1 targeted clinical/CRM/identity sweep:40files/525tests PASS,
+  including actual rollback PG cases. Full typecheck and full ESLint PASS. Final
+  `pnpm build:deploy-check` PASS; source scan835files/artifact590files PASS. Original secret
+  environment files were preserved; the build now excludes private generated
+  assets before writing them. Artifact clearance is NOT production/clinical release.
+- Live read-only identity check:6exact accounts. user-a permitted clinical/CRM/
+  directory reads; other5accounts and unknown principal denied those RPCs PT403
+  without new rights. PG identity read mean2.04ms/5samples; clinical snapshot mean
+  33.8ms/3samples (not browser/HTTP performance claims). Normal read audits only.
+  Production dependency audit0; one known HIGH in development braces3.0.3 has no
+  published patched version. Do not describe the entire platform as invulnerable.
+- Final local HTTP boundary checks18/18PASS:13private file/encoded/FS paths return
+  empty404/no-store/nosniff; anonymous clinical/CRM/directory calls401, legacy API
+  409, live health200. Readonly reachable Git history audit covered71commits,
+  1425unique blobs/1430path variants,83,616,540bytes without cap skips. No confirmed
+  secret/private artifact finding; historical sensitive-assignment warnings were
+  classified as code expressions, not literal credentials. No remote fetch or
+  history rewrite. Reflog/unreachable objects/remote platform were NOT audited.
+- Backups remain outside repo. Pre-cutover unified dump10-05-22-633Z and credential
+  backup `accounts-before-pg-2026-10-07T10-05-23-167Z.sqlite` are preserved. Latest
+  post-cutover unified dump is `orion-unified-2026-10-07T10-24-07-691Z.dump` under
+  C:/Users/profm/AppData/Local/ORION-Clinic-CRM/backups. Restore drill of the earlier
+  dump passed29tables/329rows and52FKs in an isolated private temporary database.
+  Latest post-cutover dump restore also PASS:36tables/358rows/59FKs, all4clinical
+  migrations, PostgreSQL directory revision4,6accounts/20patients; PUBLIC/app CONNECT
+  revoked. Its private report is restore-drills/orion_restore_drill_35d39bf1b6304e3ba9a5f84f0608ec04.json
+  under the dedicated runtime. Live database was never a restore target. Four
+  isolated private drill copies remain recoverable; no broad cleanup was attempted.
+- Vite hot restart retained the old closed auth handler and collided on3200.
+  Exact owning node PID1896 was verified against ORION/vinext/3200 and stopped;
+  ONLY web restarted with the existing hidden launcher (launcher PID24056).
+  PostgreSQL and speech were not stopped. Fresh /sign-in returns200 and displays
+  the local form. Logs retained at .orion-runtime/web-before-pg-restart.*.log.
+- Remaining acceptance: authenticated browser new flow/card/referral and actual
+  microphone interaction; user asked to sign in without sending a password.
+  Remaining implementation: explicit provenance-preserving old clinical import;
+  PG versions of old orders/results/observations/care/communications/export modules;
+  broader appointment/roster/master-data administration and production DEC-008.
+  Do NOT claim every former module has migrated or full medical release is complete.
+  Root generated readonly source manifest clinical-import-plan-2026-10-07T10-28-54-976Z.json
+  in the private PG runtime:34legacy source records, exact IDs/scope/hashes only.
+  No clinical record was imported by this planning command; preserve provenance,
+  draft/publication status and explicit identity links in the next migration.
+
+2026-10-07 — CRM-5: persisted manual registry, real room expansion and map repair:
+
+- Owner rejected the visually enlarged room/gap version. It was reverted: normal
+  room/person scale and original six-room coordinates remain. Expansion is now
+  SAVED building/room data: two buildings, twelve rooms, twelve assigned staff,
+  six services. Native building navigation and separate platforms read PostgreSQL;
+  Home gives an overview, pointer/wheel still move the persistent world. No new
+  building queue/arrival was fabricated. The second building initially has0visits.
+- Owner asked for20 hand-authored patient cards, not frontend drawings/fixtures.
+  Forward0009 stores20 explicit fictional TRAINING profiles with name/sex/DOB and
+  normal CRM-0001..0020 MRNs, eight linked future bookings/preparation tasks.
+  Prior12 name/sex/MRN profiles remain as immutable captures (absent old DOB=NULL).
+  Normal UI removes TEST wording; one honest Учебная БД boundary remains. This is
+  not approval for real patient data or migration of legacy clinical D1 records.
+- Forward0010 normalizes the exact reviewed clinic/staff/service names and known
+  seed/automatic task titles. Prior task snapshots/audit actors remain immutable.
+  Each changed title has a new matching version and generic maintenance audit;
+  stage-only task guard is restored before commit, no task-edit RPC/grant added.
+  User-created task text is preserved. No fabricated stage-transition event.
+- Forward0011 adds2closedRLS building/mapping tables,6rooms/6staff/3services without
+  moving existing assignments or creating visits. Snapshot validates mappings and
+  bounds; optional DTO supports old no-building fixtures without invented records.
+  Frozen applied SHA256:0009=9E275B3376AEF20F26ED356F7AC6435B3BAF8CDD681C9DB3EFEA75F7F1F2ABF3;
+  0010=94FAC93822661E5404DF6B50A672E82C285B1B40ED404BE223EEB1C8BFB8CF51;
+  0011=17759B0DBFC44D414A5D93B7A0545766BF9123B9798FEA53C150A7950131A53E.
+  Never edit already applied migrations. Root `node scripts/crm-local-postgres.mjs
+  migrate` passed. Initial unapplied0009 syntax failure was fully rolled back;
+  parenthesizing its CASE expression fixed it before the successful publication.
+- Corrected owner's negative visual report (supersedes earlier broad positive
+  reply): room labels/task pins compact; console uses body portal independent of
+  transformed/clipped shell, whole titlebar pointer capture, no duplicate header.
+  Camera controls now occupy a separate right lane from queue stages; responsive
+  layer controls/selector retain their own lanes. First-paint compiled CSS retained.
+- Root final unit command `pnpm exec vitest run --project unit app/crm lib/crm
+  lib/crm-local-middleware.test.ts lib/local-account-store.test.ts
+  lib/memorable-local-password.test.ts app/first-paint-styles.test.ts
+  --no-file-parallelism --maxWorkers=1`:16files/283tests PASS.
+- Root actual PG aggregate with ORION_CRM_PG_TEST=1 and both persistent-test flags0:
+  `pnpm exec vitest run --project crm-postgres db/crm/postgres.test.ts
+  db/crm/operations.test.ts db/crm/scheduling.test.ts db/crm/registry.test.ts
+  db/crm/buildings.test.ts --no-file-parallelism --maxWorkers=1`:5files/31PASS,
+  1explicit legacy persistent test SKIP. First aggregate found only stale14-table
+  assertion; maintained17-table expectation, rerun PASS. All new cases rollback.
+  Registry6/6 and building3/3 actual-PG checks separately passed. No persistent
+  acceptance booking rerun. Full TypeScript, scoped ESLint and final build PASS.
+- Sanitized actual PG:20patients/19visits/19tasks/19bookings;2buildings/12rooms/
+  12staff/6services/12mappings;32registry versions including12prior captures.
+  Temporary clinics, invalid visit/task/profile/audit heads, bad queue order,
+  missing booking/mapping counts all0. All17tables RLS; app has0table grants,
+  no private schema usage, exactly2public RPCs. Current task_state_guard enabled.
+- CRM-only backups outside repo include pre-change19-12-05-431Z, post0009/10
+  19-30-23-071Z and post0011 19-38-19-920Z (UTC2026-10-06 filenames). Source scan
+  and final diff check are recorded below. No full restore
+  drill, trace/Lighthouse or fresh rendered pointer/mobile/theme acceptance was
+  performed. Browser policy block was not bypassed. Owner is sleeping: collect
+  latest-map visual confirmation on next session, do not claim it already passed.
+- No new password reset, old D1/STT/cloud/Git mutation, public deployment, or real
+  clinical readiness. Owner's literal `a` remains. Owner explicitly authorized
+  one-shot NON-FORCED PC shutdown only after this team's reports and completion of
+  supplied chat01a1021d-ebc7-7300-b014-f89c584b8ca4. That chat's final report says
+  214tests/build/browser first request/checkpoint done, its agents/commands ended.
+- Final `pnpm security:secrets`:767tracked/untracked source files PASS; final
+  `pnpm exec tsc --noEmit`, scoped `pnpm exec eslint app/crm lib/crm db/crm
+  scripts/crm-local-middleware.ts scripts/crm-postgres-repository.ts`, and
+  `git diff --check`:PASS. No claim of public artifact clearance: prior
+  dist/server/.dev.vars deployment blocker remains; no artifact uploaded.
+- Shutdown preparation complete: exact original web PID25412 verified by pinned
+  executable, original checkout path and vinext dev/3200 command; only it stopped.
+  Final private backup orion-crm-2026-10-06T19-43-51-789Z.dump succeeded, then
+  dedicated `node scripts/crm-local-postgres.mjs stop` smart stop succeeded.
+  Other named chat rechecked completed/idle; own agents reported complete. A
+  one-shot hidden helper will request NON-FORCED Windows /s /t0 after final
+  message delivery; no /f, no other project/service manipulation. Unsaved apps
+  may block it. This poweroff authorization is fulfilled only once this turn.
+
+2026-10-06 — CRM-4 map console and owner-approved memorable local credentials:
+
+- Owner clarified that CRM should use ONE large game-like map, not6 replacing
+  screens; queue, tasks, patients and resources must stay above that visual field.
+  Persistent game map now remains mounted across all tool panels. Pointer camera,
+  ordinary wheel around its anchor, keyboard controls/Home, .4–2.8 zoom/±1400 pan,
+  one-time selection focus and layer switches. UI-only coordinates never mutate
+  rooms, appointments or patient stages. Maximum moving actors stays24.
+- New movable `CrmMapConsole` desktop windows and mobile bottom sheets contain
+  existing PostgreSQL tools/details/booking, not duplicate backends. Window drag/
+  keyboard movement preserves mounted form values; close/Escape respects pending
+  commands and child forms. Console/scene styles pinned to server first-paint CSS.
+  Room pins show saved queue/call/service/open-task counts and organisational
+  urgent tasks; patient badges show canonical department queue position. Direct
+  nurse/staff detail now includes owned tasks as well as related visit tasks.
+- Old SQL regression suites maintained under CRM3:14 rollback checks PASS across
+  db/crm/postgres.test.ts and operations.test.ts, old persistent case1 explicitly
+  skipped behind new ORION_CRM_LEGACY_RUNTIME_TEST=1. Fixtures gained calendar/
+  future staggered intervals/call-before-start/14RLS expectations. No persistent
+  record added by maintenance. CRM3 counts stayed12patients/11visits/11tasks/
+  11bookings and all history/audit/queue/booking integrity failures0.
+- Owner specifically requested simpler passwords, then explicitly confirmed ALL
+  local test staff and acknowledged their sessions ending. Executed once:
+  `node scripts/configure-local-accounts.mjs --reset-test-all --memorable`.
+  Exactly6 already-provisioned active reviewed fixture identities updated; same
+  logins/roles/issuer/subjects. No arbitrary real external account, new staff,
+  PostgreSQL password, Supabase credential or cloud permission changed.
+- Memorable generator uses2 common Latin words plus8 unbiased unambiguous base32
+  characters; each password differs, min16chars and >=54bits random choice. Local
+  demo-only mode does not change default24char random provisioning, single-user
+  reset, scrypt work factor,15char user-change policy or loopback/auth limits.
+- Full private handoff is exclusively staged+fsynced BEFORE all-account auth-SQLite
+  CAS transaction/revocation. DB failure cleans only this invocation's stage;
+  post-commit rename failure retains authoritative stage and reports its private
+  path instead of losing credentials. Current actual publication current_file.
+  Root restricted exact auth namespace directory ACL to current owner+SYSTEM,
+  protected inheritance; resulting accounts.html has only those read/write rules.
+- Actual reset receipt: configured6,total6,sessionsRevoked=true. Password values
+  never printed/copied into source/docs/logs. Closed handoff outside OneDrive:
+  `%LOCALAPPDATA%/ORION-Clinic/5bd7b8e5a1549d88/accounts.html`; use latest table.
+  Root programmatically verified latest6 against real scrypt hashes and distinct
+  values6; remaining sessions0. Human browser password-manager state not changed.
+- Final explicit16-file unit aggregate265/265 PASS, TypeScript/scoped ESLint/source
+  scan759files/diff-check/build PASS. New game camera+motion24, console13 and
+  memorable credential17 tests included. Three earlier separate-page presentation
+  assertions failed after the intentional persistent-map change; updated to assert
+  map remains with overlays, final aggregate passed. No secret-scanner exclusions
+  or auth/permission weakening to pass tests. No full verify:ci/public-release claim.
+- Owner confirmed CRM3 calendar/queue are visible after login, before map redesign
+  and credential reset. New game-map visual confirmation requested separately;
+  no automated browser screenshot/trace. Browser URL policy block not bypassed.
+  After overlapping dev/build work React emitted multi-renderer warnings; exact
+  original web listener18796 verified against original node_modules command line
+  and restarted only that web service. PG remained running. No DB reset/reseed.
+- Source remains dirty/uncommitted. No cloud/ECHO/legacy clinical data changes,
+  role grants, account creation, recording/STT changes or external deployment.
+  Existing generated-artifact gate server/.dev.vars remains a public-upload blocker.
+
+2026-10-06 — CRM-3: PostgreSQL appointment intervals and durable manual queue:
+
+- Owner requested completing CRM appointments/queue logic against the DB. Scope
+  stays the separate PC PostgreSQL simulation; no legacy clinical D1 data copy,
+  Cloud/Supabase/STT/account change, real-patient workflow, commit/push/deploy.
+  Prior dirty source and the unrelated owner `a` are preserved.
+- Applied forward0008_scheduling_and_queue.sql after dedicated backup
+  `orion-crm-2026-10-06T17-29-40-892Z.dump`. Final applied SHA256:
+  B632B9CA72966E7C70ACFE399DFD1E42DCE064C024101E10C361F49FDB76720F.
+  New closed/RLS tables `clinic_calendar` and immutable `visit_booking`;14total
+  CRM tables, still only2 public runtime RPC functions. No old visit/history/
+  audit row rewritten.10 existing durations were explicitly recorded once from
+  the current catalogue with provenance `catalogue_backfill`, not fabricated
+  historical measurements. New bookings freeze duration with source `booking`.
+- Stored calendar is explicitly a synthetic policy: Asia/Qyzylorda, Mon–Fri,
+ 09:00–18:00. It is NOT an imported real doctor roster. New/create and transfer
+  require a future whole interval inside policy. Server clinic mutex and trigger
+  enforce half-open [start,end) overlaps across room, clinician and patient;
+  adjacency is allowed. Direct trusted SQL cannot bypass resource compatibility,
+  calendar or overlap checks; runtime has no table/private-helper permissions.
+- Manual stages: scheduled -> arrived -> queued -> called -> in_service ->
+  completed. Called reserves room/staff/patient through partial-unique indexes.
+  Requeue returns called to queued; cancellation allowed before service; no_show
+  only scheduled at/after its start time. No clinical triage/autocall. Canonical
+  FIFO is the latest queued version's immutable audit sequence, not animation,
+  browser sort or millisecond clock. Missing/ambiguous evidence fails closed;
+  requeue moves to the later event order even on equal-ms/clock-skew cases.
+- Snapshot includes saved duration/provenance, stage timestamps and queue order.
+  DTO fields remain optional only for older isolated fixtures; actual SQL supplies
+  them. Historical conflicts are displayed without deleting/moving records.
+  Existing task deadlines/statuses remain independent on transfer/cancel/no_show;
+  after completion/no_show only a new follow_up task is allowed. Receipt replay
+  is independent of a parent's later no_show state; invalid new tasks roll their
+  inner task/version/audit/receipt publication back atomically.
+- New unified calendar/queue UI, clinic-zone booking form, advisory10min slots,
+  frozen-duration transfer, conflict details, cross-date queue and wait age from
+  snapshot clock. Every route—including the former operations schedule API and
+  map drawer—uses the same scheduling/actions. Explicit confirmation for cancel/
+  no_show, versioned commands, synchronous double-click locks, false-save input
+  retention and uncertain replay protections. Scheduling CSS included in server
+  first-paint payload. No timers change records, no external slots or notifications.
+- Actual PostgreSQL command: `ORION_CRM_PG_TEST=1 pnpm exec vitest run --project
+  crm-postgres db/crm/scheduling.test.ts --no-file-parallelism --maxWorkers=1`:
+  final8/8 PASS. Isolated fixtures all rolled back; checks hours/future/adjacency/
+  all3resource overlaps, duration freeze, FIFO/requeue/capacity/no_show/CAS/replay,
+  strict direct-SQL resource relations, history/audit/grants and mutex waiting.
+  One initial fixture ALTER TABLE conflicted with pending deferred triggers;
+  test flush/DEFERRED restoration fixed, applied migration remained unchanged.
+- Strong committed race proof: explicit second opt-in `ORION_CRM_RUNTIME_TEST=1
+  pnpm exec vitest run --project crm-postgres db/crm/runtime-scheduling.test.ts
+  --no-file-parallelism --maxWorkers=1`:1/1 PASS. Two competing real connections
+  booked one future interval; exactly one committed, loser CRM_SCHEDULE_CONFLICT.
+  Exact winning command replay produced no duplicate; close/reopen recovered
+  frozen duration and task link. Intentionally retains ONE new labelled synthetic
+  patient12/nurse/treatment appointment and its auto-linked preparation task.
+  Do not rerun this proof merely for status: each invocation retains another demo.
+- Final read-only database integrity:12patients,11visits,11tasks,11bookings
+  (10backfill+1booking), temporary CRM3 clinics0; invalid visit/task/audit/queue
+  heads, missing bookings and orphan bookings all0. Latest post-proof backup:
+  `orion-crm-2026-10-06T17-37-57-573Z.dump`, outside repo/OneDrive.
+- Root `pnpm typecheck` and scoped ESLint PASS. Explicit13-file unit aggregate
+  with `--project unit --no-file-parallelism --maxWorkers=1`:227/227 PASS. Includes
+  scheduling UI callback/hook tests15, pure scheduling36, domain/repository28 and
+  auth/middleware/other CRM regression checks. Source scan752files and diff-check
+  PASS; `pnpm build` PASS. Not full verify:ci/clinical readiness or deployment gate.
+- Local listeners checked127.0.0.1:3200 and127.0.0.1:55432. Owner asked to verify
+  new calendar/queue after login; no automated browser screenshot/trace this slice
+  (prior tool URL policy block was not bypassed). Previous CSS/user confirmation
+  from CRM2 is not evidence for new scheduling visual acceptance. Existing public
+  artifact gate remains blocked by generated server/.dev.vars; no upload authorised.
+
+2026-10-06 — CRM-2: game-like saved-state operations and loading/first-paint repair:
+
+- Owner requested more interactivity/information, understandable medical CRM,
+  walking/activity from database state (not physical real-time tracking), and
+  repair of slow loading/initial CSS shift. Bounded slice extends the separate
+  PC PostgreSQL CRM; no clinical D1 data migration, Cloud/Supabase/STT change,
+  external communication, clinical orders, account rotation, commit or push.
+- Six views now use one validated snapshot: clinic plan, operational centre,
+  appointments/queue, tasks, synthetic patient catalogue, team/rooms/services.
+  Saved urgent/overdue/escalated tasks, arrivals/queue and recent events link to
+  exact records. Patient catalogue includes patients without visits. Lists have
+  real counts and100-record pagination; grouped memoized indexes avoid repeated
+  patient*task scans. Switching views does not request another database snapshot.
+- CSS/SVG walking follows bounded orthogonal corridors and saved stages, with
+  route highlighting. Staff activity derives only from saved in-service visits
+  or in-progress tasks.24 moving actors maximum,24 visit and24 staff actors
+  shown; remaining records stay in lists. No per-frame React state, STT, polling,
+  automatic workflow command or movement persistence. Explicit pause, hover/focus,
+  hidden document and reduced-motion stops; SSR begins stationary.
+- Forward migrations0006/0007 applied after CRM-only backup.0006 adds strict
+  task.create, visit.reschedule, visit.rescheduled audit and escalated->in_progress
+  manual review.0007 corrects empty-title validation discovered in actual SQL;
+  already-applied0006 was not rewritten. Runtime still has only2 public RPCs;
+  private tables/helpers remain closed. Reschedule requires scheduled state/CAS;
+  it does NOT validate future appointment overlaps or move existing task deadlines.
+- Actual PG command: `ORION_CRM_PG_TEST=1 pnpm exec vitest run --project
+  crm-postgres db/crm/operations.test.ts --no-file-parallelism --maxWorkers=1`:
+  final8/8 PASS. Tests cover replay, CAS/history, independent deadlines,
+  escalation review, denied/read-only/revoked actors, scope/terminal states,
+  strict Unicode/UTF16/date/version/UUID inputs, audit rollback and grants.
+  All new fixtures rolled back: temporary CRM2 clinics0, patients12, visits10,
+  tasks10, invalid visit/task heads0. No additional persistent acceptance records.
+- Root aggregate command `pnpm exec vitest run --project unit` with explicit
+  workspace/operations/domain/repository/motion/middleware/local-auth/store/
+  isolation/first-paint files, `--no-file-parallelism --maxWorkers=1`:11files,
+  final162/162 PASS. One preceding run timed out in an existing password-change
+  test while dev startup was warming; unchanged5s timeout, clean rerun PASS.
+  TypeScript/scoped ESLint/diff-check PASS; source secret scan744files PASS.
+  `pnpm build` PASS. These are scoped gates, not full verify:ci/clinical readiness.
+- web-perf skill used source/tool discovery and read-only timing analysis;
+  no trace/Chrome DevTools tools available, so LCP/CLS/INP/network waterfall are
+  unmeasured. Repeated local auth validation formerly opened/compiled readonly
+  SQLite staff connection for each request/await. Now handles/statements are
+  reused but every check executes fresh SELECT, never caches authority results.
+  Immediate membership/user changes and existing logout/password fences tested.
+ 30 same-PC read samples: p50 19.11ms ->0.03ms, p95 22.11ms ->0.08ms. This measures
+  auth validation only, not end-to-end page load. Separate CRM code warmup is
+  configured for4 frequently used client modules; no database/rights cache.
+- Compiled server-owned base/shell and CRM/operations/motion CSS now embedded
+  before visible content rather than depending only on client hydration. Trusted
+  CSS style-end escape, original first-paint importer tests preserved; stable
+  loading placeholder contains no invented counts. Build class-selector parity
+  checked across client CSS/server bundles. CSS inline/warmup mechanisms verified
+  against Vite official docs, no dependency/framework monkey patch or update.
+- Owner answered 'Да, всё отображается' after local login/reload request asking
+  about6 views, walking and stable CSS. This is owner visual confirmation, not an
+  automated screenshot/trace. New browser automation was not attempted as a bypass
+  of the prior URL policy block. No new screenshot or measured cold-load CWVs.
+- Artifact gate honestly BLOCKED: `pnpm security:artifact --dir dist` inspected
+ 549files and found generated `server/.dev.vars`. Do not upload this build tree;
+  credentials were not printed/read or sent. Vite HTTP deny list now explicitly
+  includes `.dev.vars*`, retaining normal environment/key/Git denials. Source
+  secret scan PASS does not certify generated deployment artifact. No deployment.
+
+2026-10-06 — CRM-1: isolated PC PostgreSQL and medical CRM simulation:
+
+- Owner selected a separate PostgreSQL on this PC, with Supabase transfer later.
+  Work targeted original `ORION-CLINIC` only. Cloud checkout, Supabase, Vercel,
+  Git remotes and all ECHOES resources stayed out of scope. Existing clinical D1,
+  local credentials, audio/STT and the owner's unrelated `a` edit were preserved.
+- Official vendor Windows PostgreSQL 17.11 binaries installed outside OneDrive
+  under `%LOCALAPPDATA%/ORION-Clinic-CRM`. Dedicated data directory, owner marker,
+  SCRAM credentials and database `orion_crm_local`; listener is loopback55432.
+  Directory ACL verified protected: current Windows owner and SYSTEM only.
+  Credentials are generated outside the repository; no credential value in logs.
+- Applied checksum-ledger migrations0001,0002 (synthetic seed),0004 and0005.
+  Manual grant template0003 is excluded from automatic migrations. Initial seed:
+  6rooms,6staff,3services,12patients,8visits and8tasks. New CRM has12 linked tables,
+  composite-clinic foreign keys, versioned immutable history, command receipts,
+  audit lineage and exclusive in-service room/staff/patient constraints.
+- Runtime role has no direct table access: only two public RPC functions are
+  executable. Authentication uses a private server capability from the existing
+  local session; no client identity/role header is trusted. Same-origin JSON,
+  size/deadline bounds, generation/logout fences, post-await revocation checks,
+  CAS and idempotent retry are covered. Lifecycle configuration now copies exact
+  loopback fields, never an arbitrary connectionString; backup validates cluster
+  ownership before pg_dump. Late revocation after a PostgreSQL commit suppresses
+  publication but cannot undo that committed command across separate databases.
+- Actual PostgreSQL acceptance:7/7 PASS, including lifecycle, CAS concurrency,
+  replay, capacity, denied/read-only/revoked grants, table/private-function denial,
+  immutable history, rollback on audit failure, commit guards and close/reopen.
+  Six isolated SQL fixtures rolled back; zero acceptance clinics or broken heads
+  remained. One explicitly labelled synthetic visit/task retained by runtime test.
+- Root focused unit aggregate:7files/91tests PASS (CRM UI/domain/repository,
+  middleware and existing local account auth/store/isolation). After final
+  scanner-safe dynamic-password refactors, middleware+mock repository53/53 PASS.
+  Final root rerun after these refactors also passed all7files/91tests and
+  TypeScript/scoped lint/source scan. No scanner rules/exclusions were weakened.
+  TypeScript, scoped ESLint, source security scan732files and git diff-check PASS.
+  Root `pnpm build` PASS. This is not a claim of full `verify:ci`, whole-app
+  regression coverage, dependency audit, clinical release or public readiness.
+- Browser acceptance on actual `/crm`: create patient12 consultation in room102;
+  manually arrive -> queue -> in_service -> complete; independently start and
+  complete its related task. All8 events displayed; reload+MRN search recovered
+  completed visit/task. Thus two additional synthetic visits exist beyond seed
+  (one runtime-test visit, one browser visit); old clinical data is unaffected.
+- Browser map-room/staff links, list/search and zoom100 ->115 ->100 verified.
+  Dark/light desktop1440x1000 and light390x844 checked; narrow DOM width375 with
+  viewport390, no horizontal overflow. Viewport reset and original dark theme
+  restored. Proofs: ignored `artifacts/crm/local-crm-{dark,light,mobile}.jpg`.
+  CSS imports at the server page boundary cover the initial client workspace.
+  Reduced-motion CSS/unit evidence exists; OS-level motion setting not exercised.
+- CRM-only pg_dump backup created outside repo; custom archive readable by
+  `pg_restore --list` (122TOC entries). Full restore drill remains unverified.
+  On owner continuation the local processes had stopped: one backup attempt
+  honestly failed ECONNREFUSED before writing. Restarted only the marked PG
+  cluster/old web launcher, without migrate/seed; subsequent health and backup
+  passed. Latest backup `orion-crm-2026-10-06T11-07-36-079Z.dump`, readable archive.
+  Final listeners verified127.0.0.1:3200 and127.0.0.1:55432. Browser acceptance
+  above predates this restart; a repeated browser check was blocked by the tool's
+  URL security policy. No bypass attempted. Final restart evidence is CLI/listener
+  health, not another authenticated browser walkthrough.
+  No migration/reset/reseed of legacy D1, no external communication, no clinical
+  orders/signing, no automatic workflow, no commit/push or deployment this slice.
 
 2026-09-30 post-restart Cloudflare access and dedicated auth database:
 
@@ -2124,7 +3127,7 @@ real-audio test, external delivery test or production acceptance.
 ## 14. Risk register
 
 Initial risks to maintain:
-
+a
 - incorrect patient identity or duplicate merge;
 - inaccurate RU/KK STT, mixed-language loss, or wrong speaker attribution;
 - negation, medicine, unit, and dosage transcription errors;
@@ -2146,6 +3149,207 @@ Each active risk must eventually record probability, impact, owner, preventive
 control, detection, response, and residual acceptance.
 
 ## 15. Current checkpoint
+
+### Active checkpoint — MAP-ENTRY-UX completed locally, 2026-10-12
+
+Owner resumed and authorized applying prepared PostgreSQL data. Migration0006
+is applied/frozen after schedule correction, guarded rollback checks and backup.
+All36 institutions have patients and visits; queues/cards/labs/history use actual
+PostgreSQL snapshots. Map facade/camera, mobile footer/entry, smooth staged2.5D
+entry and return fixes passed automated and authenticated live checks. Final
+queue permission/rank bug fixed without expanding grants; tests/build pass.
+Runtime remains loopback web3200/PG55432. Details and limitations in newest§13.
+No remaining required task in this bounded slice. Dedicated directives browser
+upload/download acceptance and existing security/release blockers are separate.
+
+### Previous checkpoint — MAP-ENTRY-UX paused explicitly by owner, 2026-10-09
+
+STOP requested at a concrete point; resume only when owner asks. Map-first
+dispatcher and explicit institution entry are implemented and exercised in the
+authenticated local browser. Separate KPI view, selection/AI scope fencing,
+clearer3D buildings and bounded five-building layout saved and focused tests pass.
+Two mobile visual issues remain (fixed-header CTA overlap after selecting a
+scrolled list row; clipped map footer), see newest§13. Dataset0006 is draft only;
+fix five schedule overlaps and regression, then review/backup/apply/verify.
+No new patient rows have been committed. Existing credentials/permissions intact.
+After those steps run final tests/build and inspect records inside institutions.
+
+### Previous checkpoint — DIRECTIVES-1 locally verified; browser acceptance pending, 2026-10-09
+
+Dedicated administrator/head report workflow is implemented and applied locally,
+with37 new-only credentials. Regional0004/0005 frozen; existing accounts/grants
+unchanged. Nine source-based KPIs, scoped table/evidence and concise KPI AI are
+implemented. See newest§13 for hashes, backups, verification and limitations.
+
+Current next step: authenticated browser acceptance after owner login. Code/PG/
+unit/full-prepatch/build checks passed, see§13. Full dependency audit retains one
+unpatched dev/build braces HIGH; production dependency audit clean. Do not repeat
+the interview or provision/reset accounts again. No full production/security
+readiness claim or cloud deployment is authorized by this local finishing turn.
+
+Settled design tree:
+
+- Purpose: KPI-first administrator dispatcher; detailed interiors still exist.
+- Finding an institution: synchronized map/list plus fast search at the top.
+- Selection: short useful institution summary, not immediate interior entry.
+- Explicit entry: detailed institution workspace with the retained 2.5D plan.
+- AI presentation: concrete evidence-backed findings with visual explanation.
+- KPI groups: visits/queue, labs, medication, procurement and tasks; minimal text.
+- Reporting: selectable dates and a table for available saved historical data.
+- Completion interpretation: progress must be shown in relation to its deadline;
+  an early 85% is not equivalent to an incomplete 85% at the deadline.
+- Completion and on-time performance are separate; overdue completed work stays
+  distinguishable from timely work, even when overall completion is high.
+- Table drill-down: a selected metric opens its underlying saved records under
+  existing permissions; unavailable historical data is not reported as zero.
+- Layout (updated MAP-ENTRY-UX): top search, map-first3D region with institution
+  list/summary and explicit entry alongside; detailed KPI/date/table controls in
+  a separate retained-state view. No large prose panels before/over the map.
+- Assignment source: authority order/letter, entered manually by an admin in
+  this version. No government-system integration is part of this decision.
+- Completion submission: institution sends a report to an authorized reviewer;
+  reporting completion is distinct from the reviewer confirming the result.
+- Submission evidence: uploaded reports and supporting documents; not just a
+  completion message. Administrator accepts or returns with a remark (Q13).
+- Timeliness: confirmed actual work-completion date governs; a later review does
+  not change timely work into overdue work. Keep reporting/review dates separate
+  from actual completion (Q14).
+- Fixed deadlines: NO extensions or rescheduling of the assignment deadline.
+  Missed deadlines require an explanatory letter from the institution (Q15).
+- Return reasons: separate correction of documents from unfinished work; document
+  correction alone does not imply late work (Q16).
+- Late work: obligation continues after the deadline; explanation does not erase
+  lateness. Accepted late completion remains explicitly marked late (Q17).
+- KPI basis: research applicable official Kazakhstan/MoH indicators before any
+  realistic manually defined fallback. Q18 did not approve formulas or targets.
+- Submission owner: the head/first leader of the institution submits (Q19).
+- Identity separation: create a NEW dedicated administrator-of-directives
+  account/role for assigning work and approving reports. Preserve existing
+  administrator accounts/permissions; do not infer PHI or generic superuser access.
+- Q20 accepted: institution indicators and directives are separate; the system
+  must cover all institutions, with profile-appropriate near-real KPI rules.
+
+Q18 official-source research is saved in
+docs/research/kazakhstan-healthcare-kpi-2026-10-09.md. It establishes that applicable
+quality/rating/laboratory indicators exist; it does not approve a new overall score
+or guarantee current regulatory compliance. Separate presentation of indicators
+and assignments is now accepted by Q20. Implement compatible formulas with
+source evidence and data-coverage guards, not a generic hospital score. The head
+of institution is now the submission owner, not an open choice. Do not reopen
+deadline extensions: the owner explicitly forbids them. Exact group-specific
+denominators and any interim pace/comparison rules must not be silently invented.
+Verify each incremental feature with source-data, authorization and UI checks.
+Report remaining workflow/account work explicitly. The broad layout,
+table drill-down and reporting selection are settled, not open questions.
+Preserve PostgreSQL as source, existing admin/facility scope, accurate geography,
+separate Shymkent, and sequential Back. Do not invent statistics or medical norms.
+
+### Latest operational checkpoint — REGIONAL-1 medical network, 2026-10-08
+
+Local `/crm` now opens the authorized regional network. An administrator can
+browse the OSM Turkestan map, choose a district/city, explicitly choose one of
+its institutions, then use its saved 2.5D room plan and records. Other staff see
+only assigned hospitals. Shymkent is a separate city and excluded from region
+totals. `/crm?view=clinic` preserves the preceding local clinic workspace.
+
+Owner's latest visual decisions supersede the experimental 3D interior:
+regional boundaries/exterior buildings are 3D; hospital interiors stay2.5D.
+No 2D switch on the regional map. Selected territory must be unmistakable;
+close buildings must remain individually selectable. Smoothness means calm,
+bounded camera movement and a building-anchored 2.5D reveal, not full-page scaling or
+automatic entry into the first institution. Navigation returns one level at a
+time. Use PostgreSQL records only; do not replace empty data with drawn actors.
+
+Data/scope/verification details are in the newest §13 entry. This is local
+training-data acceptance, not authorization for real patient use or production.
+
+
+### Latest operational checkpoint — CRM-5 persisted registry and second building, 2026-10-07
+
+The rejected visual magnification is gone. Original rooms/people keep their normal
+scale; PostgreSQL now supplies an additional building with six rooms, assigned
+staff and services. Use the building selector or pan the map; Home shows the whole
+campus. Operational windows remain above the map and drag by their titlebar.
+Camera/queue panels no longer share the same overlay area.
+
+Twenty hand-authored training cards (normal names/MRNs, sex/DOB) are persisted and
+linked to19visits/19tasks. Prior profiles and title versions stay immutable. This
+does not import legacy medical records or authorize real-person data. Current
+DB/authorization/rollback proofs are in newest §13. New rendered map acceptance
+is still for the owner next session. Scope is local only, not public release.
+
+All current code/data is saved; same six local credentials as CRM4, no new reset.
+Poweroff was explicitly requested after BOTH task reports, not on a timer while
+an agent is still working. No future poweroff authorization should be inferred.
+
+### Latest operational checkpoint — CRM-4 one-map workspace, 2026-10-06
+
+CRM is now a persistent full game field; operational tools open as movable windows
+above it. Data/stages remain shared with PostgreSQL CRM3; camera/window movement
+is UI-only. Rooms, staff, patients, queue positions and task pins are linked saved
+state, not real physical tracking. Main old D1 clinical modules are still separate.
+
+All6 local fixture accounts now have owner-requested memorable passwords, same
+logins/roles. Old sessions are revoked. Use latest table in the protected private
+accounts.html; no password value in this plan. Cloud/PG/service credentials unchanged.
+Latest command receipts,265unit gates and older PG regression maintenance in §13.
+Human visual calendar/queue acceptance is confirmed; new one-map/panel interaction
+acceptance is separate and pending. No public deployment/real-data readiness implied.
+
+### Latest operational checkpoint — local CRM-3, 2026-10-06
+
+The CRM's appointments, duration records and queue now share one PostgreSQL model
+and command boundary. Future slot/hours/3-resource conflicts are enforced by the
+database, not just the UI; called reservations, canonical FIFO, requeue and no_show
+are saved and audited. The map/directory/centre read these same states. Calendar
+and booking UI are explicit synthetic clinic policy, not real external availability.
+
+Preserved old D1-based clinical `/scheduling` separately: this is NOT an implicit
+migration/merge of legacy patients/encounters into CRM. No historic conflicting
+record was silently rewritten. New-duration provenance and independent tasks are
+visible. Root real concurrent booking proof kept1newfuture test appointment/task;
+data baseline11visits/11tasks. Evidence/limits in newest §13; resume in §16.
+
+Working hours are currently fixed synthetic clinic-wide Mon–Fri09:00–18:00.
+Individual staff shifts/breaks/holidays, policy editing, walk-in/hold/confirmation,
+patient merge and consent-gated delivery are NOT implemented by this slice.
+
+### Latest operational checkpoint — local CRM-2, 2026-10-06
+
+Current local CRM at `/crm` has6 operational views and lightweight walking/work
+visuals derived from PostgreSQL records. It is an organisational simulation, not
+physical tracking, a clinical risk model or a completed all-features medical CRM.
+New linked tasks, manual escalation review and versioned appointment rescheduling
+are durable. The patient/team/service/room directories are browse-only; editing
+their master records, callback delivery, finance and full calendar conflict logic
+are not implemented. Existing clinical modules remain separate and unchanged.
+
+Initial base/shell/CRM styles are server-owned inline CSS; local auth validation
+reuses SQL handles with fresh reads and the client code is pre-warmed. Owner
+confirmed6 views, motion and correct display after login/reload. Quantified auth
+timings, automated evidence and unmeasured UI/performance limits are in §13.
+Keep all data synthetic. Build succeeds, but generated artifact upload is blocked
+by `dist/server/.dev.vars`; no cloud release is authorised by this checkpoint.
+
+### Latest operational checkpoint — local CRM-1, 2026-10-06
+
+`http://127.0.0.1:3200/crm` is live in original ORION. A separate local-only nav
+entry opens a lightweight SVG2.5D medical operations simulation: rooms, staff,
+patients, services, visits, tasks and history share the new PostgreSQL model.
+Metrics come from saved records, not browser fixtures; changes are explicit manual
+commands. The existing local `user-a` has a separate CRM simulation grant.
+Other employees are denied unless explicitly provisioned for this new CRM.
+
+This completes the bounded CRM vertical slice, not a migration of every clinical
+module. Main patient records, scheduling, encounters and STT still use their
+existing local architecture. There is deliberately no dual-write or automatic
+copy between old D1 and new PostgreSQL. Cloud is unchanged. Next transfer must be
+reviewed independently, including target guards, auth and secret handling.
+
+Web3200 and dedicated PostgreSQL55432 are running. The original web launcher
+resumes the owned CRM cluster but never migrates or reseeds at startup. Detailed
+verification is at the latest §13 entry; resumable commands are in §16 below.
+This supersedes older operational Cloudflare next-step notes for the current task.
 
 ### Latest operational checkpoint — Cloudflare ready, empty auth D1, 2026-09-30
 
@@ -3613,6 +4817,439 @@ Do not touch:
 - previously created user data, audio, keys, or local environment files.
 
 ## 16. Last handoff
+
+**CURRENT RESUME — 2026-10-12, MAP-ENTRY-UX completed locally.**
+
+Latest owner-requested restart2026-10-20: web3200 PID29568 /PG55432 PID24428
+(hidden launcher25892), database health and sign-inHTTP200 verified; `/crm`
+requested. Early cold-start staff-directory failure cleared on unchanged retry
+after successful native provider probe; exact transient cause unconfirmed.
+No data/schema/configuration change at restart. These replace the older runtime
+PIDs below; implementation checkpoint remains completed, not reopened.
+
+Use only ORION-CLINIC, never stale ariaproject or ANY dir echoes resources.
+Prepared dataset0006 is APPLIED/FROZEN; do not edit or replay destructively.
+All36 institutions have76 fictional patients/visits/cards and25 queued visits;
+accurate geography remains unchanged and buildings are explicit schematic
+symbols. Facades/camera/resize, smooth staged entry/back and mobile entry/footer
+are fixed. Regional queue respects canonical permissions while embedded CRM
+remains read-only. Latest85 UI/scheduling and30 actual-PG tests, types/lint/
+artifact build PASS; earlier full3021 unit tests PASS/1providerSKIP. See§13 for
+backup, immutable hash, exact commands and evidence. User-a already authenticated;
+never retrieve passwords or broaden rights for QA. No cloud/STT/deploy/shutdown
+authorized in this slice. Web3200 PID30068/PG55432 PID4456 remain running.
+Keep existing uncommitted changes. Dedicated directive upload/download live
+acceptance and existing security/release gates remain separate next work, not
+part of the completed map/data request.
+
+**PREVIOUS RESUME — 2026-10-09, MAP-ENTRY-UX explicitly PAUSED by owner.**
+
+Runtime update2026-10-12: owner requested project launch only. Existing local
+PostgreSQL55432 PID4456 and web3200 PID30068 started; sign-in HTTP200. CRM panel
+open request queued. This request does not resume the paused implementation or
+authorize applying draft0006. No code, schema or credentials changed at startup.
+
+Do not automatically resume: owner asked to stop and continue later. All agents
+stopped; code saved uncommitted in ORION-CLINIC (not ariaproject). New map-first
+3D regional dispatcher/adjacent enter CTA/2.5D interior verified with user-a;
+browser tab3 at /crm?area=baydibek retained, viewport override reset. Never fetch
+passwords or change accounts for QA. Web3200 PID6416 /PG55432 PID10908 still run.
+Focused acceptance37 + scene44 tests GREEN, lint/types/source926/diffcheck PASS;
+final integrated tests/build pending. Details and evidence in newest§13.
+
+Next authorized continuation: (1) mobile preview scroll under fixed header and
+map footer clipping; (2) correct five schedule overlaps in DRAFT0006, regression,
+dry-run preservation/isolation review; (3) backup+apply+verify local owned PG;
+(4) reload UI, verify new patients/queues/labs/task connections; final tests/build.
+0006 NOT APPLIED/NOT FREEZE_READY;56patients/56visits/40labs/84tasks/84stocks are
+only rollback-tested planned additions. Hash and specific five facilities in§13.
+No deployment, broad rewrite, credential reset or shutdown pending authorization.
+Dedicated directives UI upload/download browser acceptance still separate/pending.
+
+**PREVIOUS RESUME — 2026-10-09, DIRECTIVES-1 locally verified; browser acceptance pending.**
+
+Work ONLY in `C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC`, not stale
+ariaproject cwd. Web3200 (PID6416) and owned PostgreSQL55432 (PID10908) running.
+Regional0001–0005 applied/frozen; backups/hashes in newest§13. Full pre-dependency
+patch3421 tests PASS; after Next/eslint-config-next16.3.8 update,191 unit files/
+2955 tests PASS including51 actual-PG cases. Lint/types/build/source917/artifact620
+checks PASS. Full audit retains unpatched dev/build braces HIGH; --prod audit clean.
+Preserve dirty work and unrelated edits; no security-gate suppression.
+
+Separate directive-admin +36 exact-facility heads provisioned, old credentials
+unchanged. Private handoffs and index in§13; never read passwords into chat/reset
+for testing/bypass auth. Owner asked to log in as new admin for browser QA; until
+then visual/upload/download acceptance remains pending. Verify new directives UI,
+then KPI periods/evidence/search/preview versus explicit2.5D entry/sequential back
+with authorized existing regional admin. No cloud/deploy/commit/push/shutdown.
+Local source metrics do not claim production/clinical/security certification.
+
+**HISTORICAL HANDOFF — 2026-10-09, DISPATCH-DESIGN interview, superseded by Q20 above.**
+
+RESUMED AT OWNER REQUEST on 2026-10-09. Questions 1–10 are accepted. Q11 sets
+authority-letter/order origin with manual admin assignment. Q12 introduces a
+completion report plus authorized human confirmation; it did NOT settle deadline
+extensions. Q13–15 now settle uploaded report/supporting documents with admin
+acceptance or return-with-remark; timeliness by confirmed actual work-completion
+date, unaffected by later review; and NO deadline extensions. Missed deadlines
+require an explanatory letter. The owner additionally requests a NEW dedicated
+admin account/role, never repeated expansion of the existing admin.
+No account/grant/upload service created yet.
+
+Q16–17 accepted: document corrections and unfinished work are different return
+reasons; the obligation survives the deadline, explanation does not erase lateness,
+and accepted late work is marked completed late. Q18 requests official Kazakhstan
+KPI research first (not approval of manual formulas); Q19 puts submission with the
+institution's first leader. Primary-source findings will be saved under
+docs/research/kazakhstan-healthcare-kpi-2026-10-09.md. No implementation started.
+
+Research now completed and saved at that path: seven official examples from
+230/2020, 170/2023 and 257/2020; role basis 305/2020. Preserve the documented
+applicability/version-access limits, and don't label proposed internal procurement
+targets as government norms. Known source-data gaps mean current patient/staff
+counters cannot calculate all these indicators. Proposed separation of quality,
+resource rating and directive completion still awaits shared design confirmation.
+
+Owner approved round 1: KPI is the administrator's first priority, map and list
+are equal with fast top search, selection opens summary and explicit entry opens
+interior, AI must explain concrete issues visually. See §15 for design tree and
+GLOSSARY.md for resolved terms. Round 2 adds the five KPI groups, concise content,
+user-selected reporting dates, historical tables and deadline-aware completion.
+Round 3 confirms separate completion/on-time metrics, source-record drill-down,
+truthful missing history, top search/date + five KPI blocks + map/list layout,
+and map/table switching with retained filters. Do not assume linear pace or
+confuse completion percentage with on-time rate or confirmed acceptance.
+Next use the saved official-source research to settle presentation/catalogue scope
+and distinguish quality/rating from internal assignment completion, then consolidate
+for confirmation. The
+submission owner and late-work/document-return decisions are settled by Q16–19.
+No extension-request flow: explicitly rejected by the owner in Q15.
+Continue grilling and record accepted answers;
+do not redesign code until final shared understanding
+is explicitly confirmed. Latest work only changed these documents; the local
+runtime and database remain as recorded in the preceding REGIONAL-1 handoff.
+
+**CURRENT RESUME — 2026-10-08, REGIONAL-1 local regional network and map polish.**
+
+Work only in ORION-CLINIC; no cloud checkout, deployment or repository replacement.
+Local web:127.0.0.1:3200; PostgreSQL:127.0.0.1:55432/orion_crm_local. Credentials
+remain the same six local accounts; never copy private runtime files into Git.
+Previous one-shot shutdown authorization is not current authorization.
+
+The latest owner correction is 3D geography/buildings + lightweight2.5D interior,
+separate district/building selection, clear highlighted district and sequential
+back navigation. New code:app/crm/region,lib/regional,db/regional and the opt-in
+facilityMode in CrmScene. Three is lazy loaded and renders on demand; hidden maps
+pause and retain camera bookmarks. Do not resurrect the deleted experimental
+clinic WebGL component or add an unwanted regional2D switch.
+The latest request adds a 420 ms doorway reveal anchored to the selected
+exterior building, with reverse exit and reduced-motion support. It does not
+introduce a WebGL hospital interior. Last acceptance: 195 focused tests,
+typecheck, scoped lint, source-secret scan and build/artifact gate passed;
+entry/exit and rapid district double-click also checked in the logged-in UI.
+
+Source data are18territories/36institutions/20fictional cards; accurate OSM
+polygons are not cadastral guarantees and building dimensions are stylized.
+Pending work must not alter frozen migrations or broaden facility grants.
+See newest §13 for proof, limitations and private backup reference. UI navigation
+QA does not establish all production, security, provider or microphone gates.
+
+
+**CURRENT RESUME — 2026-10-07, CLINICAL-UI-2 conversation-first in-person screen.**
+
+Latest owner correction: keep the conversation visible in the centre and live
+AI recommendations in the right sidebar. Implemented in /clinical: Conversation
+default, doctor/patient bubbles, microphone/activity/timer, one primary recording
+action; Note opens after stopping/flush for clinician review. Do not restore the
+form-first screen or the old D1 authority to recover this presentation.
+
+Live hints use the new read-only /api/clinical/v1/analysis/live with canonical PG
+speech and explicit external consent. The client never sends transcript text in
+this request. Auto updates are bounded and consent-gated, suggestions do not edit
+the doctor's note. The existing explicit draft fill and reviewed completion remain.
+New helpers/hooks/components and source/effect tests are in app/clinical and
+lib/clinical. Exact source IDs/sequence prevent repeated/out-of-order resumed text.
+
+Focused240tests PASS/1optionalSKIP, full typecheck and scoped lint PASS; live
+security review and authenticated HTTP login/read/logout smoke passed. Browser
+visual/microphone/provider acceptance remains unclaimed. The in-app browser was
+on sign-in; owner may be using another browser with an active local encounter.
+Local web is running; existing credentials, PG migrations/data and STT preserved.
+Build and artifact gates passed; private source scan844files PASS, artifact592files
+PASS. No cloud/Git publication or repeat shutdown. All implementation agents
+reported finished. The earlier database checkpoint below remains authoritative
+for migrations/backups and the remaining broader platform work.
+
+**CURRENT RESUME — 2026-10-07, CLINICAL-PG-1 active local PostgreSQL core.**
+
+Supersedes older shutdown/startup instructions below. Do NOT repeat the completed
+PC shutdown. Current user wants implementation, not cloud publication. Use ONLY
+this original ORION-CLINIC checkout; preserve all unrelated dirty edits and the
+owner's literal `a`. No commit/push this slice. Do not touch dir-ECHO/Cloud/legacy
+ariaproject resources. Detailed receipts and remaining scope are at the top of§13.
+
+Local web is running at http://127.0.0.1:3200/ with PostgreSQL active as canonical
+clinical/CRM/identity source. Personal passwords are UNCHANGED.6accounts migrated
+exactly; only the existing verified doctor user-a currently has clinical access.
+`/clinical/team` manages explicit assignments; do not auto-promote other accounts.
+Core paths: `/patients` -> card -> one Start -> `/clinical?encounterId=...`;
+`/crm?view=schedule` for calendar/queue, `/pathway` for addressed referrals.
+
+Database: C:/Users/profm/AppData/Local/ORION-Clinic-CRM,127.0.0.1:55432,
+orion_crm_local. Applied db/clinical0001..0004 are IMMUTABLE. Directory is postgres,
+revision4/importComplete; private accounts vault has one-way postgresql fence.
+Never restore legacy authority, re-run D1 provisioning, reset accounts, seed over
+old data or edit applied migrations. Login hashes/sessions stay in the private
+credential SQLite; all new clinical/CRM records and employee rights are PG.
+Old D1 medical rows are preserved as a migration source, not silently displayed
+as new PG records. Old APIs/loaders are deliberately closed after cutover.
+
+Existing hidden web launcher resumes only the owner-marked PG cluster and stops
+startup on PG failure. `run-orion-web.ps1` parameters are the same pinned paths as
+the historical instructions. Never create another listener if3200is occupied.
+Current speech3101 is ready onCUDA; its new offline startup flags await a future
+normal restart. No real patient speech was tested. Do not bypass a denied process
+operation. Browser currently requires owner sign-in for rendered acceptance.
+
+Checkpoints: full2852PASS/54explicitSKIP; post-cutover targeted525PASS including
+actual PG; full tsc/lint/build/source/artifact checks passed. Production audit0,
+known development bracesHIGH remains recorded. Latest private unified backup:
+orion-unified-2026-10-07T10-24-07-691Z.dump. Never publish private backup/account
+paths as artifacts. Restore-drill reports/copies are private, not live replacements.
+
+Next: authenticate and verify the new ordinary user flow, then continue explicit
+old-clinical import and missing PG modules. Full platform migration/real-PHI
+readiness is NOT complete. Do not mistake this bounded working care core for all
+former D1 features. Do not re-open legacy routes merely to make a button work.
+
+**LATEST RESUME — 2026-10-07, CRM-5 registry/buildings and requested PC shutdown.**
+
+Work ONLY in this original ORION-CLINIC checkout. Keep old clinical D1/STT/Cloud and
+all dir-ECHO resources untouched. Preserve owner's literal `a`; no commit/push or
+deployment made in this slice. Existing local credentials are unchanged since the
+approved CRM4 reset; latest protected accounts.html table remains authoritative.
+
+Owner corrected the enlargement request: restore normal room/person size, expand
+with new actual rooms/building. DONE in PG0009–0011 and map DTO. Main six rooms
+unchanged; second building has six additional rooms, six assigned staff and three
+added services; no fake arrivals/queue. Map and native building selector read these
+saved rows. Two buildings/12rooms/12staff/6services,20manual training profiles,
+19visits/19tasks/19bookings. Old profile/title/audit history preserved. No source
+arrays pretending to be the database; no real-patient claim. One Учебная БД marker.
+
+Compact room pins, separate camera-control lane, body-portalled title-draggable
+windows, single detail header and compiled first-paint CSS are implemented.
+Newest owner screenshot of oversized rooms was addressed by reverting that visual
+change, not by squeezing the whole larger campus into a smaller view. Final source
+and PG tests pass; actual fresh desktop pointer/narrow/theme acceptance remains
+unverified and must not be conflated with the older superseded positive response.
+
+Final scoped unit283PASS; actual PG31PASS/1explicit legacy persistent SKIP; full
+TypeScript/scoped lint/build PASS. SQL integrity/closed17tables/2RPCs and exact
+immutable hashes/backups in §13. Do NOT rerun seeds, reset passwords or rerun the
+persistent committed-race case merely to check status. Startup never migrates.
+
+Resume after boot with the existing launcher:
+`scripts/run-orion-web.ps1 -ProjectRoot <this original absolute checkout>
+-PnpmPath <pinned runtime dependencies/bin/fallback/pnpm.cmd>
+-NodeBin <pinned runtime dependencies/node/bin>`.
+It resumes only the owner-marked PC PG cluster and serves127.0.0.1:3200; then open
+http://127.0.0.1:3200/crm. Private database runtime is
+C:/Users/profm/AppData/Local/ORION-Clinic-CRM (127.0.0.1:55432/orion_crm_local).
+Never print admin/runtime configuration or publish private backup/account files.
+
+Owner authorized shutdown AFTER this team and named second chat finish/report.
+The other chat is `Исправить вход в ChatGPT Desktop`, thread
+01a1021d-ebc7-7300-b014-f89c584b8ca4: completed/idle, final214tests/build/browser
+first-request/checkpoint confirmation and no active agents/commands. Root owns
+one-shot shutdown, no other agent should issue it. Finish checkpoint/backup,
+close only verified ORION-owned web/PG, then request Windows shutdown with /t0
+and NO /f (a short hidden helper delay permits final message delivery). Unsaved
+apps may block shutdown; do not force past them. Do not repeat shutdown tomorrow.
+Final source scan767PASS/diffPASS; last backup19-43-51-789Z.dump is authoritative
+for this shutdown checkpoint. Verified original web PID25412 and marked dedicated
+PG were cleanly stopped; start them again with the launcher after boot. No secret
+values, forced app closure, or unrelated process termination performed.
+
+Next bounded work: owner visual map/panel acceptance; deliberate master-data CRUD,
+rosters/holds and old-clinical integration decisions. No full CRM/clinical release,
+cloud port, complete restore drill or artifact-upload clearance claimed here.
+
+**LATEST RESUME — 2026-10-06, CRM-4 persistent map and simpler local test login.**
+
+Current owner direction: one large interactive visual field, not separate pages.
+`/crm` always mounts gameMode CrmScene; queue/tasks/patient/resource/booking/detail
+panels float above it through CrmMapConsole. Drag background for camera, wheel
+zoom, click object for details/focus, Home reset; drag title to move a panel.
+Layer filters do not change records. Backend remains the reviewed PC CRM3 model.
+
+Owner requested ALL local test account passwords simplified. Reset executed once,
+6 exact existing active fixture identities, no login/role changes; sessions cleared.
+New format2Latin words+8code, unchanged15-minimum/scrypt/loopback rules. Open latest
+table of private C:/Users/profm/AppData/Local/ORION-Clinic/5bd7b8e5a1549d88/accounts.html.
+Never commit/publish/print its values in diagnostics. Folder ACL now owner+SYSTEM.
+Staging-before-reset recovery is tested. Do not repeat reset just to check status:
+each execution replaces all6 credentials and logs users out. Cloud/DB secrets and
+inactive/unprovisioned/non-reviewed accounts are NOT included.
+
+Final265unit,TypeScript,scopedlint,source759scan,build,diff PASS. CRM3 new8rollback+
+1committed-race checks passed earlier this work; prior14rollback SQL cases now
+updated for calendar/call/durations and passed, old persistent case skipped by
+separate flag. No further data added:12patients/11visits/11tasks/11bookings.
+Calendar/queue owner display confirmation received before new-map/pw changes;
+new-map interaction verification requested. No automatic browser/trace workaround.
+
+Original web process was clean-restarted after dev/build overlap warnings; only
+the verified original checkout listener targeted, PG untouched. Source is dirty,
+no commit/push/deploy. Keep user `a`, legacy D1, Cloud/ECHO and STT out of edits.
+Earlier startup commands and0008immutability remain valid. Next: owner map pointer/
+panel/mobile/theme visual acceptance, then deliberate master-data/roster/hold work
+and public artifact cleanup/release gates, not automatic production migration.
+
+**LATEST RESUME — 2026-10-06, CRM-3 appointments/queue integrated with PostgreSQL.**
+
+Original `/crm`, separate PC database only. Migration0008 applied and frozen; keep
+0001–0008 immutable. Main clinical D1, local credentials, STT and cloud unchanged.
+No implicit old scheduling/patient import, no clinical/external actions, no commit/
+push/deploy. Owner `a` preserved. Startup/lifecycle commands in earlier CRM1 handoff
+still apply; do not recreate/reseed the dedicated cluster.
+
+Added14-table model (closed calendar+booking metadata), future10min slot hints,
+clinic-zone hours/interval checks, room/staff/patient collision prevention, called
+reservations and audited FIFO/requeue/no_show. Both old component schedule entry
+and new main view delegate the same new scheduling module. All mutation paths
+including map drawer use shared guarded confirmation/actions. UI still consumes
+one saved snapshot; slot hints are advisory and server rechecks on commit.
+
+Calendar: source synthetic_policy, Asia/Qyzylorda, Mon–Fri09:00–18:00, no individual
+staff roster/holiday/break overrides. Backfill durations are explicitly catalogue
+snapshots, not original duration evidence. Terminal/transfer actions NEVER silently
+finish tasks or adjust deadlines. Human follow_up tasks after no_show supported,
+but no actual call/delivery. No automatic recording, triage or workflow advancement.
+
+Proof:227unit PASS,8isolated actual PG PASS,1committed concurrent-booking proof PASS,
+typecheck/scoped lint/build/source scan/diff PASS. All isolated PG fixtures rolled
+back; one deliberate future patient12/nurse/treatment visit and preparation task
+persist. Current counts12patients/11visits/11tasks/11bookings; integrity all0.
+Don't rerun runtime-scheduling test by default: explicit ORION_CRM_RUNTIME_TEST=1
+retains a new synthetic demonstration record every run. Other new scheduling
+tests are rollback-only under ORION_CRM_PG_TEST=1. Earlier actual-PG test suites
+encode pre-CRM3 lifecycle assumptions and have NOT been rerun/recertified here.
+Latest private backup17-37-57 (see §13). Full restore drill still not performed.
+
+Remaining bounded work:
+
+1. Owner visual acceptance for new calendar/queue; browser trace/cold-load and
+   keyboard/mobile/reduced-motion acceptance remain separate from unit callbacks.
+2. Audited calendar/staff shifts, lunch/holiday/room blackout controls with correct
+   timezone/overlap parity. Current policy is immutable and deliberately synthetic.
+3. Walk-ins, temporary slot holds/expiry, confirmation and explicit missing-patient
+   cases; patient/staff/service CRUD, assignment/deadline editing and consent-gated
+   callbacks as reviewed PostgreSQL commands, not localStorage/fake frontend state.
+4. Deliberate legacy clinical PostgreSQL adapters/import mapping later, preserving
+   D1 until recovery/identity gates; Supabase migration separately approved.
+5. Before public deployment fix generated artifact server/.dev.vars packaging and
+   run all release gates/restore drill. Current dist is not upload-certified.
+
+**LATEST RESUME — 2026-10-06, CRM-2 interactive operations complete.**
+
+Original local app `/crm`: plan, centre, appointments/queue, tasks, patients,
+team/services. User confirmed correct display,6 sections and motion. Existing
+`user-a` login and separate PostgreSQL runtime are unchanged; no passwords were
+reset/printed. Continue only in original ORION, never ECHOES or Cloud implicitly.
+The owner's unrelated `a` remains intact. No goal/automation/commit/push/deploy.
+
+0006 and0007 are applied to the dedicated PC database under the checksum ledger.
+Do not rewrite them or replay the seed. Backups before0006 are in the existing
+private runtime; `crm:start/health/backup` and original web launcher below still
+apply. Startup resumes ONLY the marked cluster, never auto-migrates/seeds.
+Current data baseline:12 synthetic patients,10visits,10tasks; CRM2 SQL fixtures
+all rolled back. Final scoped162unit+8actualPG tests, typecheck/lint/build/source
+scan passed; owner visual confirmation is recorded separately from automated QA.
+
+Next bounded work:
+
+1. Add future-calendar overlap/capacity constraints and slot/working-hours model
+   before presenting availability as guaranteed. Current reschedule checks state,
+   version and time only; existing task deadlines intentionally stay independent.
+2. Audited patient/staff/room/service master-record editing and task assignment/
+   deadline editing. No fake frontend-only CRUD; require new versioned commands.
+3. Separate consent-gated callback delivery/CRM messaging, finance/billing,
+   imports/exports, analytics and cloud adaptation as approved slices. Current
+   follow_up/service tasks do not make actual calls, order tests or charge anyone.
+4. Full backup restore drill and browser cold-load/interaction trace. Before any
+   deployment remove generated server/.dev.vars through a reviewed artifact
+   packaging step and rerun artifact gate; never upload the current dist tree.
+5. Continue deliberate legacy PostgreSQL migration/Supabase auth adapter later,
+   preserving old D1 until mapping/recovery gates are agreed; no automatic dual-write.
+
+New source map: operations views/styles/tests and indexed `lib/crm/operations`;
+motion scene/styles and pure `lib/crm/motion`; migrations0006/0007+operations PG
+tests; server `first-paint-styles`, root layout/CRM page compiled CSS; fresh-read
+prepared SQL in local account store; local-only Vite4-module warmup/secret deny.
+Commands/errors for review: latest §13. Do not claim whole-app performance numbers
+from the auth microbenchmark or real-life locations from the looping animation.
+
+**LATEST RESUME — 2026-10-06, CRM-1 local PostgreSQL slice ready.**
+
+Current owner choice: separate PostgreSQL on PC first, Supabase later. Continue
+only in original `C:/Users/profm/OneDrive/Документы/ChatGPT/ORION-CLINIC`.
+Do not enter ECHOES resources, touch Cloud/Supabase/Vercel, reset old D1, rotate
+local accounts, or migrate existing clinical records implicitly. Preserve the
+owner's unrelated `a` edit. No goal, automation, commit or push was created.
+
+Open `http://127.0.0.1:3200/crm` using the existing local `user-a` account.
+Current app is local development only; CRM is not mounted in build/preview/cloud.
+The private runtime is `%LOCALAPPDATA%/ORION-Clinic-CRM` (outside OneDrive),
+database `orion_crm_local`, PostgreSQL17.11 loopback55432. Do not print/read out
+`admin.json` or `runtime.json`; both contain private generated DB credentials.
+The marker/data-directory match is mandatory before lifecycle database commands.
+
+Restart from the original project with the existing launcher and bundled tools:
+
+```powershell
+& .\scripts\run-orion-web.ps1 `
+  -ProjectRoot 'C:\Users\profm\OneDrive\Документы\ChatGPT\ORION-CLINIC' `
+  -PnpmPath 'C:\Users\profm\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd' `
+  -NodeBin 'C:\Users\profm\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin'
+```
+
+With bundled node/pnpm on PATH, `pnpm crm:health`, `crm:start`, `crm:stop` and
+`crm:backup` target ONLY this owned cluster. `crm:migrate` applies forward schema
+files under advisory lock/checksum ledger; `crm:seed` is explicit one-time synthetic
+initialization, not a reset. `crm:grant-owner` targets the exact already provisioned
+local `user-a`, cannot silently replace a conflicting grant and never writes D1
+roles. Never change connection targets via environment variables/connectionString.
+On another PC first install official binaries in the documented dedicated path
+and restrict the runtime directory Windows ACL BEFORE `crm:init` writes secrets;
+Node file mode alone does not enforce Windows ACLs.
+
+Browser acceptance retained one new patient12 visit in room102, completed with
+its task and8 history events. Runtime PG acceptance retained one additional
+patient01 visit in arrived state. These records are explicitly synthetic and
+intentional; no cleanup/reset of the seeded simulation was performed. Viewport
+and original theme restored; local CRM tab remains open. Proofs in ignored
+`artifacts/crm/`. A CRM-only backup exists in the private runtime `backups` folder;
+pg_restore listing checked, full restore drill not yet performed.
+
+Next bounded work, only on a new owner request:
+
+1. Add further medical CRM flows (e.g. service catalogue/room/staff editing,
+   callbacks, analytics) with explicit synthetic commands and related history.
+2. Plan PostgreSQL adapters for legacy clinical modules separately; agree import
+   boundaries/identity mapping first. No implicit dual-write or browser fixtures.
+3. Before Supabase transfer, create a reviewed migration target/auth adapter:
+   current scripts/SQL hard-guard local database and are not drop-in cloud setup.
+   Preserve closed tables/RLS, server-side principal checks and secret isolation.
+4. Full CRM backup restore drill and broader regression gates before real-patient
+   or public deployment. Current evidence is scoped, not release certification.
+
+Implementation file map: `app/crm/*`; `lib/crm/*` contracts/domain/mock tests;
+`scripts/crm-local-{config,middleware,postgres}`; server PG repository;
+`crm/sql/0001,0002,0004,0005`; explicit actual-PG tests `db/crm/postgres.test.ts`.
+Three subagents implemented/reviewed database, UI and auth boundary in parallel.
+Actual-PG test suite is opt-in (`ORION_CRM_PG_TEST=1`); its last case intentionally
+adds one labelled synthetic record, so do not rerun merely to poll status.
 
 **LATEST RESUME — 2026-09-30, restart and Cloudflare access verified.**
 
@@ -6386,3 +8023,56 @@ with active implementation and handoff in §15–16. This supersedes earlier sha
 local-login UI notes, not ONLINE-1 public-release or durable recording gates.
 Owner subsequently requested finishing the current work; no further scope added,
 no recurring task created, no deploy/push or main clinical-data initialization.
+
+### 2026-10-06 — CRM-1: separate local PostgreSQL and isometric simulation
+
+Owner chose a PC-only PostgreSQL architecture, deferring Supabase. Added the
+separate original-app CRM tab with linked synthetic records, manual workflow,
+immutable history and real persistence; preserved old clinical D1 and Cloud.
+Parallel database/UI/auth-boundary work completed. Actual PostgreSQL7/7 and
+focused unit91/91 passed; build/typecheck/scoped lint/source scan passed. Browser
+created and completed a visit/task, verified reload/history/search, both themes
+and narrow layout. Latest evidence and reproducible startup/remaining scope are
+at the top of §13, §15 and §16. No claim of full clinical migration/public release.
+
+### 2026-10-06 — CRM-2: saved-state game-like operations and first-paint loading
+
+Expanded the PC-only CRM with6 linked operational views, bounded CSS walking and
+staff activity, task creation/review and manual rescheduling. Applied forward0006/
+0007; preserved legacy D1/Cloud/STT/accounts. Reused readonly auth SQL handles with
+fresh validation and embedded compiled first-paint styles; owner confirmed display.
+Final scoped162unit+8actualPG PASS; build/typecheck/scoped lint/source scan PASS.
+Generated deployment artifact gate remains blocked by server/.dev.vars; no upload.
+Latest complete evidence, limitations and next slices are at §13/§15/§16 tops.
+
+### 2026-10-06 — CRM-3: intervals, collision prevention and persistent manual queue
+
+Extended PC PostgreSQL with closed calendar/immutable booking metadata; applied
+forward0008 after backup. Unified CRM appointment/queue UI and guarded actions;
+audited called/requeue/no_show, canonical audit-sequence FIFO and frozen-duration
+future slot checks. Preserved old clinical D1/cloud/accounts/STT and all old rows.
+227unit+8rollbackPG+1committed-race PASS; retained exactly1newfuture synthetic
+appointment/task. New evidence and remaining scope are at §13/§15/§16 tops.
+
+### 2026-10-06 — CRM-4: one persistent map and approved simpler local credentials
+
+Replaced separate view presentation with full persistent game-map and floating
+movable operational windows. Saved PostgreSQL workflow preserved; only camera/
+window coordinates are client state. Owner requested/confirmed all6 local fixture
+passwords changed to memorable format; private handoff staged before atomic auth
+reset, sessions revoked, logins/roles unchanged. No plaintext values in source/docs.
+265unit/build/type/lint/source gates PASS; old14rollback PG cases maintained.
+Latest receipts, acceptance limits and resume instructions at §13/§15/§16 tops.
+
+### 2026-10-07 — CRM-5: saved manual profiles, second building and corrected map
+
+Owner rejected pure visual room enlargement; restored normal sizes and expanded
+through actual PG building/room/roster/service rows. Added20explicit hand-authored
+training profiles with normal names/MRNs and DOB/sex, preserved old identity/title
+history, linked future bookings/tasks. Applied0009–0011 after scoped backups and
+review; kept closed schema/2RPC boundary, no old-clinical/cloud/password mutation.
+Portal/titlebar drag and compact/independent HUD lanes address the negative map
+report; latest rendered acceptance still pending. Final283unit+31rollbackPG passed,
+1legacy persistent case deliberately skipped; type/lint/build passed. Both task
+reports/checkpoint are required before the explicitly requested non-forced PC
+poweroff. Detailed evidence, frozen hashes, limitations and resume at §13/15/16.

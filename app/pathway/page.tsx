@@ -1,3 +1,8 @@
+import { ClinicalShell } from '../clinical/clinical-shell';
+import { ClinicalRegistry } from '../clinical/registry';
+import { FirstPaintStyles } from '../first-paint-styles';
+import clinicalRegistryCss from '../clinical/registry.module.css?inline';
+import { localAccountModeEnabled } from '@/lib/local-account-mode';
 import {
   AuthenticatedClinicPage,
   getAuthenticatedClinicContext,
@@ -15,6 +20,7 @@ export default async function PathwayPage({
     accessAssignmentId?: string | string[];
   }>;
 }) {
+  if (localAccountModeEnabled()) return <ClinicalShell returnTo="/pathway"><FirstPaintStyles id="clinical-registry" css={clinicalRegistryCss} /><ClinicalRegistry mode="referrals" /></ClinicalShell>;
   const query = await searchParams;
   const params = new URLSearchParams();
   for (const key of ['view', 'facilityId', 'accessAssignmentId'] as const) {

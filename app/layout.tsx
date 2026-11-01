@@ -5,6 +5,9 @@ import { PathwayTransitionLayer } from './pathway-transition-layer';
 import { LocalAccountBoundary } from './local-account-boundary';
 import '@fontsource-variable/golos-text';
 import './globals.css';
+import globalFirstPaintCss from './globals.css?inline';
+import shellFirstPaintCss from './clinic-shell.module.css?inline';
+import { FirstPaintStyles } from './first-paint-styles';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +27,7 @@ export default async function RootLayout({
   const generation = (await headers()).get('x-orion-local-generation');
   return (
     <html lang="ru" data-theme={theme} style={{ colorScheme: theme }} suppressHydrationWarning>
+      <head><FirstPaintStyles id="base-and-shell" css={`${globalFirstPaintCss}\n${shellFirstPaintCss}`} /></head>
       <body><LocalAccountBoundary generation={generation}>{children}<PathwayTransitionLayer /><ClientNavigationRecovery /></LocalAccountBoundary></body>
     </html>
   );
