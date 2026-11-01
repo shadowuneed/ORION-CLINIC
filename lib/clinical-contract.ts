@@ -6,7 +6,8 @@ export type ClinicalLanguage = 'ru' | 'kk' | 'mixed' | 'unknown';
 export type ClinicalSuggestionCategory =
   | 'clarification'
   | 'safety'
-  | 'option';
+  | 'option'
+  | 'medication';
 export type ClinicalSuggestionPriority = 'routine' | 'attention' | 'urgent';
 
 export type ClinicalTranscriptSegment = {
@@ -44,3 +45,4 @@ export type ClinicalAnalysisError = {
   code: string;
   retryAfterSeconds?: number;
 };
+

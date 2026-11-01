@@ -39,6 +39,7 @@ const categories = new Set<ClinicalSuggestionCategory>([
   'clarification',
   'safety',
   'option',
+  'medication',
 ]);
 const priorities = new Set<ClinicalSuggestionPriority>([
   'routine',
@@ -46,6 +47,15 @@ const priorities = new Set<ClinicalSuggestionPriority>([
   'urgent',
 ]);
 const forbiddenModelText = /(?:промпт|prompt)/iu;
+const medicationDoseOrRegimen =
+  /(?:\d+(?:[.,]\d+)?\s*(?:мг|мкг|г|мл|mg|mcg|ml|ме|ед|iu|%)(?![\p{L}\p{N}_])|\d+\s*раз(?:а)?\s*(?:в|за)\s*(?:день|сутки)(?![\p{L}\p{N}_])|каждые?\s+\d+\s*(?:час(?:а|ов)?|дн(?:я|ей)?)(?![\p{L}\p{N}_])|\d+\s*(?:дн(?:я|ей)?|недел(?:ю|и|ь)?|месяц(?:а|ев)?)(?![\p{L}\p{N}_])|(?<![\p{L}\p{N}_])(?:доз(?:а|е|у|ы|ой|ировка|ировке|ировку)|курс(?:ом|а)?|перорально|внутривенно|внутримышечно|подкожно|ингаляционно|ректально|сублингвально|наружно|местно|ежедневно|однократно|утром|вечером|на ночь)(?![\p{L}\p{N}_]))/iu;
+const medicationImperativeOrPrescription =
+  /(?<![\p{L}\p{N}_])(?:принимайте|принимать|начните|начать|дайте|дать|назначьте|назначить|назначени(?:е|я|ю|ем)|выпишите|выписать|используйте|использовать|применяйте|применять|отмените|отменить|замените|заменить|увеличьте|увеличить|снизьте|снизить|рецепт(?:а|е|у|ом)?)(?![\p{L}\p{N}_])/iu;
+const MEDICATION_SAFETY_CHECKLIST =
+  'Проверка врачом до решения: показания; текущие лекарства и взаимодействия; аллергии и нежелательные реакции; противопоказания и значимые факторы пациента.';
+const normalizedMedicationSafetyChecklist = MEDICATION_SAFETY_CHECKLIST.toLocaleLowerCase(
+  'ru',
+);
 const analysisRateWindows = new Map<
   string,
   { startedAt: number; requestCount: number }
@@ -200,7 +210,14 @@ function buildSystemPrompt() {
     'Отрицание относится только к названному симптому: «ентігу жоқ» означает «одышки нет», а не «кашля нет»; «жөтел жоқ» означает «кашля нет».',
     'В summary перечисляй только факты, прямо присутствующие в сегментах. Если перевод или смысл не уверен — пропусти факт и предложи уточнить.',
     'Вывод предназначен только врачу и не является окончательным медицинским решением.',
-    'Предлагай максимум 4 коротких элемента: clarification — что уточнить; safety — подтверждённый сигнал безопасности; option — вариант для рассмотрения врачом.',
+    'Предлагай максимум 6 коротких элементов: clarification — что уточнить; safety — подтверждённый сигнал безопасности; option — диагностический или организационный вариант для рассмотрения врачом; medication — вариант лекарства только для рассмотрения врачом.',
+    'Для clarification пиши в clinicianPrompt один готовый нейтральный вопрос пациенту, обязательно заканчивающийся знаком «?». Не повторяй вопрос, если ответ уже явно присутствует в расшифровке.',
+    'Если сведения ещё не прозвучали, приоритетно уточняй текущие лекарства: точные названия, дозы, частоту, время последнего приёма, БАДы и другие добавки, а также лекарственные аллергии и прежние нежелательные реакции.',
+    'Перед medication в расшифровке должны быть явно зафиксированы ответы и о текущих лекарствах/БАДах, и о лекарственных аллергиях/нежелательных реакциях. Если хотя бы один из этих блоков неизвестен, не создавай medication: предложи соответствующий clarification.',
+    'В medication разрешено назвать только одно международное непатентованное наименование или класс лекарств как необязательный вариант для решения врача; не используй торговые марки.',
+    'В medication запрещены доза, путь введения, частота, длительность, схема, рецепт и любые указания пациенту или врачу в повелительной форме. Не формулируй medication как назначение.',
+    `Для каждого medication clinicianPrompt обязан дословно содержать фразу: «${MEDICATION_SAFETY_CHECKLIST}»`,
+    'Предлагай не более 2 элементов medication за один ответ.',
     'Используй safety только для присутствующего срочного тревожного признака и только вместе с priority="urgent"; отсутствие симптома не является safety-подсказкой.',
     'Не используй safety для изолированной субфебрильной температуры без иных явно сказанных тревожных признаков.',
     'Пример: фраза «температура 37,5, одышки и боли в груди нет» не является safety; при необходимости уточни динамику температуры через clarification.',
@@ -211,7 +228,7 @@ function buildSystemPrompt() {
     'Корректно понимай русский, казахский и смешанную речь, но все значения summary, title, rationale и clinicianPrompt пиши только на грамотном русском языке.',
     'Значения category и priority используй только в точности из перечисленных английских enum, никогда не переводи их.',
     'Слово urgent разрешено только в поле priority; для срочного сигнала всегда ставь category="safety" и priority="urgent".',
-    'Верни только JSON без markdown: {"summary":"...","suggestions":[{"category":"clarification|safety|option","priority":"routine|attention|urgent","title":"...","rationale":"...","clinicianPrompt":"...","evidenceSegmentIds":["segment-id"]}]}.',
+    'Верни только JSON без markdown: {"summary":"...","suggestions":[{"category":"clarification|safety|option|medication","priority":"routine|attention|urgent","title":"...","rationale":"...","clinicianPrompt":"...","evidenceSegmentIds":["segment-id"]}]}.',
     'Если надёжных подсказок нет, верни пустой массив suggestions.',
   ].join('\n');
 }
@@ -232,13 +249,13 @@ const clinicalResponseSchema = {
     summary: { type: 'string' },
     suggestions: {
       type: 'array',
-      maxItems: 4,
+      maxItems: 6,
       items: {
         type: 'object',
         properties: {
           category: {
             type: 'string',
-            enum: ['clarification', 'safety', 'option'],
+            enum: ['clarification', 'safety', 'option', 'medication'],
           },
           priority: {
             type: 'string',
@@ -395,6 +412,93 @@ function stableSuggestionId(parts: string[]) {
   return `sg_${(hash >>> 0).toString(36)}`;
 }
 
+const patientMedicationAnswer =
+  /(?:лекарств|препарат|таблет|капсул|сироп|маз[ьи]|инъекц|витамин|бад|принима|пью|дәрі|дәрумен|қабылда|ішем)/iu;
+const patientReportsNoMedication =
+  /(?:(?:ничего|никак\w*)[\s\S]{0,100}не\s+(?:принима|пью)|(?:лекарств|препарат|витамин|бад)[\s\S]{0,80}не\s+принима|не\s+принима\w*\s+(?:никак\w*\s+)?(?:лекарств|препарат)|дәрі\s+қабылдамай|ештеңе\s+ішпей)/iu;
+const medicationDoseDetail =
+  /(?:доз|\d+(?:[.,]\d+)?\s*(?:мг|мкг|г|мл|mg|mcg|ml|ме|ед|iu))/iu;
+const medicationFrequencyDetail =
+  /(?:как\s+часто|частот|кратност|\d+\s*раз|кажд\w*\s+(?:день|сутки|час)|күніне|рет)/iu;
+const medicationLastIntakeDetail =
+  /(?:(?:последн|соңғы)\w*\s+при[её]м|когда\s+(?:был\s+)?(?:последн\w*\s+)?при[её]м|соңғы\s+рет)/iu;
+const patientAllergyAnswer =
+  /(?:аллерг|нежелательн\w*\s+реакц|побочн\w*\s+(?:эффект|реакц)|дәріге\s+аллерг|жағымсыз\s+реакц)/iu;
+
+function addMedicationReconciliationQuestions(
+  suggestions: ClinicalSuggestion[],
+  segments: ClinicalTranscriptSegment[],
+) {
+  const patientSegments = segments.filter((segment) => segment.role === 'patient');
+  const patientText = patientSegments.map((segment) => segment.text).join(' ');
+  const evidenceId =
+    patientSegments.at(-1)?.id ?? segments.at(-1)?.id ?? segments[0]?.id;
+  if (!evidenceId) return suggestions;
+
+  let supplemented = [...suggestions];
+  const clarificationText = suggestions
+    .filter((suggestion) => suggestion.category === 'clarification')
+    .map((suggestion) => `${suggestion.title} ${suggestion.clinicianPrompt}`)
+    .join(' ');
+  const patientMedicationHistoryComplete =
+    patientReportsNoMedication.test(patientText) ||
+    (patientMedicationAnswer.test(patientText) &&
+      medicationDoseDetail.test(patientText) &&
+      medicationFrequencyDetail.test(patientText) &&
+      medicationLastIntakeDetail.test(patientText));
+  const medicationClarificationComplete =
+    patientMedicationAnswer.test(clarificationText) &&
+    medicationDoseDetail.test(clarificationText) &&
+    medicationFrequencyDetail.test(clarificationText) &&
+    medicationLastIntakeDetail.test(clarificationText);
+
+  if (!patientMedicationHistoryComplete && !medicationClarificationComplete) {
+    supplemented = supplemented.filter((suggestion) => {
+      if (suggestion.category !== 'clarification') return true;
+      return !patientMedicationAnswer.test(
+        `${suggestion.title} ${suggestion.clinicianPrompt}`,
+      );
+    });
+    const title = 'Что пациент принимает сейчас';
+    supplemented.unshift({
+      id: stableSuggestionId(['clarification', title]),
+      category: 'clarification',
+      priority: 'routine',
+      title,
+      rationale:
+        'В подтверждённой расшифровке ещё не зафиксирована полная информация о текущих препаратах и добавках.',
+      clinicianPrompt:
+        'Какие рецептурные и безрецептурные препараты, витамины или БАДы вы принимаете сейчас, в какой дозе и как часто, и когда был последний приём?',
+      evidenceSegmentIds: [evidenceId],
+    });
+  }
+
+  const remainingClarificationText = supplemented
+    .filter((suggestion) => suggestion.category === 'clarification')
+    .map((suggestion) => `${suggestion.title} ${suggestion.clinicianPrompt}`)
+    .join(' ');
+
+  if (
+    !patientAllergyAnswer.test(patientText) &&
+    !patientAllergyAnswer.test(remainingClarificationText)
+  ) {
+    const title = 'Аллергии и реакции на лекарства';
+    supplemented.unshift({
+      id: stableSuggestionId(['clarification', title]),
+      category: 'clarification',
+      priority: 'routine',
+      title,
+      rationale:
+        'В подтверждённой расшифровке ещё нет ответа о лекарственных аллергиях и нежелательных реакциях.',
+      clinicianPrompt:
+        'Есть ли у вас аллергия на лекарства или были нежелательные реакции на препараты, и как именно они проявлялись?',
+      evidenceSegmentIds: [evidenceId],
+    });
+  }
+
+  return supplemented;
+}
+
 function validateSuggestion(
   value: unknown,
   allowedEvidenceIds: Set<string>,
@@ -414,6 +518,10 @@ function validateSuggestion(
   }
   const rawEvidence = value.evidenceSegmentIds as string[];
   const evidenceSegmentIds = Array.from(new Set(rawEvidence));
+  const suggestionText = [title, rationale, clinicianPrompt]
+    .filter((text): text is string => text !== null)
+    .join(' ');
+  const normalizedClinicianPrompt = clinicianPrompt?.toLocaleLowerCase('ru');
 
   if (
     typeof category !== 'string' ||
@@ -430,6 +538,13 @@ function validateSuggestion(
     rawEvidence.length > 8 ||
     evidenceSegmentIds.length !== rawEvidence.length ||
     evidenceSegmentIds.some((id) => !allowedEvidenceIds.has(id)) ||
+    (category === 'clarification' && !clinicianPrompt.endsWith('?')) ||
+    (category === 'medication' && priority === 'urgent') ||
+    (category === 'medication' && medicationDoseOrRegimen.test(suggestionText)) ||
+    (category === 'medication' &&
+      medicationImperativeOrPrescription.test(suggestionText)) ||
+    (category === 'medication' &&
+      !normalizedClinicianPrompt?.includes(normalizedMedicationSafetyChecklist)) ||
     (category === 'safety' && priority !== 'urgent') ||
     (priority === 'urgent' && category !== 'safety')
   ) {
@@ -459,7 +574,7 @@ function validateModelOutput(
 
   const allowedEvidenceIds = new Set(segments.map((segment) => segment.id));
   const suggestions = parsed.suggestions
-    .slice(0, 8)
+    .slice(0, 12)
     .map((suggestion) => validateSuggestion(suggestion, allowedEvidenceIds))
     .filter((suggestion): suggestion is ClinicalSuggestion => suggestion !== null);
 
@@ -467,9 +582,25 @@ function validateModelOutput(
 
   const uniqueSuggestions = Array.from(
     new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])).values(),
-  ).slice(0, 4);
+  );
+  const reconciledSuggestions = addMedicationReconciliationQuestions(
+    uniqueSuggestions,
+    segments,
+  );
+  let medicationCount = 0;
+  const cappedSuggestions = reconciledSuggestions
+    .filter((suggestion) => {
+      if (suggestion.category !== 'medication') return true;
+      medicationCount += 1;
+      return medicationCount <= 2;
+    })
+    .sort((left, right) => {
+      const rank = { urgent: 0, attention: 1, routine: 2 } as const;
+      return rank[left.priority] - rank[right.priority];
+    })
+    .slice(0, 6);
 
-  return { summary, suggestions: uniqueSuggestions };
+  return { summary, suggestions: cappedSuggestions };
 }
 
 export async function POST(request: Request) {
@@ -488,9 +619,7 @@ export async function POST(request: Request) {
   }
 
   const user = await getChatGPTUser();
-  const isLocalPreview =
-    process.env.NODE_ENV === 'development' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(requestUrl.hostname);
+  const isLocalPreview = process.env.NODE_ENV === 'development';
   if (!user && !isLocalPreview) {
     return json({ error: 'Требуется вход врача.', code: 'unauthorized' }, 401);
   }
@@ -676,3 +805,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

@@ -27,6 +27,17 @@ export type SpeechActivity =
   | 'speaking'
   | 'recognizing';
 
+export type RecordingStatus =
+  | 'idle'
+  | 'recording'
+  | 'ready'
+  | 'unavailable'
+  | 'error';
+
+export type LocalSpeechStartOptions = {
+  recordAudio?: boolean;
+};
+
 export type LocalSpeechEngine = {
   stt: string;
   speaker: string;
@@ -93,10 +104,10 @@ type WorkletMessage =
 const TARGET_SAMPLE_RATE = 16_000;
 const NOISE_CALIBRATION_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.35);
 const NOISE_CALIBRATION_WAIT_MS = 400;
-const END_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.5);
+const END_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.24);
 const SHORT_PAUSE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.18);
-const TRAILING_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.2);
-const PRE_ROLL_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.45);
+const TRAILING_SILENCE_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.12);
+const PRE_ROLL_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.32);
 const SPEECH_TRIGGER_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.14);
 const MIN_SPEECH_SAMPLES = Math.round(TARGET_SAMPLE_RATE * 0.12);
 const SOFT_MAX_UTTERANCE_SAMPLES = TARGET_SAMPLE_RATE * 6;
@@ -106,7 +117,29 @@ const MAX_START_RMS_THRESHOLD = 0.03;
 const MIN_CONTINUE_RMS_THRESHOLD = 0.003;
 const MAX_CONTINUE_RMS_THRESHOLD = 0.02;
 const LOCAL_TRANSCRIBE_TIMEOUT_MS = 30_000;
+const MEDIA_RECORDER_STOP_TIMEOUT_MS = 3_000;
+const MEDIA_RECORDER_TIMESLICE_MS = 1_000;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const RECORDING_MIME_PREFERENCES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+] as const;
+
+function preferredRecordingMimeType() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+
+  for (const mimeType of RECORDING_MIME_PREFERENCES) {
+    try {
+      if (MediaRecorder.isTypeSupported(mimeType)) return mimeType;
+    } catch {
+      // Fall through to the next format or the browser default.
+    }
+  }
+
+  return '';
+}
 
 function createCaptureState(): CaptureState {
   return {
@@ -143,6 +176,11 @@ function readableError(error: unknown) {
   }
   if (error instanceof Error && error.message) return error.message;
   return 'Не удалось запустить локальное распознавание.';
+}
+
+function readableRecordingError(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  return 'Не удалось записать аудио. Расшифровка продолжает работать.';
 }
 
 async function responseError(response: Response, fallback: string) {
@@ -337,6 +375,10 @@ export function useLocalSpeechTranscription() {
   const [provisionalTokens, setProvisionalTokens] = useState<LocalSpeechToken[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [engine, setEngine] = useState<LocalSpeechEngine | null>(null);
+  const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+  const [recordingStatus, setRecordingStatus] =
+    useState<RecordingStatus>('idle');
+  const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const statusRef = useRef<TranscriptionStatus>('idle');
   const runRef = useRef(0);
@@ -352,6 +394,14 @@ export function useLocalSpeechTranscription() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const silentGainRef = useRef<GainNode | null>(null);
   const flushResolverRef = useRef<(() => void) | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingChunksRef = useRef<Blob[]>([]);
+  const recordingMimeTypeRef = useRef('');
+  const recordedAudioRef = useRef<Blob | null>(null);
+  const recordingErrorRef = useRef<string | null>(null);
+  const recordingEpochRef = useRef(0);
+  const recordingStopPromiseRef = useRef<Promise<Blob | null> | null>(null);
+  const stopOperationRef = useRef<Promise<Blob | null> | null>(null);
 
   const updateStatus = useCallback((nextStatus: TranscriptionStatus) => {
     statusRef.current = nextStatus;
@@ -374,6 +424,199 @@ export function useLocalSpeechTranscription() {
       updateActivity('listening');
     }
   }, [updateActivity]);
+
+  const discardRecording = useCallback((updateReactState = true) => {
+    recordingEpochRef.current += 1;
+    const recorder = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
+    recordingStopPromiseRef.current = null;
+    recordingChunksRef.current = [];
+    recordingMimeTypeRef.current = '';
+    recordedAudioRef.current = null;
+    recordingErrorRef.current = null;
+
+    if (recorder) {
+      recorder.ondataavailable = null;
+      recorder.onerror = null;
+      if (recorder.state !== 'inactive') {
+        try {
+          recorder.stop();
+        } catch {
+          // Stopping tracks below also releases a recorder that already failed.
+        }
+      }
+    }
+
+    if (updateReactState) {
+      setRecordedAudio(null);
+      setRecordingError(null);
+      setRecordingStatus('idle');
+    }
+  }, []);
+
+  const startRecording = useCallback(
+    (stream: MediaStream, enabled: boolean) => {
+      if (!enabled) return;
+
+      const preferredMimeType = preferredRecordingMimeType();
+      if (preferredMimeType === null) {
+        const message = 'Этот браузер не поддерживает запись аудио.';
+        recordingErrorRef.current = message;
+        setRecordingError(message);
+        setRecordingStatus('unavailable');
+        return;
+      }
+
+      const epoch = recordingEpochRef.current + 1;
+      recordingEpochRef.current = epoch;
+      recordingChunksRef.current = [];
+      recordingMimeTypeRef.current = preferredMimeType;
+      recordedAudioRef.current = null;
+      recordingErrorRef.current = null;
+      setRecordedAudio(null);
+      setRecordingError(null);
+
+      try {
+        const recorder = preferredMimeType
+          ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+          : new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+        recordingMimeTypeRef.current = recorder.mimeType || preferredMimeType;
+
+        recorder.ondataavailable = (event: BlobEvent) => {
+          if (
+            epoch !== recordingEpochRef.current ||
+            mediaRecorderRef.current !== recorder ||
+            event.data.size === 0
+          ) {
+            return;
+          }
+          recordingChunksRef.current.push(event.data);
+        };
+        recorder.onerror = (event: Event) => {
+          if (
+            epoch !== recordingEpochRef.current ||
+            mediaRecorderRef.current !== recorder
+          ) {
+            return;
+          }
+          const recorderEvent = event as Event & { error?: unknown };
+          const message = readableRecordingError(recorderEvent.error);
+          recordingErrorRef.current = message;
+          setRecordingError(message);
+          setRecordingStatus('error');
+        };
+
+        recorder.start(MEDIA_RECORDER_TIMESLICE_MS);
+        setRecordingStatus('recording');
+      } catch (caught) {
+        mediaRecorderRef.current = null;
+        recordingChunksRef.current = [];
+        recordingMimeTypeRef.current = '';
+        const message = readableRecordingError(caught);
+        recordingErrorRef.current = message;
+        setRecordingError(message);
+        setRecordingStatus('error');
+      }
+    },
+    [],
+  );
+
+  const stopRecording = useCallback((): Promise<Blob | null> => {
+    const pendingStop = recordingStopPromiseRef.current;
+    if (pendingStop) return pendingStop;
+
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return Promise.resolve(recordedAudioRef.current);
+
+    const epoch = recordingEpochRef.current;
+    const stopPromise = new Promise<Blob | null>((resolve) => {
+      let settled = false;
+      let timeoutId: number | null = null;
+
+      const finish = (timedOut: boolean) => {
+        if (settled) return;
+        settled = true;
+        recorder.removeEventListener('stop', handleStop);
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
+
+        if (
+          epoch !== recordingEpochRef.current ||
+          mediaRecorderRef.current !== recorder
+        ) {
+          resolve(null);
+          return;
+        }
+
+        mediaRecorderRef.current = null;
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+
+        if (timedOut) {
+          const message = 'Браузер не завершил аудиофайл вовремя.';
+          recordingErrorRef.current = message;
+          recordedAudioRef.current = null;
+          setRecordedAudio(null);
+          setRecordingError(message);
+          setRecordingStatus('error');
+          resolve(null);
+          return;
+        }
+
+        if (recordingErrorRef.current) {
+          recordedAudioRef.current = null;
+          setRecordedAudio(null);
+          setRecordingStatus('error');
+          resolve(null);
+          return;
+        }
+
+        const chunks = recordingChunksRef.current;
+        const mimeType =
+          recorder.mimeType || recordingMimeTypeRef.current || chunks[0]?.type;
+        const blob = chunks.length > 0
+          ? new Blob(chunks, mimeType ? { type: mimeType } : undefined)
+          : null;
+        recordingChunksRef.current = [];
+        recordedAudioRef.current = blob;
+        setRecordedAudio(blob);
+        if (blob) {
+          setRecordingStatus('ready');
+        } else {
+          const message = 'Браузер завершил запись без аудиоданных.';
+          recordingErrorRef.current = message;
+          setRecordingError(message);
+          setRecordingStatus('error');
+        }
+        resolve(blob);
+      };
+
+      const handleStop = () => finish(false);
+      recorder.addEventListener('stop', handleStop, { once: true });
+      timeoutId = window.setTimeout(
+        () => finish(true),
+        MEDIA_RECORDER_STOP_TIMEOUT_MS,
+      );
+
+      if (recorder.state === 'inactive') {
+        window.queueMicrotask(handleStop);
+        return;
+      }
+      try {
+        recorder.stop();
+      } catch {
+        finish(true);
+      }
+    });
+
+    recordingStopPromiseRef.current = stopPromise;
+    void stopPromise.finally(() => {
+      if (recordingStopPromiseRef.current === stopPromise) {
+        recordingStopPromiseRef.current = null;
+      }
+    });
+    return stopPromise;
+  }, []);
 
   const tearDownAudio = useCallback(() => {
     captureRef.current.accepting = false;
@@ -518,16 +761,24 @@ export function useLocalSpeechTranscription() {
       });
 
       uploadChainRef.current = task;
-      void task.catch((caught) => {
+      void task.catch(async (caught) => {
         if (run !== runRef.current) return;
         uploadFailedRef.current = true;
         setError(readableError(caught));
         updateActivity('idle');
         updateStatus('error');
+        await stopRecording();
+        if (run !== runRef.current) return;
         tearDownAudio();
       });
     },
-    [syncActivity, tearDownAudio, updateActivity, updateStatus],
+    [
+      stopRecording,
+      syncActivity,
+      tearDownAudio,
+      updateActivity,
+      updateStatus,
+    ],
   );
 
   const processPcm = useCallback(
@@ -636,12 +887,14 @@ export function useLocalSpeechTranscription() {
     });
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (options: LocalSpeechStartOptions = {}) => {
     if (!['idle', 'finished', 'error'].includes(statusRef.current)) return;
 
     const previousSession = sessionIdRef.current;
     if (previousSession) void releaseSession(previousSession);
     sessionIdRef.current = null;
+    stopOperationRef.current = null;
+    discardRecording();
     tearDownAudio();
     requestAbortRef.current?.abort();
     const controller = new AbortController();
@@ -716,6 +969,7 @@ export function useLocalSpeechTranscription() {
         return;
       }
       streamRef.current = stream;
+      startRecording(stream, options.recordAudio === true);
 
       const context = new AudioContext({ latencyHint: 'interactive' });
       audioContextRef.current = context;
@@ -764,6 +1018,7 @@ export function useLocalSpeechTranscription() {
       syncActivity();
     } catch (caught) {
       if (run !== runRef.current || controller.signal.aborted) return;
+      discardRecording();
       tearDownAudio();
       const sessionId = sessionIdRef.current;
       sessionIdRef.current = null;
@@ -773,60 +1028,95 @@ export function useLocalSpeechTranscription() {
       updateStatus('error');
     }
   }, [
+    discardRecording,
     processPcm,
     releaseSession,
     syncActivity,
+    startRecording,
     tearDownAudio,
     updateActivity,
     updateStatus,
   ]);
 
-  const stop = useCallback(async () => {
+  const stop = useCallback((): Promise<Blob | null> => {
+    const pendingOperation = stopOperationRef.current;
+    if (pendingOperation) return pendingOperation;
+
     if (
       statusRef.current === 'idle' ||
-      statusRef.current === 'finished' ||
-      statusRef.current === 'stopping'
+      statusRef.current === 'finished'
     ) {
-      return;
+      return Promise.resolve(recordedAudioRef.current);
     }
 
-    if (
-      statusRef.current === 'requesting' ||
-      statusRef.current === 'connecting'
-    ) {
-      runRef.current += 1;
-      requestAbortRef.current?.abort();
-      requestAbortRef.current = null;
-      tearDownAudio();
+    const operation = (async () => {
+      if (
+        statusRef.current === 'requesting' ||
+        statusRef.current === 'connecting'
+      ) {
+        runRef.current += 1;
+        const completionRun = runRef.current;
+        const controller = requestAbortRef.current;
+        const sessionId = sessionIdRef.current;
+        controller?.abort();
+
+        const audio = await stopRecording();
+        if (completionRun !== runRef.current) return null;
+        tearDownAudio();
+        if (sessionIdRef.current === sessionId) sessionIdRef.current = null;
+        if (sessionId) await releaseSession(sessionId);
+        if (completionRun !== runRef.current) return audio;
+        if (requestAbortRef.current === controller) {
+          requestAbortRef.current = null;
+        }
+        pendingUploadsRef.current = 0;
+        updateActivity('idle');
+        updateStatus('finished');
+        return audio;
+      }
+
+      const completionRun = runRef.current;
       const sessionId = sessionIdRef.current;
-      sessionIdRef.current = null;
+      const controller = requestAbortRef.current;
+      updateStatus('stopping');
+      await flushWorklet();
+      if (completionRun !== runRef.current) return null;
+      captureRef.current.accepting = false;
+      const lastUtterance = takeUtterance();
+      if (lastUtterance) enqueueUtterance(lastUtterance);
+
+      // MediaRecorder shares the microphone stream with the Worklet. Its final
+      // dataavailable event must arrive before tearDownAudio stops the tracks.
+      const audio = await stopRecording();
+      if (completionRun !== runRef.current) return null;
+      tearDownAudio();
+
+      await uploadChainRef.current.catch(() => undefined);
+      if (sessionIdRef.current === sessionId) sessionIdRef.current = null;
       if (sessionId) await releaseSession(sessionId);
+      if (completionRun !== runRef.current) return audio;
+      if (requestAbortRef.current === controller) {
+        requestAbortRef.current = null;
+      }
+      setProvisionalTokens([]);
       pendingUploadsRef.current = 0;
       updateActivity('idle');
-      updateStatus('finished');
-      return;
-    }
+      updateStatus(uploadFailedRef.current ? 'error' : 'finished');
+      return audio;
+    })();
 
-    updateStatus('stopping');
-    await flushWorklet();
-    captureRef.current.accepting = false;
-    const lastUtterance = takeUtterance();
-    if (lastUtterance) enqueueUtterance(lastUtterance);
-    tearDownAudio();
-
-    await uploadChainRef.current.catch(() => undefined);
-    const sessionId = sessionIdRef.current;
-    sessionIdRef.current = null;
-    if (sessionId) await releaseSession(sessionId);
-    requestAbortRef.current = null;
-    setProvisionalTokens([]);
-    pendingUploadsRef.current = 0;
-    updateActivity('idle');
-    updateStatus(uploadFailedRef.current ? 'error' : 'finished');
+    stopOperationRef.current = operation;
+    void operation.finally(() => {
+      if (stopOperationRef.current === operation) {
+        stopOperationRef.current = null;
+      }
+    });
+    return operation;
   }, [
     enqueueUtterance,
     flushWorklet,
     releaseSession,
+    stopRecording,
     takeUtterance,
     tearDownAudio,
     updateActivity,
@@ -835,11 +1125,13 @@ export function useLocalSpeechTranscription() {
 
   const reset = useCallback(() => {
     runRef.current += 1;
+    stopOperationRef.current = null;
     requestAbortRef.current?.abort();
     requestAbortRef.current = null;
     const sessionId = sessionIdRef.current;
     sessionIdRef.current = null;
     if (sessionId) void releaseSession(sessionId);
+    discardRecording();
     tearDownAudio();
     captureRef.current = createCaptureState();
     uploadChainRef.current = Promise.resolve();
@@ -851,17 +1143,25 @@ export function useLocalSpeechTranscription() {
     setEngine(null);
     updateActivity('idle');
     updateStatus('idle');
-  }, [releaseSession, tearDownAudio, updateActivity, updateStatus]);
+  }, [
+    discardRecording,
+    releaseSession,
+    tearDownAudio,
+    updateActivity,
+    updateStatus,
+  ]);
 
   useEffect(
     () => () => {
       runRef.current += 1;
+      stopOperationRef.current = null;
       requestAbortRef.current?.abort();
       const sessionId = sessionIdRef.current;
       if (sessionId) void releaseSession(sessionId);
+      discardRecording(false);
       tearDownAudio();
     },
-    [releaseSession, tearDownAudio],
+    [discardRecording, releaseSession, tearDownAudio],
   );
 
   return {
@@ -871,6 +1171,9 @@ export function useLocalSpeechTranscription() {
     provisionalTokens,
     error,
     engine,
+    recordedAudio,
+    recordingStatus,
+    recordingError,
     start,
     stop,
     reset,

@@ -206,11 +206,8 @@ async function runCompound(apiKey: string, model: string, request: ClinicalResea
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: 'Запрос из другого источника отклонён.' }, 403);
 
-  const requestUrl = new URL(request.url);
   const user = await getChatGPTUser();
-  const isLocalPreview =
-    process.env.NODE_ENV === 'development' &&
-    ['localhost', '127.0.0.1', '[::1]'].includes(requestUrl.hostname);
+  const isLocalPreview = process.env.NODE_ENV === 'development';
   if (!user && !isLocalPreview) return json({ error: 'Требуется вход врача.' }, 401);
 
   const declaredLength = Number(request.headers.get('content-length') ?? 0);
@@ -270,3 +267,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

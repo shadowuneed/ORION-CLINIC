@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type LocalSpeechToken,
   useLocalSpeechTranscription,
-} from '../lib/local-speech-client';
+} from '../lib/live-local-speech-client';
 import {
   ClinicalAnalysisRequestError,
   requestClinicalAnalysis,
@@ -17,6 +17,22 @@ import type {
   ClinicalTranscriptSegment,
 } from '../lib/clinical-contract';
 import type { ClinicalResearchResponse } from '../lib/clinical-research-contract';
+import {
+  downloadAudio,
+  downloadAudit,
+  downloadEncounterArchive,
+  downloadProtocol,
+  downloadTranscript,
+} from '../lib/encounter-export';
+import {
+  listEncounters,
+  markAbandonedEncountersInterrupted,
+  saveEncounter,
+  type OrionEncounterRecord,
+  type SuggestionDecisionStatus,
+  type SuggestionLedgerEntry,
+} from '../lib/encounter-history';
+import { EncounterHistoryPanel } from './encounter-history-panel';
 
 type WorkspaceProps = {
   clinicianName: string;
@@ -36,12 +52,12 @@ type TranscriptTurn = {
 };
 
 type AnalysisStatus = 'idle' | 'waiting' | 'loading' | 'ready' | 'error';
-type ReviewStatus = 'pending' | 'accepted' | 'rejected';
-type SuggestionReview = {
-  status: ReviewStatus;
-  title: string;
-  clinicianPrompt: string;
-};
+type SuggestionView = 'active' | 'trash';
+type MedicationCheck =
+  | 'indication'
+  | 'interactions'
+  | 'allergies'
+  | 'contraindications';
 type ResearchState = {
   status: 'loading' | 'ready' | 'error';
   result?: ClinicalResearchResponse;
@@ -50,6 +66,15 @@ type ResearchState = {
 
 const FIRST_LIVE_ANALYSIS_DELAY_MS = 1_200;
 const LIVE_ANALYSIS_INTERVAL_MS = 12_000;
+const MEDICATION_CHECKS: Array<{ id: MedicationCheck; label: string }> = [
+  { id: 'indication', label: 'Показание и цель проверены' },
+  { id: 'interactions', label: 'Текущие препараты и взаимодействия проверены' },
+  { id: 'allergies', label: 'Аллергии и нежелательные реакции проверены' },
+  {
+    id: 'contraindications',
+    label: 'Противопоказания и факторы пациента проверены',
+  },
+];
 
 type WorkingClinicalSegment = ClinicalTranscriptSegment & {
   speaker: string | null;
@@ -209,12 +234,14 @@ function languageLabel(language: TranscriptTurn['language']) {
 function suggestionCategoryLabel(category: ClinicalSuggestion['category']) {
   if (category === 'clarification') return 'Что уточнить';
   if (category === 'safety') return 'Безопасность';
+  if (category === 'medication') return 'Вариант лекарства';
   return 'Вариант действия';
 }
 
 function suggestionCategoryGlyph(category: ClinicalSuggestion['category']) {
   if (category === 'clarification') return '?';
   if (category === 'safety') return '!';
+  if (category === 'medication') return 'Rx';
   return '+';
 }
 
@@ -226,15 +253,23 @@ function suggestionPriorityLabel(priority: ClinicalSuggestion['priority']) {
 
 export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const [theme, setTheme] = useState<Theme | null>(null);
+  const [visitRailCollapsed, setVisitRailCollapsed] = useState(false);
   const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [audioConsentConfirmed, setAudioConsentConfirmed] = useState(false);
+  const [patientName, setPatientName] = useState('');
   const [sessionState, setSessionState] = useState<SessionState>('ready');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [rolesSwapped, setRolesSwapped] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>('idle');
   const [analysis, setAnalysis] = useState<ClinicalAnalysisResponse | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [suggestionReviews, setSuggestionReviews] = useState<
-    Record<string, SuggestionReview>
+  const [suggestionLedger, setSuggestionLedger] = useState<
+    Record<string, SuggestionLedgerEntry>
+  >({});
+  const [currentSuggestionIds, setCurrentSuggestionIds] = useState<string[]>([]);
+  const [suggestionView, setSuggestionView] = useState<SuggestionView>('active');
+  const [medicationChecks, setMedicationChecks] = useState<
+    Record<string, Partial<Record<MedicationCheck, boolean>>>
   >({});
   const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(
     null,
@@ -248,6 +283,14 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
   const latestAnalysisKeyRef = useRef('');
   const lastAnalysisStartedAtRef = useRef(0);
   const analysisBackoffUntilRef = useRef(0);
+  const [encounterId, setEncounterId] = useState<string | null>(null);
+  const [encounterStartedAt, setEncounterStartedAt] = useState<string | null>(null);
+  const [encounterEndedAt, setEncounterEndedAt] = useState<string | null>(null);
+  const [historyRecords, setHistoryRecords] = useState<OrionEncounterRecord[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [archiveDownloading, setArchiveDownloading] = useState(false);
+  const currentEncounterRef = useRef<OrionEncounterRecord | null>(null);
   const speech = useLocalSpeechTranscription();
 
   useEffect(() => {
@@ -270,6 +313,31 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
       media.removeEventListener('change', followSystemTheme);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      setVisitRailCollapsed(
+        window.localStorage.getItem('orion-visit-rail-collapsed') === 'true',
+      );
+    } catch {
+      // The rail remains expanded when browser storage is unavailable.
+    }
+  }, []);
+
+  const toggleVisitRail = () => {
+    setVisitRailCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(
+          'orion-visit-rail-collapsed',
+          String(next),
+        );
+      } catch {
+        // Visual state still works for the current tab.
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (sessionState !== 'listening') return;
@@ -380,14 +448,40 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         analysisBackoffUntilRef.current = 0;
         setAnalysis(result);
         setResearchBySuggestion({});
-        setSuggestionReviews((current) => {
-          const next: Record<string, SuggestionReview> = {};
+        setCurrentSuggestionIds(result.suggestions.map((suggestion) => suggestion.id));
+        setSuggestionLedger((current) => {
+          const next = { ...current };
+          const now = new Date().toISOString();
           for (const suggestion of result.suggestions) {
-            next[suggestion.id] = current[suggestion.id] ?? {
-              status: 'pending',
-              title: suggestion.title,
-              clinicianPrompt: suggestion.clinicianPrompt,
-            };
+            const existing = current[suggestion.id];
+            next[suggestion.id] = existing
+              ? {
+                  ...existing,
+                  suggestion:
+                    existing.status === 'pending'
+                      ? suggestion
+                      : existing.suggestion,
+                  draftTitle:
+                    existing.status === 'pending' &&
+                    existing.draftTitle === existing.suggestion.title
+                      ? suggestion.title
+                      : existing.draftTitle,
+                  draftPrompt:
+                    existing.status === 'pending' &&
+                    existing.draftPrompt === existing.suggestion.clinicianPrompt
+                      ? suggestion.clinicianPrompt
+                      : existing.draftPrompt,
+                  lastSeenAt: now,
+                }
+              : {
+                  id: suggestion.id,
+                  suggestion,
+                  draftTitle: suggestion.title,
+                  draftPrompt: suggestion.clinicianPrompt,
+                  status: 'pending',
+                  firstSeenAt: now,
+                  lastSeenAt: now,
+                };
           }
           return next;
         });
@@ -506,6 +600,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
   const startSession = () => {
     if (!consentConfirmed) return;
+    const startedAt = new Date().toISOString();
     analysisAbortRef.current?.abort();
     analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
@@ -514,41 +609,86 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setAnalysisStatus('idle');
     setAnalysis(null);
     setAnalysisError(null);
-    setSuggestionReviews({});
+    setSuggestionLedger({});
+    setCurrentSuggestionIds([]);
+    setSuggestionView('active');
+    setMedicationChecks({});
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
+    setEncounterId(crypto.randomUUID());
+    setEncounterStartedAt(startedAt);
+    setEncounterEndedAt(null);
+    setHistoryError(null);
     lastAnalyzedKeyRef.current = '';
     lastAnalysisStartedAtRef.current = 0;
     analysisBackoffUntilRef.current = 0;
     setSessionState('listening');
-    void speech.start();
+    void speech.start({ recordAudio: audioConsentConfirmed });
   };
 
-  const stopSession = () => {
+  const stopSession = async () => {
+    setEncounterEndedAt((current) => current ?? new Date().toISOString());
+    setSessionState('review');
     if (
       speech.status === 'streaming' ||
       speech.status === 'connecting' ||
       speech.status === 'requesting'
     ) {
-      speech.stop();
+      await speech.stop();
     }
-    setSessionState('review');
   };
 
-  const resetSession = () => {
+  const resetSession = async () => {
+    const finalizedAudio =
+      sessionState === 'ready' ? null : await speech.stop();
+    const currentRecord = currentEncounterRef.current;
+    if (currentRecord) {
+      try {
+        const completedRecord: OrionEncounterRecord = {
+          ...currentRecord,
+          status: 'completed',
+          endedAt: currentRecord.endedAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          audio: finalizedAudio ?? currentRecord.audio,
+          audioMimeType:
+            finalizedAudio?.type || currentRecord.audioMimeType,
+        };
+        await saveEncounter(completedRecord);
+        setHistoryRecords((records) => [
+          completedRecord,
+          ...records.filter((record) => record.id !== completedRecord.id),
+        ]);
+      } catch (error) {
+        setHistoryError(
+          error instanceof Error
+            ? error.message
+            : 'Последний приём не удалось сохранить.',
+        );
+        return;
+      }
+    }
     analysisAbortRef.current?.abort();
     analysisAbortRef.current = null;
     researchAbortRef.current?.abort();
     speech.reset();
     setConsentConfirmed(false);
+    setAudioConsentConfirmed(false);
+    setPatientName('');
     setElapsedSeconds(0);
     setRolesSwapped(false);
     setAnalysisStatus('idle');
     setAnalysis(null);
     setAnalysisError(null);
-    setSuggestionReviews({});
+    setSuggestionLedger({});
+    setCurrentSuggestionIds([]);
+    setSuggestionView('active');
+    setMedicationChecks({});
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
+    setEncounterId(null);
+    setEncounterStartedAt(null);
+    setEncounterEndedAt(null);
+    currentEncounterRef.current = null;
     lastAnalyzedKeyRef.current = '';
     lastAnalysisStartedAtRef.current = 0;
     analysisBackoffUntilRef.current = 0;
@@ -563,7 +703,28 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     setAnalysis(null);
     setAnalysisStatus('waiting');
     setAnalysisError(null);
-    setSuggestionReviews({});
+    setCurrentSuggestionIds(
+      Object.values(suggestionLedger)
+        .filter((entry) => entry.status !== 'discarded')
+        .map((entry) => entry.id),
+    );
+    setSuggestionLedger((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([id, entry]) => [
+          id,
+          {
+            ...entry,
+            status:
+              entry.status === 'accepted'
+                ? ('pending' as const)
+                : entry.status,
+            decidedAt:
+              entry.status === 'accepted' ? undefined : entry.decidedAt,
+          },
+        ]),
+      ),
+    );
+    setMedicationChecks({});
     setEditingSuggestionId(null);
     setResearchBySuggestion({});
     lastAnalyzedKeyRef.current = '';
@@ -571,12 +732,38 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     analysisBackoffUntilRef.current = 0;
   };
 
-  const reviewSuggestion = (id: string, status: ReviewStatus) => {
-    setSuggestionReviews((current) => {
-      const review = current[id];
-      if (!review) return current;
-      return { ...current, [id]: { ...review, status } };
+  const reviewSuggestion = (
+    id: string,
+    status: SuggestionDecisionStatus,
+  ) => {
+    setSuggestionLedger((current) => {
+      const entry = current[id];
+      if (!entry) return current;
+      const now = new Date().toISOString();
+      return {
+        ...current,
+        [id]: {
+          ...entry,
+          status,
+          decidedAt: status === 'pending' ? undefined : now,
+          acceptedSnapshot:
+            status === 'accepted'
+              ? {
+                  title: entry.draftTitle,
+                  clinicianPrompt: entry.draftPrompt,
+                  category: entry.suggestion.category,
+                  evidenceSegmentIds: [...entry.suggestion.evidenceSegmentIds],
+                  acceptedAt: now,
+                }
+              : entry.acceptedSnapshot,
+        },
+      };
     });
+    if (status === 'pending') {
+      setCurrentSuggestionIds((current) =>
+        current.includes(id) ? current : [...current, id],
+      );
+    }
     setEditingSuggestionId(null);
   };
 
@@ -585,12 +772,22 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     field: 'title' | 'clinicianPrompt',
     value: string,
   ) => {
-    setSuggestionReviews((current) => {
-      const review = current[id];
-      if (!review) return current;
+    setCurrentSuggestionIds((current) =>
+      current.includes(id) ? current : [...current, id],
+    );
+    setSuggestionLedger((current) => {
+      const entry = current[id];
+      if (!entry) return current;
       return {
         ...current,
-        [id]: { ...review, [field]: value.slice(0, 260) },
+        [id]: {
+          ...entry,
+          [field === 'title' ? 'draftTitle' : 'draftPrompt']: value.slice(0, 260),
+          status: entry.status === 'accepted' ? 'pending' : entry.status,
+          acceptedSnapshot:
+            entry.status === 'accepted' ? undefined : entry.acceptedSnapshot,
+          decidedAt: entry.status === 'accepted' ? undefined : entry.decidedAt,
+        },
       };
     });
   };
@@ -648,19 +845,379 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
     [analysisSegments],
   );
 
+  const activeSuggestionEntries = useMemo(() => {
+    const currentIds = new Set(currentSuggestionIds);
+    return Object.values(suggestionLedger)
+      .filter(
+        (entry) =>
+          entry.status !== 'discarded' &&
+          (entry.status === 'accepted' || currentIds.has(entry.id)),
+      )
+      .sort((left, right) => left.firstSeenAt.localeCompare(right.firstSeenAt));
+  }, [currentSuggestionIds, suggestionLedger]);
+  const discardedSuggestionEntries = useMemo(
+    () =>
+      Object.values(suggestionLedger)
+        .filter((entry) => entry.status === 'discarded')
+        .sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt)),
+    [suggestionLedger],
+  );
   const reviewedSuggestionCount = useMemo(
     () =>
-      Object.values(suggestionReviews).filter(
-        (review) => review.status !== 'pending',
+      currentSuggestionIds.filter(
+        (id) =>
+          suggestionLedger[id] && suggestionLedger[id].status !== 'pending',
       ).length,
-    [suggestionReviews],
+    [currentSuggestionIds, suggestionLedger],
   );
   const acceptedSuggestionCount = useMemo(
     () =>
-      Object.values(suggestionReviews).filter(
-        (review) => review.status === 'accepted',
+      Object.values(suggestionLedger).filter(
+        (entry) => entry.status === 'accepted',
       ).length,
-    [suggestionReviews],
+    [suggestionLedger],
+  );
+  const pendingSuggestionCount = useMemo(
+    () =>
+      activeSuggestionEntries.filter((entry) => entry.status === 'pending')
+        .length,
+    [activeSuggestionEntries],
+  );
+
+  const encounterTranscript = useMemo(
+    () =>
+      groupTokens(speech.finalTokens, false).map((turn) => ({
+        id: turn.id,
+        role: roleForSpeaker(turn.speaker),
+        language: turn.language,
+        text: turn.text.trim(),
+        startMs: turn.startMs,
+      })),
+    [roleForSpeaker, speech.finalTokens],
+  );
+
+  const currentEncounter = useMemo<OrionEncounterRecord | null>(() => {
+    if (!encounterId || !encounterStartedAt) return null;
+    return {
+      version: 1,
+      id: encounterId,
+      status: sessionState === 'listening' ? 'in_progress' : 'completed',
+      clinicianName,
+      patientName: patientName.trim(),
+      startedAt: encounterStartedAt,
+      endedAt: encounterEndedAt,
+      updatedAt: new Date().toISOString(),
+      durationSeconds: elapsedSeconds,
+      consent: {
+        transcription: consentConfirmed,
+        audioRecording: audioConsentConfirmed,
+        confirmedAt: encounterStartedAt,
+      },
+      transcript: encounterTranscript,
+      analysisSummary: analysis?.summary ?? null,
+      decisions: Object.values(suggestionLedger),
+      audio: speech.recordedAudio,
+      audioMimeType: speech.recordedAudio?.type || null,
+      audioError: speech.recordingError,
+    };
+  }, [
+    analysis?.summary,
+    audioConsentConfirmed,
+    clinicianName,
+    consentConfirmed,
+    elapsedSeconds,
+    encounterEndedAt,
+    encounterId,
+    encounterStartedAt,
+    encounterTranscript,
+    patientName,
+    sessionState,
+    speech.recordedAudio,
+    speech.recordingError,
+    suggestionLedger,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await markAbandonedEncountersInterrupted();
+        const records = await listEncounters();
+        if (!cancelled) setHistoryRecords(records);
+      } catch (error) {
+        if (!cancelled) {
+          setHistoryError(
+            error instanceof Error
+              ? error.message
+              : 'Локальная история недоступна.',
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    currentEncounterRef.current = currentEncounter;
+    if (!currentEncounter) return;
+    const timer = window.setTimeout(() => {
+      void saveEncounter(currentEncounter)
+        .then(() => {
+          setHistoryRecords((records) =>
+            [
+              currentEncounter,
+              ...records.filter((record) => record.id !== currentEncounter.id),
+            ].sort((left, right) =>
+              right.startedAt.localeCompare(left.startedAt),
+            ),
+          );
+          setHistoryError(null);
+        })
+        .catch((error) => {
+          setHistoryError(
+            error instanceof Error
+              ? error.message
+              : 'Приём не удалось сохранить локально.',
+          );
+        });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [currentEncounter]);
+
+  const renameEncounter = async (recordId: string, nextName: string) => {
+    const source =
+      currentEncounterRef.current?.id === recordId
+        ? currentEncounterRef.current
+        : historyRecords.find((record) => record.id === recordId);
+    if (!source) throw new Error('Приём не найден в локальной истории.');
+
+    const updated: OrionEncounterRecord = {
+      ...source,
+      patientName: nextName.trim().slice(0, 100),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveEncounter(updated);
+    if (currentEncounterRef.current?.id === recordId) {
+      currentEncounterRef.current = updated;
+      setPatientName(updated.patientName ?? '');
+    }
+    setHistoryRecords((records) =>
+      records.map((record) => (record.id === recordId ? updated : record)),
+    );
+  };
+
+  const medicationIsChecked = (id: string) =>
+    MEDICATION_CHECKS.every((item) => medicationChecks[id]?.[item.id]);
+
+  const toggleMedicationCheck = (id: string, check: MedicationCheck) => {
+    setMedicationChecks((current) => ({
+      ...current,
+      [id]: {
+        ...current[id],
+        [check]: !current[id]?.[check],
+      },
+    }));
+  };
+
+  const renderSuggestionCard = (entry: SuggestionLedgerEntry) => {
+    const suggestion = entry.suggestion;
+    const isEditing = editingSuggestionId === suggestion.id;
+    const research = researchBySuggestion[suggestion.id];
+    const isMedication = suggestion.category === 'medication';
+    const promptLabel =
+      suggestion.category === 'clarification'
+        ? 'Можно спросить пациента'
+        : isMedication
+          ? 'Вариант для клинической проверки'
+          : 'Что может рассмотреть врач';
+
+    return (
+      <article
+        className={`suggestion-card category-${suggestion.category} status-${entry.status}`}
+        key={suggestion.id}
+      >
+        <div className="suggestion-origin">Рекомендация ORION</div>
+        <div className="suggestion-card__meta">
+          <span className={`insight-icon ${suggestion.category}`}>
+            {suggestionCategoryGlyph(suggestion.category)}
+          </span>
+          <div>
+            <strong>{suggestionCategoryLabel(suggestion.category)}</strong>
+            <small>{suggestionPriorityLabel(suggestion.priority)}</small>
+          </div>
+          <span className="review-state">
+            {entry.status === 'accepted'
+              ? 'Добавлено'
+              : entry.status === 'discarded'
+                ? 'В корзине'
+                : 'Ожидает врача'}
+          </span>
+        </div>
+
+        {isEditing ? (
+          <div className="suggestion-editor">
+            <label>
+              Заголовок решения
+              <textarea
+                value={entry.draftTitle}
+                onChange={(event) =>
+                  updateSuggestionReview(
+                    suggestion.id,
+                    'title',
+                    event.target.value,
+                  )
+                }
+              />
+            </label>
+            <label>
+              Формулировка для врача
+              <textarea
+                value={entry.draftPrompt}
+                onChange={(event) =>
+                  updateSuggestionReview(
+                    suggestion.id,
+                    'clinicianPrompt',
+                    event.target.value,
+                  )
+                }
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            <h3>{entry.draftTitle}</h3>
+            <p>{suggestion.rationale}</p>
+            <div className="suggestion-prompt">
+              <span>{promptLabel}</span>
+              <strong>{entry.draftPrompt}</strong>
+            </div>
+          </>
+        )}
+
+        {isMedication && entry.status !== 'discarded' && (
+          <fieldset className="medication-checklist">
+            <legend>Перед добавлением в протокол</legend>
+            {MEDICATION_CHECKS.map((item) => (
+              <label key={item.id}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(medicationChecks[suggestion.id]?.[item.id])}
+                  onChange={() => toggleMedicationCheck(suggestion.id, item.id)}
+                />
+                <span>{item.label}</span>
+              </label>
+            ))}
+            <small>
+              ORION предлагает только вариант. Дозу, путь, кратность и длительность определяет врач.
+            </small>
+          </fieldset>
+        )}
+
+        <div className="suggestion-evidence">
+          <span>
+            Основание: {suggestion.evidenceSegmentIds.length}{' '}
+            {suggestion.evidenceSegmentIds.length === 1
+              ? 'фрагмент'
+              : 'фрагмента'}
+          </span>
+          {entry.status !== 'discarded' && (
+            <button
+              type="button"
+              onClick={() =>
+                setEditingSuggestionId(isEditing ? null : suggestion.id)
+              }
+            >
+              {isEditing ? 'Готово' : 'Изменить'}
+            </button>
+          )}
+        </div>
+
+        <div className="suggestion-actions">
+          {entry.status === 'discarded' ? (
+            <button
+              className="restore"
+              type="button"
+              onClick={() => reviewSuggestion(suggestion.id, 'pending')}
+            >
+              Вернуть в рекомендации
+            </button>
+          ) : (
+            <>
+              <button
+                className="accept"
+                type="button"
+                disabled={
+                  entry.status === 'accepted' ||
+                  (isMedication && !medicationIsChecked(suggestion.id))
+                }
+                title={
+                  isMedication && !medicationIsChecked(suggestion.id)
+                    ? 'Сначала подтвердите проверки безопасности'
+                    : undefined
+                }
+                onClick={() => reviewSuggestion(suggestion.id, 'accepted')}
+              >
+                {entry.status === 'accepted'
+                  ? 'Добавлено в протокол'
+                  : suggestion.category === 'clarification'
+                    ? 'Добавить вопрос'
+                    : 'Добавить в протокол'}
+              </button>
+              <button
+                className="reject"
+                type="button"
+                onClick={() => reviewSuggestion(suggestion.id, 'discarded')}
+              >
+                В корзину
+              </button>
+            </>
+          )}
+        </div>
+
+        {entry.status !== 'discarded' && (
+          <div className={`research-check is-${research?.status ?? 'idle'}`}>
+            <button
+              type="button"
+              disabled={research?.status === 'loading'}
+              onClick={() => void runResearch(suggestion)}
+            >
+              {research?.status === 'loading'
+                ? 'Compound ищет источники…'
+                : research?.status === 'ready'
+                  ? 'Обновить проверку'
+                  : 'Проверить по источникам'}
+            </button>
+            {research?.status === 'error' && <p role="alert">{research.error}</p>}
+            {research?.status === 'ready' && research.result && (
+              <div className="research-result">
+                <strong>Проверка Compound</strong>
+                <p>{research.result.answer}</p>
+                {research.result.sources.length > 0 && (
+                  <ul>
+                    {research.result.sources.map((source) => (
+                      <li key={source.url}>
+                        <a href={source.url} target="_blank" rel="noreferrer">
+                          {source.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </article>
+    );
+  };
+
+  const clarificationEntries = activeSuggestionEntries.filter(
+    (entry) => entry.suggestion.category === 'clarification',
+  );
+  const recommendationEntries = activeSuggestionEntries.filter(
+    (entry) => entry.suggestion.category !== 'clarification',
   );
 
   const toggleTheme = () => {
@@ -691,6 +1248,15 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
 
         <div className="header-actions">
           <button
+            className="history-trigger"
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            aria-label={`Открыть историю приёмов: ${historyRecords.length}`}
+          >
+            <span aria-hidden="true">▤</span>
+            История <b>{historyRecords.length}</b>
+          </button>
+          <button
             className={`theme-toggle is-${theme ?? 'light'}`}
             type="button"
             aria-label={theme === 'dark' ? 'Включить светлую тему' : 'Включить тёмную тему'}
@@ -709,8 +1275,29 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
         </div>
       </header>
 
-      <section className="orion-workspace" id="workspace">
-        <aside className="visit-rail" aria-label="Параметры приёма">
+      <section
+        className={`orion-workspace${visitRailCollapsed ? ' has-collapsed-rail' : ''}`}
+        id="workspace"
+      >
+        <aside
+          className={`visit-rail${visitRailCollapsed ? ' is-collapsed' : ''}`}
+          aria-label="Параметры приёма"
+        >
+          <button
+            className="rail-toggle"
+            type="button"
+            aria-expanded={!visitRailCollapsed}
+            aria-label={
+              visitRailCollapsed
+                ? 'Развернуть панель приёма'
+                : 'Свернуть панель приёма'
+            }
+            title={visitRailCollapsed ? 'Развернуть панель' : 'Свернуть панель'}
+            onClick={toggleVisitRail}
+          >
+            <span aria-hidden="true">{visitRailCollapsed ? '›' : '‹'}</span>
+            <small>{visitRailCollapsed ? 'Открыть' : 'Скрыть'}</small>
+          </button>
           <div className="rail-section">
             <p className="eyebrow">Новый приём</p>
             <h1>Консультация<br />в кабинете</h1>
@@ -718,7 +1305,19 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
           </div>
 
           <div className="visit-details">
-            <div className="detail-row"><span>Пациент</span><strong>Не выбран</strong></div>
+            <label className="patient-name-field" htmlFor="patient-name">
+              <span>Пациент / название</span>
+              <input
+                id="patient-name"
+                type="text"
+                value={patientName}
+                maxLength={100}
+                autoComplete="off"
+                placeholder="Например, Айдос К."
+                onChange={(event) => setPatientName(event.target.value)}
+              />
+              <small>Необязательно · сохраняется только в этом браузере</small>
+            </label>
             <div className="detail-row"><span>Языки</span><strong>Русский · Қазақша</strong></div>
             <div className="detail-row"><span>Говорящие</span><strong>Врач · Пациент</strong></div>
           </div>
@@ -726,13 +1325,23 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
           <div className="privacy-note">
             <span className="privacy-icon" aria-hidden="true">◎</span>
             <div>
-              <strong>ORION не создаёт аудиофайл</strong>
+              <strong>
+                {audioConsentConfirmed
+                  ? 'Аудиозапись хранится локально'
+                  : 'Аудиозапись выключена'}
+              </strong>
               <p>
                 {sessionState === 'listening' && speech.status === 'streaming'
-                  ? 'Короткие реплики распознаются локально на этом ПК; в Groq уходит только подтверждённый текст.'
+                  ? audioConsentConfirmed
+                    ? 'Микрофон используется для локального STT и записи в историю этого браузера. В Groq уходит только текст.'
+                    : 'Реплики распознаются локально на этом ПК; аудиофайл не создаётся. В Groq уходит только текст.'
                   : sessionState === 'review'
-                    ? 'Аудиофайл не создавался. В Groq передаётся только подтверждённый врачом текстовый контекст.'
-                    : 'До запуска микрофона аудио не захватывается и не передаётся.'}
+                    ? speech.recordedAudio
+                      ? `Запись готова: ${(speech.recordedAudio.size / 1_048_576).toFixed(1)} МБ. Она не отправляется в Groq.`
+                      : audioConsentConfirmed
+                        ? speech.recordingError ?? 'Аудиозапись не была создана.'
+                        : 'Аудиофайл не создавался.'
+                    : 'До запуска микрофона звук не захватывается. Запись включается отдельным согласием.'}
               </p>
             </div>
           </div>
@@ -755,11 +1364,18 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
               <h2>Спокойный разговор.<br />Точная поддержка.</h2>
               <p className="stage-description">Ассистент не вмешивается в беседу. Он фиксирует контекст и готовит варианты для решения врача.</p>
 
-              <label className="consent-control">
-                <input type="checkbox" checked={consentConfirmed} onChange={(event) => setConsentConfirmed(event.target.checked)} />
-                <span className="consent-box" aria-hidden="true">✓</span>
-                <span><strong>Согласие пациента получено</strong><small>Пациент уведомлён о расшифровке и работе ИИ-ассистента</small></span>
-              </label>
+              <div className="consent-stack">
+                <label className="consent-control">
+                  <input type="checkbox" checked={consentConfirmed} onChange={(event) => setConsentConfirmed(event.target.checked)} />
+                  <span className="consent-box" aria-hidden="true">✓</span>
+                  <span><strong>Согласие на расшифровку получено</strong><small>Пациент уведомлён о локальном STT и текстовом ИИ-анализе</small></span>
+                </label>
+                <label className="consent-control is-optional">
+                  <input type="checkbox" checked={audioConsentConfirmed} onChange={(event) => setAudioConsentConfirmed(event.target.checked)} />
+                  <span className="consent-box" aria-hidden="true">✓</span>
+                  <span><strong>Записывать аудио этого приёма</strong><small>Отдельное согласие: файл останется только в истории этого браузера</small></span>
+                </label>
+              </div>
 
               <button className="primary-action" type="button" disabled={!consentConfirmed} onClick={startSession}>
                 <span className="action-icon" aria-hidden="true" /> Начать приём
@@ -790,7 +1406,12 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                     <div className="speech-error" role="alert">
                       <strong>Что нужно проверить</strong>
                       <p>{speech.error}</p>
-                      <button type="button" onClick={() => void speech.start()}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void speech.start({ recordAudio: audioConsentConfirmed })
+                        }
+                      >
                         Повторить подключение
                       </button>
                     </div>
@@ -853,7 +1474,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 className="stop-action"
                 type="button"
                 disabled={speech.status === 'requesting' || speech.status === 'connecting'}
-                onClick={stopSession}
+                onClick={() => void stopSession()}
               >
                 <span aria-hidden="true" /> Завершить приём
               </button>
@@ -882,8 +1503,8 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 <div>
                   <span>Подсказки</span>
                   <strong>
-                    {analysis?.suggestions.length
-                      ? `${reviewedSuggestionCount} из ${analysis.suggestions.length} проверено`
+                    {currentSuggestionIds.length
+                      ? `${reviewedSuggestionCount} из ${currentSuggestionIds.length} проверено`
                       : analysisStatus === 'loading'
                         ? 'Финальный анализ идёт'
                         : 'Нет проверенных подсказок'}
@@ -891,7 +1512,15 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 </div>
                 <div>
                   <span>Аудиофайл</span>
-                  <strong>Не создавался</strong>
+                  <strong>
+                    {speech.recordedAudio
+                      ? `${(speech.recordedAudio.size / 1_048_576).toFixed(1)} МБ · локально`
+                      : audioConsentConfirmed
+                        ? speech.recordingStatus === 'recording'
+                          ? 'Завершается…'
+                          : 'Не создан'
+                        : 'Запись выключена'}
+                  </strong>
                 </div>
               </div>
               <div className="review-steps" aria-label="Этапы проверки">
@@ -899,7 +1528,71 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 <span><b>2</b> Принять решения ({acceptedSuggestionCount})</span>
                 <span><b>3</b> Протокол — после проверки</span>
               </div>
-              <button className="secondary-action" type="button" onClick={resetSession}>Новый приём</button>
+              {pendingSuggestionCount > 0 && (
+                <p className="review-warning" role="status">
+                  Осталось проверить: {pendingSuggestionCount}. Протокол всё равно включит только явно принятые пункты.
+                </p>
+              )}
+              <div className="review-downloads" aria-label="Скачать материалы приёма">
+                <button
+                  className="download-all"
+                  type="button"
+                  disabled={!currentEncounter || archiveDownloading}
+                  onClick={() => {
+                    if (!currentEncounter) return;
+                    setArchiveDownloading(true);
+                    setHistoryError(null);
+                    void downloadEncounterArchive(currentEncounter)
+                      .catch((error) => {
+                        setHistoryError(
+                          error instanceof Error
+                            ? error.message
+                            : 'Не удалось собрать архив приёма.',
+                        );
+                      })
+                      .finally(() => setArchiveDownloading(false));
+                  }}
+                >
+                  <strong>
+                    {archiveDownloading ? 'Собираем архив…' : 'Скачать всё'}
+                  </strong>
+                  <small>ZIP · протокол, расшифровка, аудио и аудит</small>
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    !currentEncounter ||
+                    (acceptedSuggestionCount === 0 &&
+                      encounterTranscript.length === 0)
+                  }
+                  onClick={() => currentEncounter && downloadProtocol(currentEncounter)}
+                >
+                  <strong>Протокол</strong><small>Word · принятое + весь разговор</small>
+                </button>
+                <button
+                  type="button"
+                  disabled={!currentEncounter || encounterTranscript.length === 0}
+                  onClick={() => currentEncounter && downloadTranscript(currentEncounter)}
+                >
+                  <strong>Расшифровка</strong><small>TXT · весь разговор</small>
+                </button>
+                <button
+                  type="button"
+                  disabled={!currentEncounter?.audio}
+                  onClick={() => currentEncounter && downloadAudio(currentEncounter)}
+                >
+                  <strong>Аудио</strong><small>Исходная локальная запись</small>
+                </button>
+                <button
+                  type="button"
+                  disabled={!currentEncounter}
+                  onClick={() => currentEncounter && downloadAudit(currentEncounter)}
+                >
+                  <strong>Полный аудит</strong><small>JSON · включая корзину</small>
+                </button>
+              </div>
+              {historyError && <p className="history-error" role="alert">{historyError}</p>}
+              <button className="secondary-action" type="button" onClick={() => void resetSession()}>Новый приём</button>
             </div>
           )}
         </section>
@@ -910,7 +1603,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
             <span className="private-pill">Приватно</span>
           </div>
 
-          {analysis?.suggestions.length ? (
+          {analysis || activeSuggestionEntries.length > 0 || discardedSuggestionEntries.length > 0 ? (
             <div className="assistant-results">
               <div
                 className="analysis-summary"
@@ -930,7 +1623,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                           : 'GPT-OSS 120B · подтверждённый текст'}
                   </strong>
                 </div>
-                <p>{analysis.summary}</p>
+                <p>{analysis?.summary ?? 'Перепроверяем рекомендации после изменения ролей говорящих.'}</p>
               </div>
 
               {analysisStatus === 'error' && (
@@ -953,146 +1646,72 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 </div>
               )}
 
-              <div className="suggestion-list" aria-live="polite">
-                {analysis.suggestions.map((suggestion) => {
-                  const review = suggestionReviews[suggestion.id] ?? {
-                    status: 'pending' as const,
-                    title: suggestion.title,
-                    clinicianPrompt: suggestion.clinicianPrompt,
-                  };
-                  const isEditing = editingSuggestionId === suggestion.id;
-                  const research = researchBySuggestion[suggestion.id];
-
-                  return (
-                    <article
-                      className={`suggestion-card category-${suggestion.category} status-${review.status}`}
-                      key={suggestion.id}
-                    >
-                      <div className="suggestion-card__meta">
-                        <span className={`insight-icon ${suggestion.category}`}>
-                          {suggestionCategoryGlyph(suggestion.category)}
-                        </span>
-                        <div>
-                          <strong>{suggestionCategoryLabel(suggestion.category)}</strong>
-                          <small>{suggestionPriorityLabel(suggestion.priority)}</small>
-                        </div>
-                        <span className="review-state">
-                          {review.status === 'accepted'
-                            ? 'Принято'
-                            : review.status === 'rejected'
-                              ? 'Отклонено'
-                              : 'Ожидает врача'}
-                        </span>
-                      </div>
-
-                      {isEditing ? (
-                        <div className="suggestion-editor">
-                          <label>
-                            Решение
-                            <textarea
-                              value={review.title}
-                              onChange={(event) =>
-                                updateSuggestionReview(
-                                  suggestion.id,
-                                  'title',
-                                  event.target.value,
-                                )
-                              }
-                            />
-                          </label>
-                          <label>
-                            Формулировка для врача
-                            <textarea
-                              value={review.clinicianPrompt}
-                              onChange={(event) =>
-                                updateSuggestionReview(
-                                  suggestion.id,
-                                  'clinicianPrompt',
-                                  event.target.value,
-                                )
-                              }
-                            />
-                          </label>
-                        </div>
-                      ) : (
-                        <>
-                          <h3>{review.title}</h3>
-                          <p>{suggestion.rationale}</p>
-                          <blockquote>{review.clinicianPrompt}</blockquote>
-                        </>
-                      )}
-
-                      <div className="suggestion-evidence">
-                        <span>
-                          Основание: {suggestion.evidenceSegmentIds.length}{' '}
-                          {suggestion.evidenceSegmentIds.length === 1
-                            ? 'фрагмент'
-                            : 'фрагмента'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingSuggestionId(isEditing ? null : suggestion.id)
-                          }
-                        >
-                          {isEditing ? 'Готово' : 'Изменить'}
-                        </button>
-                      </div>
-
-                      <div className="suggestion-actions">
-                        <button
-                          className="accept"
-                          type="button"
-                          onClick={() => reviewSuggestion(suggestion.id, 'accepted')}
-                        >
-                          Принять
-                        </button>
-                        <button
-                          className="reject"
-                          type="button"
-                          onClick={() => reviewSuggestion(suggestion.id, 'rejected')}
-                        >
-                          Отклонить
-                        </button>
-                      </div>
-
-                      <div className={`research-check is-${research?.status ?? 'idle'}`}>
-                        <button
-                          type="button"
-                          disabled={research?.status === 'loading'}
-                          onClick={() => void runResearch(suggestion)}
-                        >
-                          {research?.status === 'loading'
-                            ? 'Compound ищет источники…'
-                            : research?.status === 'ready'
-                              ? 'Обновить проверку'
-                              : 'Проверить по источникам'}
-                        </button>
-                        {research?.status === 'error' && (
-                          <p role="alert">{research.error}</p>
-                        )}
-                        {research?.status === 'ready' && research.result && (
-                          <div className="research-result">
-                            <strong>Проверка Compound</strong>
-                            <p>{research.result.answer}</p>
-                            {research.result.sources.length > 0 && (
-                              <ul>
-                                {research.result.sources.map((source) => (
-                                  <li key={source.url}>
-                                    <a href={source.url} target="_blank" rel="noreferrer">
-                                      {source.title}
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+              <div className="suggestion-tabs" role="tablist" aria-label="Рекомендации и корзина">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={suggestionView === 'active'}
+                  className={suggestionView === 'active' ? 'is-active' : ''}
+                  onClick={() => setSuggestionView('active')}
+                >
+                  Рекомендации <b>{activeSuggestionEntries.length}</b>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={suggestionView === 'trash'}
+                  className={suggestionView === 'trash' ? 'is-active' : ''}
+                  onClick={() => setSuggestionView('trash')}
+                >
+                  Корзина <b>{discardedSuggestionEntries.length}</b>
+                </button>
               </div>
+
+              {suggestionView === 'active' ? (
+                <div className="suggestion-list" aria-live="polite">
+                  {clarificationEntries.length > 0 && (
+                    <section className="suggestion-group" aria-labelledby="clarification-group-title">
+                      <div className="suggestion-group__heading">
+                        <div><span>01</span><h3 id="clarification-group-title">Уточнить у пациента</h3></div>
+                        <b>{clarificationEntries.length}</b>
+                      </div>
+                      {clarificationEntries.map(renderSuggestionCard)}
+                    </section>
+                  )}
+                  {recommendationEntries.length > 0 && (
+                    <section className="suggestion-group" aria-labelledby="recommendation-group-title">
+                      <div className="suggestion-group__heading">
+                        <div><span>02</span><h3 id="recommendation-group-title">Рекомендации врачу</h3></div>
+                        <b>{recommendationEntries.length}</b>
+                      </div>
+                      {recommendationEntries.map(renderSuggestionCard)}
+                    </section>
+                  )}
+                  {activeSuggestionEntries.length === 0 && (
+                    <div className="suggestion-list-empty">
+                      <strong>Активных рекомендаций нет</strong>
+                      <p>Пункты из корзины можно вернуть в любой момент.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="suggestion-list is-trash" aria-live="polite">
+                  {discardedSuggestionEntries.length > 0 ? (
+                    <section className="suggestion-group" aria-labelledby="trash-group-title">
+                      <div className="suggestion-group__heading">
+                        <div><span>↺</span><h3 id="trash-group-title">Сохранённые отклонения</h3></div>
+                        <b>{discardedSuggestionEntries.length}</b>
+                      </div>
+                      {discardedSuggestionEntries.map(renderSuggestionCard)}
+                    </section>
+                  ) : (
+                    <div className="suggestion-list-empty">
+                      <strong>Корзина пуста</strong>
+                      <p>Отклонённые пункты не удаляются и появятся здесь.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -1141,6 +1760,7 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
                 <div><span className="insight-icon clarification">?</span><p><strong>Что уточнить</strong><small>Недостающие сведения</small></p></div>
                 <div><span className="insight-icon safety">!</span><p><strong>Безопасность</strong><small>Красные флаги и риски</small></p></div>
                 <div><span className="insight-icon option">+</span><p><strong>Варианты действий</strong><small>Только для решения врача</small></p></div>
+                <div><span className="insight-icon medication">Rx</span><p><strong>Лекарственные варианты</strong><small>После проверки рисков врачом</small></p></div>
               </div>
             </>
           )}
@@ -1172,6 +1792,15 @@ export function OrionWorkspace({ clinicianName }: WorkspaceProps) {
           <span>Локальный STT · Groq AI</span>
         </div>
       </footer>
+      {historyOpen && (
+        <EncounterHistoryPanel
+          records={historyRecords}
+          preferredEncounterId={encounterId}
+          onRename={renameEncounter}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
     </main>
   );
 }
+
